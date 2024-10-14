@@ -6,8 +6,4 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
-    <ItemGroup>
-      <ProjectReference Include="..\nKafka.Contracts.Generator\nKafka.Contracts.Generator.csproj" />
-    </ItemGroup>
-
 </Project>
