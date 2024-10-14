@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "nKafka.Contracts", "nKafka.Contracts\nKafka.Contracts.csproj", "{02DE0135-4FDA-4A45-93F6-AD7CDEEC35FB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "nKafka.Contracts.Tests", "nKafka.Contracts.Tests\nKafka.Contracts.Tests.csproj", "{8F790FF0-5D53-41D7-AC01-3B47F9418278}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{02DE0135-4FDA-4A45-93F6-AD7CDEEC35FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{02DE0135-4FDA-4A45-93F6-AD7CDEEC35FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{02DE0135-4FDA-4A45-93F6-AD7CDEEC35FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{02DE0135-4FDA-4A45-93F6-AD7CDEEC35FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8F790FF0-5D53-41D7-AC01-3B47F9418278}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8F790FF0-5D53-41D7-AC01-3B47F9418278}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8F790FF0-5D53-41D7-AC01-3B47F9418278}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8F790FF0-5D53-41D7-AC01-3B47F9418278}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
