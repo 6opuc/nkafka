@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using nKafka.Contracts.Generator.Definitions;
 using nKafka.Contracts.Primitives;
 
@@ -13,7 +14,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         Debugger.Launch();
-        
+
         var messageDefinitions = ParseMessageDefinitions(context);
 
         context.RegisterSourceOutput(messageDefinitions, GenerateCodeForMessageDefinitions);
@@ -44,23 +45,32 @@ public class ContractsSourceGenerator : IIncrementalGenerator
         {
             context.AddSource(
                 $"{messageDefinition.Name}.g.cs",
-                $$"""
-                 using nKafka.Contracts.Primitives;
-                 
-                 namespace nKafka.Contracts;
-                 
-                 public partial class {{messageDefinition.Name}}
-                 {
-                    public static readonly ApiKey ApiKey = ApiKey.{{messageDefinition.ApiKey}};
-                    public static readonly VersionRange ValidVersions = {{messageDefinition.ValidVersions.ToLiteral()}};
-                    public static readonly VersionRange DeprecatedVersions = {{messageDefinition.DeprecatedVersions.ToLiteral()}};
-                    public static readonly VersionRange FlexibleVersions = {{messageDefinition.FlexibleVersions.ToLiteral()}};
-                    
-                    public int Version { get; set; }
-                    
-                    {{messageDefinition.Fields.ToPropertyDeclarations()}}
-                 }            
-                 """);
+                Format(
+                    $$"""
+                      using nKafka.Contracts.Primitives;
+
+                      namespace nKafka.Contracts;
+
+                      public partial class {{messageDefinition.Name}}
+                      {
+                         public static readonly ApiKey ApiKey = ApiKey.{{messageDefinition.ApiKey}};
+                         public static readonly VersionRange ValidVersions = {{messageDefinition.ValidVersions.ToLiteral()}};
+                         public static readonly VersionRange DeprecatedVersions = {{messageDefinition.DeprecatedVersions.ToLiteral()}};
+                         public static readonly VersionRange FlexibleVersions = {{messageDefinition.FlexibleVersions.ToLiteral()}};
+                         
+                         public int Version { get; set; }
+                         
+                         {{messageDefinition.Fields.ToPropertyDeclarations()}}
+                      }            
+                      """));
         }
+    }
+
+    private string Format(string source)
+    {
+        var tree = CSharpSyntaxTree.ParseText(source);
+        var root = tree.GetRoot().NormalizeWhitespace();
+        var formatted = root.ToFullString();
+        return formatted;
     }
 }

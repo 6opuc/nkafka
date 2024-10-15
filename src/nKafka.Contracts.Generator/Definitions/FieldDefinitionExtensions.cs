@@ -4,6 +4,7 @@ public static class FieldDefinitionExtensions
 {
     public static string ToPropertyDeclarations(this IEnumerable<FieldDefinition> fields)
     {
+        
         return string.Join("\n", fields.Select(x => x.ToPropertyDeclaration()));
     }
 
