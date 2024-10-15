@@ -53,6 +53,12 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                  {
                     public static readonly ApiKey ApiKey = ApiKey.{{messageDefinition.ApiKey}};
                     public static readonly VersionRange ValidVersions = {{messageDefinition.ValidVersions.ToLiteral()}};
+                    public static readonly VersionRange DeprecatedVersions = {{messageDefinition.DeprecatedVersions.ToLiteral()}};
+                    public static readonly VersionRange FlexibleVersions = {{messageDefinition.FlexibleVersions.ToLiteral()}};
+                    
+                    public int Version { get; set; }
+                    
+                    
                  }            
                  """);
         }

@@ -8,6 +8,8 @@ public static class VersionRangeExtensions
     {
         return versions == null || versions.Value.IsEmpty
             ? "VersionRange.Empty"
-            : $"new VersionRange({versions.Value.From}, {versions.Value.To})";
+            : versions.Value.To != null
+                ? $"new VersionRange({versions.Value.From}, {versions.Value.To})"
+                : $"new VersionRange({versions.Value.From}, null)";
     }
 }
