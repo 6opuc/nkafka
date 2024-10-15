@@ -46,7 +46,9 @@ public static class FieldDefinitionExtensions
         }
 
         var nullable = field.Ignorable ||
-                       (field.NullableVersions != null && !field.NullableVersions.Value.IsEmpty);
+                       (field.NullableVersions != null && !field.NullableVersions.Value.IsEmpty) ||
+                       field.Versions?.From > 0 ||
+                       field.Versions?.To != null;
         type = nullable
             ? $"{type}?"
             : $"required {type}";
