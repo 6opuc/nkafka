@@ -12,7 +12,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        //Debugger.Launch();
+        Debugger.Launch();
         
         var messageDefinitions = ParseMessageDefinitions(context);
 
@@ -58,7 +58,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                     
                     public int Version { get; set; }
                     
-                    
+                    {{messageDefinition.Fields.ToPropertyDeclarations()}}
                  }            
                  """);
         }
