@@ -24,6 +24,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\nKafka.Contracts.Generator\nKafka.Contracts.Generator.csproj" />
+      <ProjectReference Include="..\nKafka.Contracts.Primitives\nKafka.Contracts.Primitives.csproj" />
     </ItemGroup>
 
 </Project>

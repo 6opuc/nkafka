@@ -18,6 +18,7 @@ public class MessageDefinitionSerializerOptions
                 new StringConverter(),
                 new BooleanConverter(),
                 new IntConverter(),
+                new VersionRangeConverter(),
             }
         };
 }

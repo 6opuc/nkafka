@@ -17,4 +17,8 @@
       <PackageReference Include="System.Text.Json" Version="8.0.5" />
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\nKafka.Contracts.Primitives\nKafka.Contracts.Primitives.csproj" />
+    </ItemGroup>
+
 </Project>
