@@ -47,6 +47,8 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                 $"{messageDefinition.Name}.g.cs",
                 Format(
                     $$"""
+                      #nullable enable
+                      
                       using nKafka.Contracts.Primitives;
 
                       namespace nKafka.Contracts;
@@ -58,7 +60,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                          public static readonly VersionRange DeprecatedVersions = {{messageDefinition.DeprecatedVersions.ToLiteral()}};
                          public static readonly VersionRange FlexibleVersions = {{messageDefinition.FlexibleVersions.ToLiteral()}};
                          
-                         public int Version { get; set; }
+                         public required int Version { get; set; }
                          
                          {{messageDefinition.Fields.ToPropertyDeclarations()}}
                       }            

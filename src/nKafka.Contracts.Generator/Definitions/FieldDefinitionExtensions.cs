@@ -4,7 +4,6 @@ public static class FieldDefinitionExtensions
 {
     public static string ToPropertyDeclarations(this IEnumerable<FieldDefinition> fields)
     {
-        
         return string.Join("\n", fields.Select(x => x.ToPropertyDeclaration()));
     }
 
@@ -17,13 +16,13 @@ public static class FieldDefinitionExtensions
     private static string GetPropertyType(FieldDefinition field)
     {
         var type = field.Type;
-        
+
         var isCollection = type?.StartsWith("[]") ?? false;
         if (isCollection)
         {
             type = type!.Substring(2);
         }
-        
+
         if (string.IsNullOrEmpty(type))
         {
             type = "TODO";
@@ -36,11 +35,12 @@ public static class FieldDefinitionExtensions
             type = $"IList<{type}>";
         }
 
-        if (field.NullableVersions != null && !field.NullableVersions.Value.IsEmpty)
-        {
-            type = $"{type}?";
-        }
-        
+        var nullable = field.Ignorable ||
+                       (field.NullableVersions != null && !field.NullableVersions.Value.IsEmpty);
+        type = nullable
+            ? $"{type}?"
+            : $"required {type}";
+
         return type;
     }
 
