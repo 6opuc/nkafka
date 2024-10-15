@@ -9,8 +9,18 @@ public static class FieldDefinitionExtensions
 
     public static string ToPropertyDeclaration(this FieldDefinition field)
     {
+        var comment = GetPropertyComment(field);
         var type = GetPropertyType(field);
-        return $"public {type} {field.Name} {{ get; set; }}";
+        return $"{comment}\npublic {type} {field.Name} {{ get; set; }}";
+    }
+
+    private static string GetPropertyComment(FieldDefinition field)
+    {
+        return $"""
+                /// <summary>
+                /// {field.About}
+                /// </summary>
+                """;
     }
 
     private static string GetPropertyType(FieldDefinition field)
