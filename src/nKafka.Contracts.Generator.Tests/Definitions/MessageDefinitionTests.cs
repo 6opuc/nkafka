@@ -1,7 +1,8 @@
 using System.Text.Json;
 using FluentAssertions;
+using nKafka.Contracts.Generator.Definitions;
 
-namespace nKafka.Contracts.Generator.Tests;
+namespace nKafka.Contracts.Generator.Tests.Definitions;
 
 public class Tests
 {

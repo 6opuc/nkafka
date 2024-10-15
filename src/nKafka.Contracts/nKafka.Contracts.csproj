@@ -7,7 +7,13 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\nKafka.Contracts.Generator\nKafka.Contracts.Generator.csproj" />
+      <ProjectReference Include="..\nKafka.Contracts.Generator\nKafka.Contracts.Generator.csproj"  ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <AdditionalFiles Include="..\..\apache_kafka_message_definitions\*.json">
+        <LinkBase>apache_kafka_message_definitions</LinkBase>
+      </AdditionalFiles>
     </ItemGroup>
 
 </Project>

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace nKafka.Contracts.Generator;
+namespace nKafka.Contracts.Generator.Definitions;
 
 public class MessageDefinitionSerializerOptions
 {

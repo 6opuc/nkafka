@@ -1,9 +1,9 @@
-namespace nKafka.Contracts.Generator;
+namespace nKafka.Contracts.Generator.Definitions;
 
 public class FieldDefinition
 {
-    public required string Name { get; set; }
-    public required string Type { get; set; }
+    public string? Name { get; set; }
+    public string? Type { get; set; }
     public string? About { get; set; }
     public string? Versions { get; set; }
     public string? NullableVersions { get; set; }

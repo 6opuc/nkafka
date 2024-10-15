@@ -11,5 +11,5 @@ internal static class ProjectSource
 
     public static string RepositoryDirectory => Path.Combine(ProjectDirectory, "../..");
     
-    public static string MessageDefinitionsDirectory = Path.Combine(RepositoryDirectory, "apache_kafka_message_definitions");
+    public static string MessageDefinitionsDirectory => Path.Combine(RepositoryDirectory, "apache_kafka_message_definitions");
 }
