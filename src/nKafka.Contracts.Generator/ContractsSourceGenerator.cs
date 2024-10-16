@@ -13,7 +13,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        Debugger.Launch();
+        //Debugger.Launch();
 
         var messageDefinitions = ParseMessageDefinitions(context);
 
@@ -60,10 +60,9 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                          public static readonly VersionRange DeprecatedVersions = {{messageDefinition.DeprecatedVersions.ToLiteral()}};
                          public static readonly VersionRange FlexibleVersions = {{messageDefinition.FlexibleVersions.ToLiteral()}};
                          
-                         public required int Version { get; set; }
-                         
                          {{messageDefinition.Fields.ToPropertyDeclarations()}}
-                      }            
+                      }        
+                          
                       """));
         }
     }

@@ -110,7 +110,9 @@ public static class FieldDefinitionExtensions
             "int32" => "int",
             "int16" => "short",
             "int8" => "sbyte",
+            "uint16" => "ushort",
             "uuid" => "Guid",
+            "bytes" => "byte[]",
             _ => fieldType
         };
     }
