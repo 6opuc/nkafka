@@ -4,9 +4,12 @@ namespace nKafka.Contracts.Generator.Definitions;
 
 public static class FieldDefinitionExtensions
 {
-    public static string ToPropertyDeclarations(this IEnumerable<FieldDefinition> fields)
+    public static string ToPropertyDeclarations(this IList<FieldDefinition> fields)
     {
-        return string.Join("\n", fields.Select(x => x.ToPropertyDeclaration()));
+        var propertyDeclarations = string.Join("\n", fields.Select(x => x.ToPropertyDeclaration()));
+        var nestedTypes = fields.Where(x => x.Fields.Any());
+        var nestedTypeDeclarations = string.Join("\n", nestedTypes.Select(x => x.ToNestedTypeDeclaration()));
+        return $"{propertyDeclarations}\n{nestedTypeDeclarations}";
     }
 
     public static string ToPropertyDeclaration(this FieldDefinition field)
@@ -103,9 +106,29 @@ public static class FieldDefinitionExtensions
     {
         return fieldType switch
         {
+            "int64" => "long",
             "int32" => "int",
+            "int16" => "short",
             "int8" => "sbyte",
+            "uuid" => "Guid",
             _ => fieldType
         };
+    }
+
+    public static string ToNestedTypeDeclaration(this FieldDefinition field)
+    {
+        var nestedTypeName = field.Type;
+        var isCollection = nestedTypeName?.StartsWith("[]") ?? false;
+        if (isCollection)
+        {
+            nestedTypeName = nestedTypeName!.Substring(2);
+        }
+        
+        return $$"""
+                 public partial class {{nestedTypeName}}
+                 {
+                    {{field.Fields.ToPropertyDeclarations()}}
+                 }  
+                 """;
     }
 }
