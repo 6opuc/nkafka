@@ -66,4 +66,67 @@ public static class PrimitiveSerializer
 
         return (short) ((input.ReadByte() << 8) | input.ReadByte());
     }
+    
+    public static void SerializeVarLong(MemoryStream output, long value)
+    {
+        var asZigZag = ToZigZag(value);
+
+        // value & 1111 1111 ... 1000 0000 will zero the last 7 bytes,
+        // if the result is zero, it means we only have those last 7 bytes
+        // to write.
+        while((asZigZag & 0xffffffffffffff80L) != 0L)
+        {
+            // keep only the 7 most significant bytes:
+            // value = (value & 0111 1111)
+            // and add a 1 in the most significant bit of the byte, meaning
+            // it's not the last byte of the VarInt:
+            // value = (value | 1000 0000)
+            output.WriteByte((byte)((asZigZag & 0x7f) | 0x80));
+            // Shift the 7 bits we just wrote to the stream and continue:
+            asZigZag >>= 7;
+        }
+        output.WriteByte((byte)asZigZag);
+    }
+
+    public static long DeserializeVarLong(MemoryStream input)
+    {
+        ulong asZigZag = 0L; // Result value
+        int i = 0; // Number of bits written
+        long b; // Byte read
+
+        // Check if the 8th bit of the byte is 1, meaning there will be more to read:
+        // b & 1000 0000
+        while (((b = input.ReadByte()) & 0x80) != 0) {
+            // Take the 7 bits of the byte we want to add and insert them at the
+            // right location (offset i)
+            asZigZag |= (ulong)(b & 0x7f) << i;
+            i += 7;
+            if (i > 63)
+                throw new OverflowException();
+        }
+
+        if (i == 63 && b != 0x01)
+        {
+            // We read 63 bits, we can only read one more (the most significant bit, MSB),
+            // or it means that the VarInt can't fit in a long.
+            // If the bit to read was 0, we would not have read it (as it's the MSB), thus, it must be 1.
+            throw new OverflowException();
+        }
+
+        asZigZag |= (ulong)b << i;
+
+        // The value is signed
+        if ((asZigZag & 0x1) == 0x1)
+        {
+            return (-1 * ((long)(asZigZag >> 1) + 1));
+        }
+
+
+        return (long)(asZigZag >> 1);
+    }
+    
+    private static ulong ToZigZag(long i)
+    {
+        return unchecked((ulong)((i << 1) ^ (i >> 63)));
+    }
 }
