@@ -35,6 +35,35 @@ public class PrimitiveSerializerTests
         yield return new SerializeTestCase<string?>(string.Empty, [0, 0]);
     }
     
+    [Test]
+    [TestCaseSource(nameof(GetVarStringCases))]
+    public void SerializeVarString_ByTestCase_ProducesExpectedOutput(SerializeTestCase<string?> testCase)
+    {
+        using var stream = new MemoryStream(0);
+        PrimitiveSerializer.SerializeVarString(stream, testCase.Value);
+
+        var actual = stream.ToArray();
+
+        actual.Should().BeEquivalentTo(testCase.Bytes);
+    }
+    
+    [Test]
+    [TestCaseSource(nameof(GetVarStringCases))]
+    public void DeserializeVarString_ByTestCase_ProducesExpectedOutput(SerializeTestCase<string?> testCase)
+    {
+        using var stream = new MemoryStream(testCase.Bytes, 0, testCase.Bytes.Length, false, true );
+        var actual = PrimitiveSerializer.DeserializeVarString(stream);
+
+        actual.Should().BeEquivalentTo(testCase.Value);
+    }
+
+    public static IEnumerable<SerializeTestCase<string?>> GetVarStringCases()
+    {
+        yield return new SerializeTestCase<string?>("ABCDE", [10, 65, 66, 67, 68, 69]);
+        yield return new SerializeTestCase<string?>(null, [1]);
+        yield return new SerializeTestCase<string?>(string.Empty, [0]);
+    }
+    
     #endregion Strings
 
     #region VarLong
