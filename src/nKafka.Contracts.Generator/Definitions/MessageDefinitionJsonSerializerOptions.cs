@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace nKafka.Contracts.Generator.Definitions;
 
-public class MessageDefinitionSerializerOptions
+public static class MessageDefinitionJsonSerializerOptions
 {
     public static readonly JsonSerializerOptions
         Default = new()

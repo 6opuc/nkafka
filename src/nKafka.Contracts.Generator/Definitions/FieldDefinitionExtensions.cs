@@ -111,7 +111,7 @@ public static class FieldDefinitionExtensions
             "uint16" => "ushort",
             "uuid" => "Guid",
             "bytes" => "byte[]",
-            "records" => "RecordBatchSet",
+            "records" => "byte[]",// TODO: "RecordBatchSet",
             _ => fieldType
         };
     }

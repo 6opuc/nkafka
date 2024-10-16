@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -29,7 +28,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
             .Select((x, token) => x.GetText(token))
             .Where(x => x != null)
             .Select((x, _) => JsonSerializer.Deserialize<MessageDefinition>(
-                x!.ToString(), MessageDefinitionSerializerOptions.Default))
+                x!.ToString(), MessageDefinitionJsonSerializerOptions.Default))
             .Where(x => x != null)
             .Where(x => Enum.IsDefined(typeof(ApiKey), x!.ApiKey))
             .Select((x, _) => x!)

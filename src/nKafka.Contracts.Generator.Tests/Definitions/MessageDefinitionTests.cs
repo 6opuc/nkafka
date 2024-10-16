@@ -12,7 +12,7 @@ public class Tests
     {
         var json = File.ReadAllText(filePath);
         
-        var actual = JsonSerializer.Deserialize<MessageDefinition>(json, MessageDefinitionSerializerOptions.Default);
+        var actual = JsonSerializer.Deserialize<MessageDefinition>(json, MessageDefinitionJsonSerializerOptions.Default);
 
         actual.Should().NotBeNull();
     }
