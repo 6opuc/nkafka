@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace nKafka.Contracts.Generator.Definitions;
 
 public static class FieldDefinitionExtensions
@@ -16,11 +18,52 @@ public static class FieldDefinitionExtensions
 
     private static string GetPropertyComment(FieldDefinition field)
     {
-        return $"""
-                /// <summary>
-                /// {field.About}
-                /// </summary>
-                """;
+        var summary = new StringBuilder();
+        if (!string.IsNullOrEmpty(field.About))
+        {
+            summary.AppendLine($"/// {field.About}");
+        }
+
+        var remarks = new StringBuilder();
+        if (!string.IsNullOrEmpty(field.Default))
+        {
+            remarks.AppendLine($"/// Default: {field.Default}.");
+        }
+        if (!string.IsNullOrEmpty(field.EntityType))
+        {
+            remarks.AppendLine($"/// EntityType: {field.EntityType}.");
+        }
+
+        if (field.Versions != null)
+        {
+            remarks.AppendLine($"/// Versions: {field.Versions}.");
+        }
+
+        if (field.NullableVersions != null)
+        {
+            remarks.AppendLine($"/// NullableVersions: {field.NullableVersions}.");
+        }
+
+        remarks.AppendLine($"/// Ignorable: {field.Ignorable}.");
+        
+        
+
+        var comment = new StringBuilder();
+        if (summary.Length > 0)
+        {
+            comment.AppendLine("/// <summary>");
+            comment.Append(summary);
+            comment.AppendLine("/// </summary>");
+        }
+
+        if (remarks.Length > 0)
+        {
+            comment.AppendLine("/// <remarks>");
+            comment.Append(remarks);
+            comment.AppendLine("/// </remarks>");
+        }
+
+        return comment.ToString();
     }
 
     private static string GetPropertyType(FieldDefinition field)
