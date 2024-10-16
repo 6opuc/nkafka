@@ -44,7 +44,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
         foreach (var messageDefinition in messageDefinitions)
         {
             context.AddSource(
-                $"{messageDefinition.Name}.g.cs",
+                $"MessageDefinitions/{messageDefinition.Name}.g.cs",
                 Format(
                     $$"""
                       #nullable enable
