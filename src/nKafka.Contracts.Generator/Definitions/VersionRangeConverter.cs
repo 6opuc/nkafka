@@ -9,6 +9,8 @@ public class VersionRangeConverter : JsonConverter<VersionRange>
     public override VersionRange Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
         reader.TokenType switch
         {
+            JsonTokenType.None => VersionRange.None,
+            JsonTokenType.Null => VersionRange.None,
             JsonTokenType.Number => new VersionRange(reader.GetInt32()),
             JsonTokenType.String => VersionRange.TryParse(reader.GetString() ?? string.Empty, out var result)
                 ? result

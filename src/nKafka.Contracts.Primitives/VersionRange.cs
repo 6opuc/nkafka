@@ -2,11 +2,11 @@ namespace nKafka.Contracts.Primitives;
 
 public readonly struct VersionRange
 {
-    public static readonly VersionRange Empty = new VersionRange();
+    public static readonly VersionRange None = new VersionRange();
 
     public int? From { get; }
     public int? To { get; }
-    public bool IsEmpty => From == null;
+    public bool IsNone => From == null;
 
 
     public VersionRange(int from, int? to = null)
@@ -17,7 +17,7 @@ public readonly struct VersionRange
 
     public static bool TryParse(string s, out VersionRange result)
     {
-        result = Empty;
+        result = None;
 
         if (string.Equals(s, "none", StringComparison.OrdinalIgnoreCase))
         {
@@ -60,7 +60,7 @@ public readonly struct VersionRange
 
     public override string ToString()
     {
-        if (IsEmpty)
+        if (IsNone)
         {
             return "none";
         }

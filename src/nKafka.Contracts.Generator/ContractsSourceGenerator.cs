@@ -89,7 +89,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                           {
                              public void Serialize(int version, {{messageDefinition.Name}} message, Stream output)
                              {
-                             
+                                {{messageDefinition.Fields.ToSerializationStatements()}}
                              }
                              
                              public {{messageDefinition.Name}} Deserialize(int version, Stream input)

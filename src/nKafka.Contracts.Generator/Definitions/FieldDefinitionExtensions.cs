@@ -35,12 +35,12 @@ public static class FieldDefinitionExtensions
             remarks.AppendLine($"/// EntityType: {field.EntityType}.");
         }
 
-        if (field.Versions != null)
+        if (!field.Versions.IsNone)
         {
             remarks.AppendLine($"/// Versions: {field.Versions}.");
         }
 
-        if (field.NullableVersions != null)
+        if (!field.NullableVersions.IsNone)
         {
             remarks.AppendLine($"/// NullableVersions: {field.NullableVersions}.");
         }
@@ -134,5 +134,17 @@ public static class FieldDefinitionExtensions
                  
                  {{field.Fields.ToNestedTypeDeclarations()}}
                  """;
+    }
+
+    public static string ToSerializationStatements(this IList<FieldDefinition> fields)
+    {
+        var serializationStatements = string.Join("\n", fields.Select(x => x.ToSerializationStatements()));
+        return serializationStatements;
+    }
+    
+
+    public static string ToSerializationStatements(this FieldDefinition field)
+    {
+        return string.Empty;
     }
 }
