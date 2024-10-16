@@ -85,14 +85,14 @@ public class ContractsSourceGenerator : IIncrementalGenerator
 
                       namespace nKafka.Contracts.MessageSerializers
                       {
-                          public class {{messageDefinition.Name}}Serializer
+                          public static class {{messageDefinition.Name}}Serializer
                           {
-                             public void Serialize(int version, {{messageDefinition.Name}} message, Stream output)
+                             public static void Serialize(int version, {{messageDefinition.Name}} message, MemoryStream output)
                              {
                                 {{messageDefinition.Fields.ToSerializationStatements()}}
                              }
                              
-                             public {{messageDefinition.Name}} Deserialize(int version, Stream input)
+                             public static {{messageDefinition.Name}} Deserialize(int version, MemoryStream input)
                              {
                                 var message = new {{messageDefinition.Name}}();
                                 
