@@ -51,18 +51,27 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                       
                       using nKafka.Contracts.Primitives;
 
-                      namespace nKafka.Contracts;
-
-                      public partial class {{messageDefinition.Name}}
+                      namespace nKafka.Contracts.MessageDefinitions
                       {
-                         public static readonly ApiKey ApiKey = ApiKey.{{messageDefinition.ApiKey}};
-                         public static readonly VersionRange ValidVersions = {{messageDefinition.ValidVersions.ToLiteral()}};
-                         public static readonly VersionRange DeprecatedVersions = {{messageDefinition.DeprecatedVersions.ToLiteral()}};
-                         public static readonly VersionRange FlexibleVersions = {{messageDefinition.FlexibleVersions.ToLiteral()}};
-                         
-                         {{messageDefinition.Fields.ToPropertyDeclarations()}}
-                      }        
+                          using nKafka.Contracts.MessageDefinitions.{{messageDefinition.Name}}Nested;
                           
+                          public class {{messageDefinition.Name}}
+                          {
+                             public static readonly ApiKey ApiKey = ApiKey.{{messageDefinition.ApiKey}};
+                             public static readonly VersionRange ValidVersions = {{messageDefinition.ValidVersions.ToLiteral()}};
+                             public static readonly VersionRange DeprecatedVersions = {{messageDefinition.DeprecatedVersions.ToLiteral()}};
+                             public static readonly VersionRange FlexibleVersions = {{messageDefinition.FlexibleVersions.ToLiteral()}};
+                             
+                             {{messageDefinition.Fields.ToPropertyDeclarations()}}
+                          }
+                      }   
+                      
+                      namespace nKafka.Contracts.MessageDefinitions.{{messageDefinition.Name}}Nested
+                      {
+                          {{messageDefinition.Fields.ToNestedTypeDeclarations()}}  
+                          
+                          {{messageDefinition.CommonStructs.ToNestedTypeDeclarations()}}  
+                      }
                       """));
         }
     }

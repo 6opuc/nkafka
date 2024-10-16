@@ -7,9 +7,7 @@ public static class FieldDefinitionExtensions
     public static string ToPropertyDeclarations(this IList<FieldDefinition> fields)
     {
         var propertyDeclarations = string.Join("\n", fields.Select(x => x.ToPropertyDeclaration()));
-        var nestedTypes = fields.Where(x => x.Fields.Any());
-        var nestedTypeDeclarations = string.Join("\n", nestedTypes.Select(x => x.ToNestedTypeDeclaration()));
-        return $"{propertyDeclarations}\n{nestedTypeDeclarations}";
+        return propertyDeclarations;
     }
 
     public static string ToPropertyDeclaration(this FieldDefinition field)
@@ -113,8 +111,16 @@ public static class FieldDefinitionExtensions
             "uint16" => "ushort",
             "uuid" => "Guid",
             "bytes" => "byte[]",
+            "records" => "RecordBatchSet",
             _ => fieldType
         };
+    }
+    
+    public static string ToNestedTypeDeclarations(this IList<FieldDefinition> fields)
+    {
+        var nestedTypes = fields.Where(x => x.Fields.Any());
+        var nestedTypeDeclarations = string.Join("\n", nestedTypes.Select(x => x.ToNestedTypeDeclaration()));
+        return nestedTypeDeclarations;
     }
 
     public static string ToNestedTypeDeclaration(this FieldDefinition field)
@@ -127,10 +133,12 @@ public static class FieldDefinitionExtensions
         }
         
         return $$"""
-                 public partial class {{nestedTypeName}}
+                 public class {{nestedTypeName}}
                  {
                     {{field.Fields.ToPropertyDeclarations()}}
                  }  
+                 
+                 {{field.Fields.ToNestedTypeDeclarations()}}
                  """;
     }
 }
