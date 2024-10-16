@@ -13,16 +13,17 @@ public static class PrimitiveSerializer
             output.Write(MinusOneShort, 0, MinusOneShort.Length);
             return;
         }
-
-        var bytes = Encoding.UTF8.GetBytes(value);
-
-        if (bytes.Length > short.MaxValue)
+        
+        var length = Encoding.UTF8.GetByteCount(value);
+        if (length > short.MaxValue)
         {
-            throw new InvalidOperationException($"value is too long. Max length: {short.MaxValue}. Current value length: {bytes.Length}");
+            throw new InvalidOperationException($"value is too long. Max length: {short.MaxValue}. Current value length: {length}");
         }
-
-        SerializeShort(output, (short)bytes.Length);
-        output.Write(bytes, 0, bytes.Length);
+        SerializeShort(output, (short)length);
+        
+        output.SetLength(output.Length + length);
+        Encoding.UTF8.GetBytes(value, 0, value.Length, output.GetBuffer(), (int) output.Position);
+        output.Position += length;
     }
 
     public static string? DeserializeString(MemoryStream input)
