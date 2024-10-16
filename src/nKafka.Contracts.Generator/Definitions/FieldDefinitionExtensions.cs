@@ -89,13 +89,7 @@ public static class FieldDefinitionExtensions
             type = $"IList<{type}>";
         }
 
-        var nullable = field.Ignorable ||
-                       (field.NullableVersions != null && !field.NullableVersions.Value.IsEmpty) ||
-                       field.Versions?.From > 0 ||
-                       field.Versions?.To != null;
-        type = nullable
-            ? $"{type}?"
-            : $"required {type}";
+        type = $"{type}?"; // property can become nullable in future versions
 
         return type;
     }

@@ -72,6 +72,35 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                           {{messageDefinition.CommonStructs.ToNestedTypeDeclarations()}}  
                       }
                       """));
+            
+            context.AddSource(
+                $"MessageSerializers/{messageDefinition.Name}Serializer.g.cs",
+                Format(
+                    $$"""
+                      #nullable enable
+
+                      using nKafka.Contracts.Primitives;
+                      using nKafka.Contracts.MessageDefinitions;
+                      using nKafka.Contracts.MessageDefinitions.{{messageDefinition.Name}}Nested;
+
+                      namespace nKafka.Contracts.MessageSerializers
+                      {
+                          public class {{messageDefinition.Name}}Serializer
+                          {
+                             public void Serialize(int version, {{messageDefinition.Name}} message, Stream output)
+                             {
+                             
+                             }
+                             
+                             public {{messageDefinition.Name}} Deserialize(int version, Stream input)
+                             {
+                                var message = new {{messageDefinition.Name}}();
+                                
+                                return message;
+                             }
+                          }
+                      }
+                      """));
         }
     }
 
