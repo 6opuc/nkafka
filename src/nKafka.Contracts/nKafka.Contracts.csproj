@@ -24,5 +24,9 @@
         <Compile Remove="$(CompilerGeneratedFilesOutputPath)/**/*.cs"/>
         <None Include="$(CompilerGeneratedFilesOutputPath)/**/*.cs"/>
     </ItemGroup>
+    
+    <ItemGroup>
+      <Folder Include="Generated\" />
+    </ItemGroup>
 
 </Project>

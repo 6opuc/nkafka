@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -12,7 +13,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        //Debugger.Launch();
+        Debugger.Launch();
 
         var messageDefinitions = ParseMessageDefinitions(context);
 
@@ -85,20 +86,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
 
                       namespace nKafka.Contracts.MessageSerializers
                       {
-                          public static class {{messageDefinition.Name}}Serializer
-                          {
-                             public static void Serialize(int version, {{messageDefinition.Name}} message, MemoryStream output)
-                             {
-                                {{messageDefinition.Fields.ToSerializationStatements()}}
-                             }
-                             
-                             public static {{messageDefinition.Name}} Deserialize(int version, MemoryStream input)
-                             {
-                                var message = new {{messageDefinition.Name}}();
-                                
-                                return message;
-                             }
-                          }
+                          {{messageDefinition.ToSerializerDefinitions()}}
                       }
                       """));
         }

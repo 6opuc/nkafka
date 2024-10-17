@@ -1,4 +1,5 @@
 using System.Text;
+using nKafka.Contracts.Primitives;
 
 namespace nKafka.Contracts.Generator.Definitions;
 
@@ -67,7 +68,7 @@ public static class FieldDefinitionExtensions
         return comment.ToString();
     }
 
-    private static string GetPropertyType(FieldDefinition field)
+    public static string GetPropertyType(this FieldDefinition field)
     {
         var type = field.Type;
 
@@ -83,13 +84,12 @@ public static class FieldDefinitionExtensions
         }
 
         type = GetPropertyType(type!);
+        type = $"{type}?"; // property can become nullable in future versions
 
         if (isCollection)
         {
-            type = $"IList<{type}>";
+            type = $"IList<{type}>?";
         }
-
-        type = $"{type}?"; // property can become nullable in future versions
 
         return type;
     }
@@ -136,15 +136,45 @@ public static class FieldDefinitionExtensions
                  """;
     }
 
-    public static string ToSerializationStatements(this IList<FieldDefinition> fields)
+    public static string ToSerializationStatements(this IList<FieldDefinition> fields, int version, bool flexible)
     {
-        var serializationStatements = string.Join("\n", fields.Select(x => x.ToSerializationStatements()));
+        var serializationStatements = string.Join("\n", fields.Select(x => x.ToSerializationStatements(version, flexible)));
         return serializationStatements;
     }
     
 
-    public static string ToSerializationStatements(this FieldDefinition field)
+    public static string ToSerializationStatements(this FieldDefinition field, int version, bool flexible)
     {
-        return string.Empty;
+        if (!field.Versions.Includes(version))
+        {
+            return string.Empty;
+        }
+
+        if (field.TaggedVersions.Includes(version))
+        {
+            return $"#warning {field.Name}: Tag support is not implemented.";
+        }
+
+        var propertyType = field.GetPropertyType();
+        if (propertyType == "string?")
+        {
+            return flexible
+                ? $"PrimitiveSerializer.SerializeVarString(output, message.{field.Name});"
+                : $"PrimitiveSerializer.SerializeString(output, message.{field.Name});";
+        }
+        
+        if (propertyType == "short?")
+        {
+            return $"PrimitiveSerializer.SerializeShort(output, message.{field.Name}.Value);";
+        }
+        
+        if (propertyType == "int?")
+        {
+            return flexible
+                ? $"PrimitiveSerializer.SerializeVarInt(output, message.{field.Name}.Value);"
+                : $"PrimitiveSerializer.SerializeInt(output, message.{field.Name}.Value);";
+        }
+
+        return $"#warning {field.Name}: {propertyType} support is not implemented.";
     }
 }

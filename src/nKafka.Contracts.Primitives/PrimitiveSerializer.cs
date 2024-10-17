@@ -98,8 +98,13 @@ public static class PrimitiveSerializer
 
     public static void SerializeShort(MemoryStream output, short value)
     {
-        output.WriteByte((byte)(value >> 8));
-        output.WriteByte((byte)value);
+        SerializeIntAsByte(output, value >> 8);
+        SerializeIntAsByte(output, value);
+    }
+    
+    private static void SerializeIntAsByte(MemoryStream output, int value)
+    {
+        output.WriteByte((byte) (value & 0xff));
     }
     
     public static short DeserializeShort(MemoryStream input)
@@ -111,6 +116,25 @@ public static class PrimitiveSerializer
         }
 
         return (short) ((input.ReadByte() << 8) | input.ReadByte());
+    }
+    
+    public static void SerializeInt(MemoryStream output, int value)
+    {
+        SerializeIntAsByte(output, value >> 8 * 3);
+        SerializeIntAsByte(output, value >> 8 * 2);
+        SerializeIntAsByte(output, value >> 8);
+        SerializeIntAsByte(output, value);
+    }
+    
+    public static int DeserializeInt(MemoryStream input)
+    {
+        if (input.Position + 4 > input.Length)
+        {
+            throw new InvalidOperationException(
+                $"DeserializeInt needs 4 bytes but got only {input.Length - input.Position}");
+        }
+
+        return input.ReadByte() << 3*8 | input.ReadByte() << 2*8 | input.ReadByte() << 8 | input.ReadByte();
     }
     
     public static void SerializeVarLong(MemoryStream output, long value)
@@ -174,5 +198,15 @@ public static class PrimitiveSerializer
     private static ulong ToZigZag(long i)
     {
         return unchecked((ulong)((i << 1) ^ (i >> 63)));
+    }
+
+    public static void SerializeVarInt(MemoryStream output, int value)
+    {
+        SerializeVarLong(output, value);
+    }
+
+    public static int DeserializeVarInt(MemoryStream input)
+    {
+        return checked((int)DeserializeVarLong(input));
     }
 }

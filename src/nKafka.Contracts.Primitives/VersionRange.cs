@@ -1,6 +1,8 @@
+using System.Collections;
+
 namespace nKafka.Contracts.Primitives;
 
-public readonly struct VersionRange
+public readonly struct VersionRange : IEnumerable<int>
 {
     public static readonly VersionRange None = new VersionRange();
 
@@ -56,6 +58,39 @@ public readonly struct VersionRange
 
         result = new VersionRange(from, to);
         return true;
+    }
+
+    public bool Includes(int version)
+    {
+        if (IsNone)
+        {
+            return false;
+        }
+
+        if (From > version || To < version)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return GetEnumerator();
+    }
+
+    public IEnumerator<int> GetEnumerator()
+    {
+        if (!To.HasValue || !From.HasValue)
+        {
+            yield break;
+        }
+
+        for (var v = From.Value; v <= To.Value; v++)
+        {
+            yield return v;
+        }
     }
 
     public override string ToString()
