@@ -96,10 +96,10 @@ public static class PrimitiveSerializer
         return value;
     }
 
-    public static void SerializeShort(MemoryStream output, short value)
+    public static void SerializeShort(MemoryStream output, short? value)
     {
-        SerializeIntAsByte(output, value >> 8);
-        SerializeIntAsByte(output, value);
+        SerializeIntAsByte(output, value!.Value >> 8);
+        SerializeIntAsByte(output, value!.Value);
     }
     
     private static void SerializeIntAsByte(MemoryStream output, int value)
@@ -117,13 +117,23 @@ public static class PrimitiveSerializer
 
         return (short) ((input.ReadByte() << 8) | input.ReadByte());
     }
-    
-    public static void SerializeInt(MemoryStream output, int value)
+
+    public static void SerializeByte(MemoryStream output, byte? value)
     {
-        SerializeIntAsByte(output, value >> 8 * 3);
-        SerializeIntAsByte(output, value >> 8 * 2);
-        SerializeIntAsByte(output, value >> 8);
-        SerializeIntAsByte(output, value);
+        output.WriteByte(value.Value);
+    }
+
+    public static byte DeserializeByte(MemoryStream input)
+    {
+        return (byte)input.ReadByte();
+    }
+
+    public static void SerializeInt(MemoryStream output, int? value)
+    {
+        SerializeIntAsByte(output, value!.Value >> 8 * 3);
+        SerializeIntAsByte(output, value!.Value >> 8 * 2);
+        SerializeIntAsByte(output, value!.Value >> 8);
+        SerializeIntAsByte(output, value!.Value);
     }
     
     public static int DeserializeInt(MemoryStream input)
@@ -136,10 +146,33 @@ public static class PrimitiveSerializer
 
         return input.ReadByte() << 3*8 | input.ReadByte() << 2*8 | input.ReadByte() << 8 | input.ReadByte();
     }
-    
-    public static void SerializeVarLong(MemoryStream output, long value)
+
+    public static void SerializeLong(MemoryStream output, long? value)
     {
-        var asZigZag = ToZigZag(value);
+        ulong ui = (ulong) value!.Value;
+        for (int j = 7; j >= 0; j--)
+            output.WriteByte((byte) (ui >> j*8 & 0xff));
+    }
+    
+    public static long DeserializeLong(MemoryStream input)
+    {
+        if (input.Position + 8 > input.Length)
+        {
+            throw new Exception($"DeserializeLong needs 8 bytes but got only {input.Length - input.Position}");
+        }
+
+        var value = 0L;
+        for (var i = 0; i < 8; i++)
+        {
+            value = value << 8 | (uint)input.ReadByte();
+        }
+
+        return value;
+    }
+    
+    public static void SerializeVarLong(MemoryStream output, long? value)
+    {
+        var asZigZag = ToZigZag(value!.Value);
 
         // value & 1111 1111 ... 1000 0000 will zero the last 7 bytes,
         // if the result is zero, it means we only have those last 7 bytes
@@ -200,7 +233,7 @@ public static class PrimitiveSerializer
         return unchecked((ulong)((i << 1) ^ (i >> 63)));
     }
 
-    public static void SerializeVarInt(MemoryStream output, int value)
+    public static void SerializeVarInt(MemoryStream output, int? value)
     {
         SerializeVarLong(output, value);
     }

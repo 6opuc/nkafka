@@ -14,7 +14,7 @@ public static class FieldDefinitionExtensions
     public static string ToPropertyDeclaration(this FieldDefinition field)
     {
         var comment = GetPropertyComment(field);
-        var type = GetPropertyType(field);
+        var type = GetFieldPropertyType(field);
         return $"{comment}\npublic {type} {field.Name} {{ get; set; }}";
     }
 
@@ -68,16 +68,9 @@ public static class FieldDefinitionExtensions
         return comment.ToString();
     }
 
-    public static string GetPropertyType(this FieldDefinition field)
+    public static string GetFieldPropertyType(this FieldDefinition field)
     {
-        var type = field.GetFieldTypeCollectionAware();
-
-        if (string.IsNullOrEmpty(type))
-        {
-            type = "TODO";
-        }
-
-        type = GetPropertyType(type!);
+        var type = GetFieldItemPropertyType(field); 
 
         if (field.IsCollection())
         {
@@ -92,7 +85,21 @@ public static class FieldDefinitionExtensions
         return type;
     }
 
-    public static string? GetFieldTypeCollectionAware(this FieldDefinition field)
+    public static string? GetFieldItemPropertyType(this FieldDefinition field)
+    {
+        var type = field.GetFieldItemType();
+
+        if (string.IsNullOrEmpty(type))
+        {
+            type = "TODO";
+        }
+
+        type = GetPropertyType(type!);
+
+        return type;
+    }
+
+    public static string? GetFieldItemType(this FieldDefinition field)
     {
         return field.IsCollection()
             ? field.Type?.Substring(2)
@@ -102,6 +109,11 @@ public static class FieldDefinitionExtensions
     public static bool IsCollection(this FieldDefinition field)
     {
         return field.Type?.StartsWith("[]") ?? false;
+    }
+
+    public static bool IsMap(this FieldDefinition field)
+    {
+        return field.GetMapKeyPropertyType() != null;
     }
 
     private static string? GetMapKeyPropertyType(this FieldDefinition field)
@@ -122,7 +134,7 @@ public static class FieldDefinitionExtensions
             "int64" => "long",
             "int32" => "int",
             "int16" => "short",
-            "int8" => "sbyte",
+            "int8" => "byte",
             "uint16" => "ushort",
             "uuid" => "Guid",
             "bytes" => "byte[]",
@@ -140,7 +152,7 @@ public static class FieldDefinitionExtensions
 
     public static string ToNestedTypeDeclaration(this FieldDefinition field)
     {
-        var nestedTypeName = field.GetFieldTypeCollectionAware();
+        var nestedTypeName = field.GetFieldItemType();
 
         return $$"""
                  public class {{nestedTypeName}}
@@ -172,27 +184,77 @@ public static class FieldDefinitionExtensions
             return $"#warning {field.Name}: Tag support is not implemented.";
         }
 
-        var propertyType = field.GetPropertyType();
-        if (propertyType == "string?")
+        var propertyType = field.GetFieldItemPropertyType();
+        if (!field.IsCollection())
+        {
+            return GetSerializationStatements($"message.{field.Name}", version, flexible, propertyType);
+        }
+
+        if (!field.IsMap())
+        {
+            var lengthSerialization = flexible
+                ? $"PrimitiveSerializer.SerializeVarInt(output, message.{field.Name}?.Count ?? 0);"
+                : $"PrimitiveSerializer.SerializeInt(output, message.{field.Name}?.Count ?? -1);";
+            return $$"""
+                     {{lengthSerialization}}
+                     foreach (var item in message.{{field.Name}} ?? Enumerable.Empty<{{propertyType}}>())
+                     {
+                        {{GetSerializationStatements("item", version, flexible, propertyType)}}
+                     }
+                     """;
+        }
+        
+        return $"#warning {field.Name}: {propertyType} map support is not implemented.";
+    }
+
+    private static string GetSerializationStatements(string propertyPath, int version, bool flexible, string? propertyType)
+    {
+        if (propertyType == "string")
         {
             return flexible
-                ? $"PrimitiveSerializer.SerializeVarString(output, message.{field.Name}!);"
-                : $"PrimitiveSerializer.SerializeString(output, message.{field.Name}!);";
+                ? $"PrimitiveSerializer.SerializeVarString(output, {propertyPath});"
+                : $"PrimitiveSerializer.SerializeString(output, {propertyPath});";
         }
 
-        if (propertyType == "short?")
+        if (propertyType == "short")
         {
-            return $"PrimitiveSerializer.SerializeShort(output, message.{field.Name}!.Value);";
+            return $"PrimitiveSerializer.SerializeShort(output, {propertyPath});";
         }
 
-        if (propertyType == "int?")
+        if (propertyType == "byte")
+        {
+            return $"PrimitiveSerializer.SerializeByte(output, {propertyPath});";
+        }
+        
+        if (propertyType == "int")
         {
             return flexible
-                ? $"PrimitiveSerializer.SerializeVarInt(output, message.{field.Name}!.Value);"
-                : $"PrimitiveSerializer.SerializeInt(output, message.{field.Name}!.Value);";
+                ? $"PrimitiveSerializer.SerializeVarInt(output, {propertyPath});"
+                : $"PrimitiveSerializer.SerializeInt(output, {propertyPath});";
+        }
+        
+        if (propertyType == "long")
+        {
+            return flexible
+                ? $"PrimitiveSerializer.SerializeVarLong(output, {propertyPath});"
+                : $"PrimitiveSerializer.SerializeLong(output, {propertyPath});";
         }
 
-        return $"#warning {field.Name}: {propertyType} support is not implemented.";
+        if (propertyType == "byte[]")
+        {
+            var lengthSerialization = flexible
+                ? $"PrimitiveSerializer.SerializeVarInt(output, {propertyPath}?.Length ?? 0);"
+                : $"PrimitiveSerializer.SerializeInt(output, {propertyPath}?.Length ?? -1);";
+            return $$"""
+                     {{lengthSerialization}}
+                     if ({{propertyPath}} != null)
+                     {
+                         output.Write({{propertyPath}}, 0, {{propertyPath}}.Length);
+                     }
+                     """;
+        }
+
+        return $"{propertyType}SerializerV{version}.Serialize(output, {propertyPath});";
     }
 
     public static string ToNestedSerializerDeclaration(this FieldDefinition field, int version, bool flexible)
@@ -207,7 +269,7 @@ public static class FieldDefinitionExtensions
             return String.Empty;
         }
 
-        var nestedTypeName = field.GetFieldTypeCollectionAware();
+        var nestedTypeName = field.GetFieldItemType();
 
         var source = new StringBuilder();
         source.AppendLine(
@@ -228,7 +290,14 @@ public static class FieldDefinitionExtensions
               }
               """);
 
-        // TODO: recursion
+        foreach (var child in field.Fields)
+        {
+            var childSerializer = child.ToNestedSerializerDeclaration(version, flexible);
+            if (!string.IsNullOrWhiteSpace(childSerializer))
+            {
+                source.AppendLine(childSerializer);
+            }
+        }
 
         return source.ToString();
     }
