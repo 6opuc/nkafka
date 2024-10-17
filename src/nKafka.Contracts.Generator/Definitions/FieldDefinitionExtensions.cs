@@ -221,9 +221,19 @@ public static class FieldDefinitionExtensions
             return $"PrimitiveSerializer.SerializeShort(output, {propertyPath});";
         }
 
+        if (propertyType == "ushort")
+        {
+            return $"PrimitiveSerializer.SerializeUshort(output, {propertyPath});";
+        }
+
         if (propertyType == "byte")
         {
             return $"PrimitiveSerializer.SerializeByte(output, {propertyPath});";
+        }
+
+        if (propertyType == "bool")
+        {
+            return $"PrimitiveSerializer.SerializeBool(output, {propertyPath});";
         }
         
         if (propertyType == "int")
@@ -252,6 +262,11 @@ public static class FieldDefinitionExtensions
                          output.Write({{propertyPath}}, 0, {{propertyPath}}.Length);
                      }
                      """;
+        }
+
+        if (propertyType == "Guid")
+        {
+            return $"PrimitiveSerializer.SerializeGuid(output, {propertyPath});";
         }
 
         return $"{propertyType}SerializerV{version}.Serialize(output, {propertyPath});";

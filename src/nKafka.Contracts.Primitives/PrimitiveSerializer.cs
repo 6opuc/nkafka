@@ -5,7 +5,9 @@ namespace nKafka.Contracts.Primitives;
 public static class PrimitiveSerializer
 {
     private static readonly byte[] MinusOneShort = [ 0xff, 0xff ];
-    public static readonly byte[] MinusOneVarInt = { 0x01 };
+    private static readonly byte[] MinusOneVarInt = { 0x01 };
+    private const byte ZeroByte = 0x00;
+    private const byte OneByte = 0x01;
     
     public static void SerializeString(MemoryStream output, string? value)
     {
@@ -117,10 +119,20 @@ public static class PrimitiveSerializer
 
         return (short) ((input.ReadByte() << 8) | input.ReadByte());
     }
+    
+    public static void SerializeUshort(MemoryStream output, ushort? value)
+    {
+        SerializeShort(output, (short)value!.Value);
+    }
+    
+    public static ushort DeserializeUshort(MemoryStream input)
+    {
+        return (ushort) DeserializeShort(input);
+    }
 
     public static void SerializeByte(MemoryStream output, byte? value)
     {
-        output.WriteByte(value.Value);
+        output.WriteByte(value!.Value);
     }
 
     public static byte DeserializeByte(MemoryStream input)
@@ -168,6 +180,16 @@ public static class PrimitiveSerializer
         }
 
         return value;
+    }
+    
+    public static void SerializeBool(MemoryStream output, bool? value)
+    {
+        output.WriteByte(value == true ? OneByte : ZeroByte);
+    }
+
+    public static bool DeserializeBool(MemoryStream input)
+    {
+        return input.ReadByte() != ZeroByte;
     }
     
     public static void SerializeVarLong(MemoryStream output, long? value)
@@ -241,5 +263,16 @@ public static class PrimitiveSerializer
     public static int DeserializeVarInt(MemoryStream input)
     {
         return checked((int)DeserializeVarLong(input));
+    }
+    
+    public static void SerializeGuid(MemoryStream output, Guid? value)
+    {
+        // TODO: implement guid support
+    }
+
+    public static Guid DeserializeGuid(MemoryStream input)
+    {
+        // TODO: implement guid support
+        return Guid.Empty;
     }
 }
