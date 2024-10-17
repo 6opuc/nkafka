@@ -31,6 +31,7 @@ public static class FieldDefinitionExtensions
         {
             remarks.AppendLine($"/// Default: {field.Default}.");
         }
+
         if (!string.IsNullOrEmpty(field.EntityType))
         {
             remarks.AppendLine($"/// EntityType: {field.EntityType}.");
@@ -47,8 +48,7 @@ public static class FieldDefinitionExtensions
         }
 
         remarks.AppendLine($"/// Ignorable: {field.Ignorable}.");
-        
-        
+
 
         var comment = new StringBuilder();
         if (summary.Length > 0)
@@ -70,13 +70,7 @@ public static class FieldDefinitionExtensions
 
     public static string GetPropertyType(this FieldDefinition field)
     {
-        var type = field.Type;
-
-        var isCollection = type?.StartsWith("[]") ?? false;
-        if (isCollection)
-        {
-            type = type!.Substring(2);
-        }
+        var type = field.GetFieldTypeCollectionAware();
 
         if (string.IsNullOrEmpty(type))
         {
@@ -84,14 +78,41 @@ public static class FieldDefinitionExtensions
         }
 
         type = GetPropertyType(type!);
-        type = $"{type}?"; // property can become nullable in future versions
 
-        if (isCollection)
+        if (field.IsCollection())
         {
-            type = $"IList<{type}>?";
+            var mapKeyPropertyType = field.GetMapKeyPropertyType();
+            type = mapKeyPropertyType == null
+                ? $"IList<{type}>"
+                : $"IDictionary<{mapKeyPropertyType}, {type}>";
         }
 
+        type = $"{type}?"; // property can become nullable in future versions
+
         return type;
+    }
+
+    public static string? GetFieldTypeCollectionAware(this FieldDefinition field)
+    {
+        return field.IsCollection()
+            ? field.Type?.Substring(2)
+            : field.Type;
+    }
+
+    public static bool IsCollection(this FieldDefinition field)
+    {
+        return field.Type?.StartsWith("[]") ?? false;
+    }
+
+    private static string? GetMapKeyPropertyType(this FieldDefinition field)
+    {
+        var mapKeyField = field.Fields.FirstOrDefault(x => x.MapKey);
+        if (mapKeyField == null)
+        {
+            return null;
+        }
+
+        return GetPropertyType(mapKeyField.Type!);
     }
 
     private static string GetPropertyType(string fieldType)
@@ -105,11 +126,11 @@ public static class FieldDefinitionExtensions
             "uint16" => "ushort",
             "uuid" => "Guid",
             "bytes" => "byte[]",
-            "records" => "byte[]",// TODO: "RecordBatchSet",
+            "records" => "byte[]", // TODO: "RecordBatchSet",
             _ => fieldType
         };
     }
-    
+
     public static string ToNestedTypeDeclarations(this IList<FieldDefinition> fields)
     {
         var nestedTypes = fields.Where(x => x.Fields.Any());
@@ -119,29 +140,25 @@ public static class FieldDefinitionExtensions
 
     public static string ToNestedTypeDeclaration(this FieldDefinition field)
     {
-        var nestedTypeName = field.Type;
-        var isCollection = nestedTypeName?.StartsWith("[]") ?? false;
-        if (isCollection)
-        {
-            nestedTypeName = nestedTypeName!.Substring(2);
-        }
-        
+        var nestedTypeName = field.GetFieldTypeCollectionAware();
+
         return $$"""
                  public class {{nestedTypeName}}
                  {
                     {{field.Fields.ToPropertyDeclarations()}}
                  }  
-                 
+
                  {{field.Fields.ToNestedTypeDeclarations()}}
                  """;
     }
 
     public static string ToSerializationStatements(this IList<FieldDefinition> fields, int version, bool flexible)
     {
-        var serializationStatements = string.Join("\n", fields.Select(x => x.ToSerializationStatements(version, flexible)));
+        var serializationStatements =
+            string.Join("\n", fields.Select(x => x.ToSerializationStatements(version, flexible)));
         return serializationStatements;
     }
-    
+
 
     public static string ToSerializationStatements(this FieldDefinition field, int version, bool flexible)
     {
@@ -159,22 +176,60 @@ public static class FieldDefinitionExtensions
         if (propertyType == "string?")
         {
             return flexible
-                ? $"PrimitiveSerializer.SerializeVarString(output, message.{field.Name});"
-                : $"PrimitiveSerializer.SerializeString(output, message.{field.Name});";
+                ? $"PrimitiveSerializer.SerializeVarString(output, message.{field.Name}!);"
+                : $"PrimitiveSerializer.SerializeString(output, message.{field.Name}!);";
         }
-        
+
         if (propertyType == "short?")
         {
-            return $"PrimitiveSerializer.SerializeShort(output, message.{field.Name}.Value);";
+            return $"PrimitiveSerializer.SerializeShort(output, message.{field.Name}!.Value);";
         }
-        
+
         if (propertyType == "int?")
         {
             return flexible
-                ? $"PrimitiveSerializer.SerializeVarInt(output, message.{field.Name}.Value);"
-                : $"PrimitiveSerializer.SerializeInt(output, message.{field.Name}.Value);";
+                ? $"PrimitiveSerializer.SerializeVarInt(output, message.{field.Name}!.Value);"
+                : $"PrimitiveSerializer.SerializeInt(output, message.{field.Name}!.Value);";
         }
 
         return $"#warning {field.Name}: {propertyType} support is not implemented.";
+    }
+
+    public static string ToNestedSerializerDeclaration(this FieldDefinition field, int version, bool flexible)
+    {
+        if (!field.Fields.Any())
+        {
+            return string.Empty;
+        }
+
+        if (!field.Versions.Includes(version))
+        {
+            return String.Empty;
+        }
+
+        var nestedTypeName = field.GetFieldTypeCollectionAware();
+
+        var source = new StringBuilder();
+        source.AppendLine(
+            $$"""
+              public static class {{nestedTypeName}}SerializerV{{version}}
+              {
+                 public static void Serialize(MemoryStream output, {{nestedTypeName}} message)
+                 {
+                    {{field.Fields.ToSerializationStatements(version, flexible)}}
+                 }
+                 
+                 public static {{nestedTypeName}} Deserialize(MemoryStream input)
+                 {
+                    var message = new {{nestedTypeName}}();
+                    
+                    return message;
+                 }
+              }
+              """);
+
+        // TODO: recursion
+
+        return source.ToString();
     }
 }

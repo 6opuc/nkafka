@@ -86,7 +86,14 @@ public class ContractsSourceGenerator : IIncrementalGenerator
 
                       namespace nKafka.Contracts.MessageSerializers
                       {
-                          {{messageDefinition.ToSerializerDefinitions()}}
+                            using nKafka.Contracts.MessageSerializers.{{messageDefinition.Name}}Nested;
+                        
+                            {{messageDefinition.ToSerializerDefinitions()}}
+                      }
+                      
+                      namespace nKafka.Contracts.MessageSerializers.{{messageDefinition.Name}}Nested
+                      {
+                            {{messageDefinition.ToNestedSerializerDefinitions()}}
                       }
                       """));
         }

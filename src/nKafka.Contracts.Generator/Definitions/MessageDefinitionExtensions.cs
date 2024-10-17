@@ -49,4 +49,25 @@ public static class MessageDefinitionExtensions
 
        return source.ToString();
     }
+    
+    public static string ToNestedSerializerDefinitions(this MessageDefinition messageDefinition)
+    {
+       var source = new StringBuilder();
+
+       foreach (var fieldDefinition in messageDefinition.Fields)
+       {
+          foreach (var version in messageDefinition.ValidVersions)
+          {
+             var flexible = messageDefinition.FlexibleVersions.Includes(version);
+
+             var nestedSerializer = fieldDefinition.ToNestedSerializerDeclaration(version, flexible);
+             if (!string.IsNullOrEmpty(nestedSerializer))
+             {
+                source.AppendLine(nestedSerializer);
+             }
+          }
+       }
+
+       return source.ToString();
+    }
 }
