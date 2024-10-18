@@ -552,19 +552,13 @@ public static class FieldDefinitionExtensions
 
         if (propertyType == "byte[]")
         {
-            return "#warning byte array deserialization is not implemented.";
-            /*
-            var lengthSerialization = flexible
-                ? $"PrimitiveSerializer.SerializeVarInt({output}, {propertyPath}?.Length ?? 0);"
-                : $"PrimitiveSerializer.SerializeInt({output}, {propertyPath}?.Length ?? -1);";
+            var lengthDeserialization = flexible
+                ? $"PrimitiveSerializer.DeserializeVarInt({input})"
+                : $"PrimitiveSerializer.DeserializeInt({input})";
             return $$"""
-                     {{lengthSerialization}}
-                     if ({{propertyPath}} != null)
-                     {
-                         {{output}}.Write({{propertyPath}}, 0, {{propertyPath}}.Length);
-                     }
+                     {{propertyPath}} = new byte[{{lengthDeserialization}}];
+                     {{input}}.Read({{propertyPath}}, 0, {{propertyPath}}.Length);
                      """;
-                     */
         }
 
         if (propertyType == "Guid")
