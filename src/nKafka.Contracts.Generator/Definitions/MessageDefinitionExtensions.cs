@@ -5,25 +5,51 @@ namespace nKafka.Contracts.Generator.Definitions;
 public static class MessageDefinitionExtensions
 {
     public static string ToSerializerDeclarations(this MessageDefinition messageDefinition)
-    {
-       var source = new StringBuilder(
+    { 
+         var source = new StringBuilder(
           $$"""
             public static class {{messageDefinition.Name}}Serializer
             {
                public static void Serialize(MemoryStream output, {{messageDefinition.Name}} message, int version)
                {
-               #warning switch between versions
-               }
-               
-               public static {{messageDefinition.Name}} Deserialize(MemoryStream input, int version)
-               {
-            #warning switch between versions
-                  var message = new {{messageDefinition.Name}}();
-                  
-                  return message;
-               }
-            }
+                  switch (version)
+                  {
             """);
+       foreach (var version in messageDefinition.ValidVersions)
+       {
+            source.AppendLine($$"""
+                                case {{version}}:
+                                    {{messageDefinition.Name}}SerializerV{{version}}.Serialize(output, message);
+                                    break;
+                                """);
+       }
+       source.AppendLine($$"""
+                           default:
+                                      throw new InvalidOperationException($"Version {version} is not supported.");
+                              }
+                           }
+                           
+                           public static {{messageDefinition.Name}} Deserialize(MemoryStream input, int version)
+                           {
+                              switch (version)
+                              {
+                           """);
+       foreach (var version in messageDefinition.ValidVersions)
+       {
+          source.AppendLine($$"""
+                              case {{version}}:
+                                  return {{messageDefinition.Name}}SerializerV{{version}}.Deserialize(input);
+                              """);
+       }
+
+       source.AppendLine("""
+                            default:
+                                       throw new InvalidOperationException($"Version {version} is not supported.");
+                               }
+                            }
+                         }
+                         """);
+       
 
        foreach (var version in messageDefinition.ValidVersions)
        {
