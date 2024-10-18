@@ -47,7 +47,7 @@ public static class CommonStructDefinitionExtensions
                  public static {{nestedTypeName}} Deserialize(MemoryStream input)
                  {
                     var message = new {{nestedTypeName}}();
-                    
+                    {{commonStruct.Fields.ToDeserializationStatements(version, flexible)}}
                     return message;
                  }
               }

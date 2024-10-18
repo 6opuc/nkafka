@@ -12,11 +12,12 @@ public static class MessageDefinitionExtensions
             {
                public static void Serialize(MemoryStream output, {{messageDefinition.Name}} message, int version)
                {
-               
+               #warning switch between versions
                }
                
                public static {{messageDefinition.Name}} Deserialize(MemoryStream input, int version)
                {
+            #warning switch between versions
                   var message = new {{messageDefinition.Name}}();
                   
                   return message;
@@ -40,7 +41,7 @@ public static class MessageDefinitionExtensions
                   public static {{messageDefinition.Name}} Deserialize(MemoryStream input)
                   {
                      var message = new {{messageDefinition.Name}}();
-                     
+                     {{messageDefinition.Fields.ToDeserializationStatements(version, flexible)}}
                      return message;
                   }
                }

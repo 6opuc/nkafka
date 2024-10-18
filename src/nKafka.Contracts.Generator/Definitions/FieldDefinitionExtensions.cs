@@ -348,7 +348,7 @@ public static class FieldDefinitionExtensions
                  public static {{nestedTypeName}} Deserialize(MemoryStream input)
                  {
                     var message = new {{nestedTypeName}}();
-                    
+                    {{field.Fields.ToDeserializationStatements(version, flexible)}}
                     return message;
                  }
               }
@@ -365,4 +365,178 @@ public static class FieldDefinitionExtensions
 
         return source.ToString();
     }
+    
+    
+    public static string ToDeserializationStatements(this IList<FieldDefinition> fields, int version, bool flexible)
+    {
+        var source = new StringBuilder();
+        foreach (var field in fields)
+        {
+            if (field.TaggedVersions.Includes(version))
+            {
+                continue;
+            }
+            
+            var fieldStatements = field.ToDeserializationStatements(version, flexible);
+            if (!string.IsNullOrEmpty(fieldStatements))
+            {
+                source.AppendLine(fieldStatements);
+            }
+        }
+
+        if (flexible)
+        {
+            /*
+            var taggedFields = fields
+                .Where(x => x.TaggedVersions.Includes(version))
+                .OrderBy(x => x.Tag)
+                .ToList();
+            if (!taggedFields.Any())
+            {
+                source.AppendLine("PrimitiveSerializer.SerializeVarInt(output, 0); // tag section length");
+            }
+            else
+            {
+                source.AppendLine($$"""
+                                    var tagSectionLength = {{string.Join(" + ", taggedFields.Select(x => $"(message.{x.Name} == null ? 0 : 1)"))}};
+                                    """);
+                source.AppendLine("PrimitiveSerializer.SerializeVarInt(output, tagSectionLength); // tag section length");
+                #warning consider buffer pool or message size calculation
+                source.AppendLine("""
+                                  if (tagSectionLength > 0)
+                                  {
+                                        using var buffer = new MemoryStream();
+                                  """);
+                foreach (var taggedField in taggedFields)
+                {
+                    var propertyType = taggedField.GetFieldItemPropertyType();
+                    
+                    source.AppendLine($$"""
+                                        if (message.{{taggedField.Name}} != null)
+                                        {
+                                            PrimitiveSerializer.SerializeVarInt(output, {{taggedField.Tag}}); // tag number
+                                            buffer.Position = 0;
+                                            {{taggedField.ToSerializationStatements(version, flexible, "buffer")}}
+                                            var size = (int)buffer.Position;
+                                            PrimitiveSerializer.SerializeVarInt(output, size); // tag payload size
+                                            output.Write(buffer.GetBuffer(), 0, size); // tag payload
+                                        }
+                                        """);
+                }
+                source.AppendLine("}"); // if (tagSectionLength > 0)
+            }
+                */
+            source.AppendLine("#warning tag section deserialization is not implemented.");
+        }
+        
+        return source.ToString();
+    }
+    
+    public static string ToDeserializationStatements(this FieldDefinition field, int version, bool flexible, string input = "input")
+    {
+        if (!field.Versions.Includes(version))
+        {
+            return string.Empty;
+        }
+
+        var propertyType = field.GetFieldItemPropertyType();
+        if (!field.IsCollection())
+        {
+            return GetDeserializationStatements($"message.{field.Name}", version, flexible, propertyType, input);
+        }
+        
+        /*
+        var lengthSerialization = flexible
+            ? $"PrimitiveSerializer.SerializeVarInt({output}, message.{field.Name}?.Count ?? 0);"
+            : $"PrimitiveSerializer.SerializeInt({output}, message.{field.Name}?.Count ?? -1);";
+        if (!field.IsMap())
+        {
+            return $$"""
+                     {{lengthSerialization}}
+                     foreach (var item in message.{{field.Name}} ?? Enumerable.Empty<{{propertyType}}>())
+                     {
+                        {{GetSerializationStatements("item", version, flexible, propertyType, output)}}
+                     }
+                     """;
+        }
+        
+        return $$"""
+                 {{lengthSerialization}}
+                 foreach (var item in message.{{field.Name}}?.Values ?? Enumerable.Empty<{{propertyType}}>())
+                 {
+                    {{GetSerializationStatements("item", version, flexible, propertyType, output)}}
+                 }
+                 """;
+                 */
+        return "#warning collection deserialization is not implemented.";
+    }
+
+    private static string GetDeserializationStatements(string propertyPath, int version, bool flexible, string? propertyType, string input = "input")
+    {
+        if (propertyType == "string")
+        {
+            return flexible
+                ? $"{propertyPath} = PrimitiveSerializer.DeserializeVarString({input});"
+                : $"{propertyPath} = PrimitiveSerializer.DeserializeString({input});";
+        }
+
+        if (propertyType == "short")
+        {
+            return $"{propertyPath} = PrimitiveSerializer.DeserializeShort({input});";
+        }
+
+        if (propertyType == "ushort")
+        {
+            return $"{propertyPath} = PrimitiveSerializer.DeserializeUshort({input});";
+        }
+
+        if (propertyType == "byte")
+        {
+            return $"{propertyPath} = PrimitiveSerializer.DeserializeByte({input});";
+        }
+
+        if (propertyType == "bool")
+        {
+            return $"{propertyPath} = PrimitiveSerializer.DeserializeBool({input});";
+        }
+        
+        if (propertyType == "int")
+        {
+            return flexible
+                ? $"{propertyPath} = PrimitiveSerializer.DeserializeVarInt({input});"
+                : $"{propertyPath} = PrimitiveSerializer.DeserializeInt({input});";
+        }
+        
+        if (propertyType == "long")
+        {
+            return flexible
+                ? $"{propertyPath} = PrimitiveSerializer.DeserializeVarLong({input});"
+                : $"{propertyPath} = PrimitiveSerializer.DeserializeLong({input});";
+        }
+
+        if (propertyType == "byte[]")
+        {
+            return "#warning byte array deserialization is not implemented.";
+            /*
+            var lengthSerialization = flexible
+                ? $"PrimitiveSerializer.SerializeVarInt({output}, {propertyPath}?.Length ?? 0);"
+                : $"PrimitiveSerializer.SerializeInt({output}, {propertyPath}?.Length ?? -1);";
+            return $$"""
+                     {{lengthSerialization}}
+                     if ({{propertyPath}} != null)
+                     {
+                         {{output}}.Write({{propertyPath}}, 0, {{propertyPath}}.Length);
+                     }
+                     """;
+                     */
+        }
+
+        if (propertyType == "Guid")
+        {
+            return $"{propertyPath} = PrimitiveSerializer.DeserializeGuid({input});";
+        }
+
+        return $"{propertyPath} = {propertyType}SerializerV{version}.Deserialize({input});";
+    }
+
 }
