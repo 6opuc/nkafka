@@ -267,12 +267,12 @@ public static class PrimitiveSerializer
     
     public static void SerializeGuid(MemoryStream output, Guid? value)
     {
-        // TODO: implement guid support
+        #warning implement guid support
     }
 
     public static Guid DeserializeGuid(MemoryStream input)
     {
-        // TODO: implement guid support
+        #warning implement guid support
         return Guid.Empty;
     }
 }

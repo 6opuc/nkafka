@@ -189,12 +189,12 @@ public static class FieldDefinitionExtensions
         {
             return GetSerializationStatements($"message.{field.Name}", version, flexible, propertyType);
         }
-
+        
+        var lengthSerialization = flexible
+            ? $"PrimitiveSerializer.SerializeVarInt(output, message.{field.Name}?.Count ?? 0);"
+            : $"PrimitiveSerializer.SerializeInt(output, message.{field.Name}?.Count ?? -1);";
         if (!field.IsMap())
         {
-            var lengthSerialization = flexible
-                ? $"PrimitiveSerializer.SerializeVarInt(output, message.{field.Name}?.Count ?? 0);"
-                : $"PrimitiveSerializer.SerializeInt(output, message.{field.Name}?.Count ?? -1);";
             return $$"""
                      {{lengthSerialization}}
                      foreach (var item in message.{{field.Name}} ?? Enumerable.Empty<{{propertyType}}>())
@@ -204,7 +204,13 @@ public static class FieldDefinitionExtensions
                      """;
         }
         
-        return $"#warning {field.Name}: {propertyType} map support is not implemented.";
+        return $$"""
+                 {{lengthSerialization}}
+                 foreach (var item in message.{{field.Name}}?.Values ?? Enumerable.Empty<{{propertyType}}>())
+                 {
+                    {{GetSerializationStatements("item", version, flexible, propertyType)}}
+                 }
+                 """;
     }
 
     private static string GetSerializationStatements(string propertyPath, int version, bool flexible, string? propertyType)
