@@ -4,7 +4,7 @@ namespace nKafka.Contracts.Generator.Definitions;
 
 public static class MessageDefinitionExtensions
 {
-    public static string ToSerializerDefinitions(this MessageDefinition messageDefinition)
+    public static string ToSerializerDeclarations(this MessageDefinition messageDefinition)
     {
        var source = new StringBuilder(
           $$"""
@@ -50,17 +50,26 @@ public static class MessageDefinitionExtensions
        return source.ToString();
     }
     
-    public static string ToNestedSerializerDefinitions(this MessageDefinition messageDefinition)
+    public static string ToNestedSerializerDeclarations(this MessageDefinition messageDefinition)
     {
        var source = new StringBuilder();
 
-       foreach (var fieldDefinition in messageDefinition.Fields)
+       foreach (var version in messageDefinition.ValidVersions)
        {
-          foreach (var version in messageDefinition.ValidVersions)
+          var flexible = messageDefinition.FlexibleVersions.Includes(version);
+          
+          foreach (var fieldDefinition in messageDefinition.Fields)
           {
-             var flexible = messageDefinition.FlexibleVersions.Includes(version);
-
              var nestedSerializer = fieldDefinition.ToNestedSerializerDeclaration(version, flexible);
+             if (!string.IsNullOrEmpty(nestedSerializer))
+             {
+                source.AppendLine(nestedSerializer);
+             }
+          }
+
+          foreach (var commonStruct in messageDefinition.CommonStructs)
+          {
+             var nestedSerializer = commonStruct.ToNestedSerializerDeclaration(version, flexible);
              if (!string.IsNullOrEmpty(nestedSerializer))
              {
                 source.AppendLine(nestedSerializer);
