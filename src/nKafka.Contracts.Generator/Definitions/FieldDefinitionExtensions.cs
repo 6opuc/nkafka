@@ -407,7 +407,6 @@ public static class FieldDefinitionExtensions
 
         if (flexible)
         {
-            
             var taggedFields = fields
                 .Where(x => x.TaggedVersions.Includes(version))
                 .OrderBy(x => x.Tag)
@@ -419,36 +418,37 @@ public static class FieldDefinitionExtensions
             }
             else
             {
-                source.AppendLine("#warning tag section deserialization is not implemented.");
-                /*
-                source.AppendLine($$"""
-                                    var tagSectionLength = {{string.Join(" + ", taggedFields.Select(x => $"(message.{x.Name} == null ? 0 : 1)"))}};
-                                    """);
-                source.AppendLine("PrimitiveSerializer.SerializeVarInt(output, tagSectionLength); // tag section length");
-                #warning consider buffer pool or message size calculation
                 source.AppendLine("""
-                                  if (tagSectionLength > 0)
-                                  {
-                                        using var buffer = new MemoryStream();
-                                  """);
+                                    var tagSectionLength = PrimitiveSerializer.DeserializeVarInt(input);
+                                    for (var tagIndex = 0; tagIndex < tagSectionLength; tagIndex++)
+                                    {
+                                        var tagNumber = PrimitiveSerializer.DeserializeVarInt(input);
+                                        var tagSize = PrimitiveSerializer.DeserializeVarInt(input);
+                                        var position = (int)input.Position;
+                                        switch (tagNumber)
+                                        {
+                                    """);
+                
                 foreach (var taggedField in taggedFields)
                 {
-                    var propertyType = taggedField.GetFieldItemPropertyType();
-                    
                     source.AppendLine($$"""
-                                        if (message.{{taggedField.Name}} != null)
-                                        {
-                                            PrimitiveSerializer.SerializeVarInt(output, {{taggedField.Tag}}); // tag number
-                                            buffer.Position = 0;
-                                            {{taggedField.ToSerializationStatements(version, flexible, "buffer")}}
-                                            var size = (int)buffer.Position;
-                                            PrimitiveSerializer.SerializeVarInt(output, size); // tag payload size
-                                            output.Write(buffer.GetBuffer(), 0, size); // tag payload
-                                        }
+                                        case {{taggedField.Tag}}:
+                                            {{taggedField.ToDeserializationStatements(version, flexible)}}
+                                            break;
                                         """);
                 }
-                source.AppendLine("}"); // if (tagSectionLength > 0)
-                */
+
+                source.AppendLine("""
+                                            default:
+                                                throw new InvalidOperationException($"Tag number {tagNumber} is not supported.");
+                                        }
+                                        var actualTagSize = (int)input.Position - position;
+                                        if (actualTagSize != tagSize)
+                                        {
+                                            throw new InvalidOperationException($"Tag {tagNumber} has incorrect size. Expected {tagSize} but got {actualTagSize}.");
+                                        }
+                                  }
+                                  """);
             }
         }
         

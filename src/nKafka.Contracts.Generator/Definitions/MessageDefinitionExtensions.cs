@@ -5,105 +5,106 @@ namespace nKafka.Contracts.Generator.Definitions;
 public static class MessageDefinitionExtensions
 {
     public static string ToSerializerDeclarations(this MessageDefinition messageDefinition)
-    { 
-         var source = new StringBuilder(
-          $$"""
-            public static class {{messageDefinition.Name}}Serializer
-            {
-               public static void Serialize(MemoryStream output, {{messageDefinition.Name}} message, int version)
-               {
-                  switch (version)
-                  {
-            """);
-       foreach (var version in messageDefinition.ValidVersions)
-       {
+    {
+        var source = new StringBuilder(
+            $$"""
+              public static class {{messageDefinition.Name}}Serializer
+              {
+                 public static void Serialize(MemoryStream output, {{messageDefinition.Name}} message, int version)
+                 {
+                    switch (version)
+                    {
+              """);
+        foreach (var version in messageDefinition.ValidVersions)
+        {
             source.AppendLine($$"""
                                 case {{version}}:
                                     {{messageDefinition.Name}}SerializerV{{version}}.Serialize(output, message);
                                     break;
                                 """);
-       }
-       source.AppendLine($$"""
-                           default:
-                                      throw new InvalidOperationException($"Version {version} is not supported.");
-                              }
-                           }
-                           
-                           public static {{messageDefinition.Name}} Deserialize(MemoryStream input, int version)
-                           {
-                              switch (version)
-                              {
-                           """);
-       foreach (var version in messageDefinition.ValidVersions)
-       {
-          source.AppendLine($$"""
-                              case {{version}}:
-                                  return {{messageDefinition.Name}}SerializerV{{version}}.Deserialize(input);
-                              """);
-       }
+        }
 
-       source.AppendLine("""
+        source.AppendLine($$"""
                             default:
                                        throw new InvalidOperationException($"Version {version} is not supported.");
                                }
                             }
-                         }
-                         """);
-       
 
-       foreach (var version in messageDefinition.ValidVersions)
-       {
-          var flexible = messageDefinition.FlexibleVersions.Includes(version);
-          
-          source.AppendLine(
-             $$"""
-               public static class {{messageDefinition.Name}}SerializerV{{version}}
-               {
-                  public static void Serialize(MemoryStream output, {{messageDefinition.Name}} message)
-                  {
-                     {{messageDefinition.Fields.ToSerializationStatements(version, flexible)}}
-                  }
-                  
-                  public static {{messageDefinition.Name}} Deserialize(MemoryStream input)
-                  {
-                     var message = new {{messageDefinition.Name}}();
-                     {{messageDefinition.Fields.ToDeserializationStatements(version, flexible)}}
-                     return message;
-                  }
-               }
-               """);
-       }
+                            public static {{messageDefinition.Name}} Deserialize(MemoryStream input, int version)
+                            {
+                               switch (version)
+                               {
+                            """);
+        foreach (var version in messageDefinition.ValidVersions)
+        {
+            source.AppendLine($$"""
+                                case {{version}}:
+                                    return {{messageDefinition.Name}}SerializerV{{version}}.Deserialize(input);
+                                """);
+        }
 
-       return source.ToString();
+        source.AppendLine("""
+                             default:
+                                        throw new InvalidOperationException($"Version {version} is not supported.");
+                                }
+                             }
+                          }
+                          """);
+
+
+        foreach (var version in messageDefinition.ValidVersions)
+        {
+            var flexible = messageDefinition.FlexibleVersions.Includes(version);
+
+            source.AppendLine(
+                $$"""
+                  public static class {{messageDefinition.Name}}SerializerV{{version}}
+                  {
+                     public static void Serialize(MemoryStream output, {{messageDefinition.Name}} message)
+                     {
+                        {{messageDefinition.Fields.ToSerializationStatements(version, flexible)}}
+                     }
+                     
+                     public static {{messageDefinition.Name}} Deserialize(MemoryStream input)
+                     {
+                        var message = new {{messageDefinition.Name}}();
+                        {{messageDefinition.Fields.ToDeserializationStatements(version, flexible)}}
+                        return message;
+                     }
+                  }
+                  """);
+        }
+
+        return source.ToString();
     }
-    
+
     public static string ToNestedSerializerDeclarations(this MessageDefinition messageDefinition)
     {
-       var source = new StringBuilder();
+        var source = new StringBuilder();
 
-       foreach (var version in messageDefinition.ValidVersions)
-       {
-          var flexible = messageDefinition.FlexibleVersions.Includes(version);
-          
-          foreach (var fieldDefinition in messageDefinition.Fields)
-          {
-             var nestedSerializer = fieldDefinition.ToNestedSerializerDeclaration(version, flexible);
-             if (!string.IsNullOrEmpty(nestedSerializer))
-             {
-                source.AppendLine(nestedSerializer);
-             }
-          }
+        foreach (var version in messageDefinition.ValidVersions)
+        {
+            var flexible = messageDefinition.FlexibleVersions.Includes(version);
 
-          foreach (var commonStruct in messageDefinition.CommonStructs)
-          {
-             var nestedSerializer = commonStruct.ToNestedSerializerDeclaration(version, flexible);
-             if (!string.IsNullOrEmpty(nestedSerializer))
-             {
-                source.AppendLine(nestedSerializer);
-             }
-          }
-       }
+            foreach (var fieldDefinition in messageDefinition.Fields)
+            {
+                var nestedSerializer = fieldDefinition.ToNestedSerializerDeclaration(version, flexible);
+                if (!string.IsNullOrEmpty(nestedSerializer))
+                {
+                    source.AppendLine(nestedSerializer);
+                }
+            }
 
-       return source.ToString();
+            foreach (var commonStruct in messageDefinition.CommonStructs)
+            {
+                var nestedSerializer = commonStruct.ToNestedSerializerDeclaration(version, flexible);
+                if (!string.IsNullOrEmpty(nestedSerializer))
+                {
+                    source.AppendLine(nestedSerializer);
+                }
+            }
+        }
+
+        return source.ToString();
     }
 }
