@@ -1,6 +1,4 @@
-﻿using nKafka.Contracts.Primitives;
-
-namespace nKafka.Contracts.Generator.Definitions;
+﻿namespace nKafka.Contracts.Generator.Definitions;
 
 public class MessageDefinition
 {

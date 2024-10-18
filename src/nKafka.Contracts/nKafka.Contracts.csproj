@@ -11,7 +11,6 @@
 
     <ItemGroup>
       <ProjectReference Include="..\nKafka.Contracts.Generator\nKafka.Contracts.Generator.csproj"  ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
-      <ProjectReference Include="..\nKafka.Contracts.Primitives\nKafka.Contracts.Primitives.csproj" ReferenceOutputAssembly="true" OutputItemType="Analyzer" />
     </ItemGroup>
 
     <ItemGroup>
@@ -23,6 +22,10 @@
     <ItemGroup>
         <Compile Remove="$(CompilerGeneratedFilesOutputPath)/**/*.cs"/>
         <None Include="$(CompilerGeneratedFilesOutputPath)/**/*.cs"/>
+        
+        <Compile Include="..\nKafka.Contracts.Generator\SharedSources\*.cs">
+            <LinkBase>SharedSources</LinkBase>
+        </Compile>
     </ItemGroup>
 
 </Project>

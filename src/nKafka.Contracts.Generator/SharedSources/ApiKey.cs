@@ -1,4 +1,4 @@
-﻿namespace nKafka.Contracts.Primitives;
+﻿namespace nKafka.Contracts;
 
 public enum ApiKey
 {

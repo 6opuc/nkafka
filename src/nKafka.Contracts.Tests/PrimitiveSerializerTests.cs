@@ -1,6 +1,6 @@
 using FluentAssertions;
 
-namespace nKafka.Contracts.Primitives.Tests;
+namespace nKafka.Contracts.Tests;
 
 public class PrimitiveSerializerTests
 {

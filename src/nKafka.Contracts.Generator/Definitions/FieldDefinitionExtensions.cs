@@ -1,5 +1,4 @@
 using System.Text;
-using nKafka.Contracts.Primitives;
 
 namespace nKafka.Contracts.Generator.Definitions;
 

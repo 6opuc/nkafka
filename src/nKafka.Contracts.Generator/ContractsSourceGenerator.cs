@@ -4,7 +4,6 @@ using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using nKafka.Contracts.Generator.Definitions;
-using nKafka.Contracts.Primitives;
 
 namespace nKafka.Contracts.Generator;
 
@@ -16,8 +15,10 @@ public class ContractsSourceGenerator : IIncrementalGenerator
         Debugger.Launch();
 
         var messageDefinitions = ParseMessageDefinitions(context);
-
         context.RegisterSourceOutput(messageDefinitions, GenerateCodeForMessageDefinitions);
+
+        var sharedSources = GetSharedSources(context);
+        context.RegisterSourceOutput(sharedSources, CopySources);
     }
 
     private static IncrementalValueProvider<ImmutableArray<MessageDefinition>> ParseMessageDefinitions(
@@ -48,8 +49,6 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                 Format(
                     $$"""
                       #nullable enable
-                      
-                      using nKafka.Contracts.Primitives;
 
                       namespace nKafka.Contracts.MessageDefinitions
                       {
@@ -80,7 +79,6 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                     $$"""
                       #nullable enable
 
-                      using nKafka.Contracts.Primitives;
                       using nKafka.Contracts.MessageDefinitions;
                       using nKafka.Contracts.MessageDefinitions.{{messageDefinition.Name}}Nested;
 
@@ -105,5 +103,37 @@ public class ContractsSourceGenerator : IIncrementalGenerator
         var root = tree.GetRoot().NormalizeWhitespace();
         var formatted = root.ToFullString();
         return formatted;
+    }
+    
+    private IncrementalValueProvider<ImmutableArray<SharedSource>> GetSharedSources(
+        IncrementalGeneratorInitializationContext context)
+    {
+        var sharedSources = context.AdditionalTextsProvider
+            .Where(x => x.Path.Contains("SharedSources"))
+            .Where(x => x.Path.EndsWith(".cs"))
+            .Select((x, token) => new SharedSource
+            {
+                Name = Path.GetFileNameWithoutExtension(x.Path),
+                Content = x.GetText(token)?.ToString(),
+            })
+            .Where(x => x.Name != null && x.Content != null)
+            .Collect();
+        return sharedSources;
+    }
+
+    private class SharedSource
+    {
+        public string? Name { get; set; }
+        public string? Content { get; set; }
+    }
+
+    private void CopySources(SourceProductionContext context, ImmutableArray<SharedSource> sharedSources)
+    {
+        foreach (var source in sharedSources)
+        {
+            context.AddSource(
+                $"Shared/{source.Name}.g.cs",
+                Format(source.Content!));
+        }
     }
 }

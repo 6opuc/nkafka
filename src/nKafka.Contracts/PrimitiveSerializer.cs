@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace nKafka.Contracts.Primitives;
+namespace nKafka.Contracts;
 
 public static class PrimitiveSerializer
 {

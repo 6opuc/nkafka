@@ -1,6 +1,6 @@
 using System.Collections;
 
-namespace nKafka.Contracts.Primitives;
+namespace nKafka.Contracts;
 
 public readonly struct VersionRange : IEnumerable<int>
 {
