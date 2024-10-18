@@ -119,6 +119,17 @@ public static class FieldDefinitionExtensions
         return GetPropertyType(mapKeyField.Type!);
     }
 
+    private static string? GetMapKeyPropertyName(this FieldDefinition field)
+    {
+        var mapKeyField = field.Fields.FirstOrDefault(x => x.MapKey);
+        if (mapKeyField == null)
+        {
+            return null;
+        }
+
+        return mapKeyField.Name;
+    }
+
     private static string GetPropertyType(string fieldType)
     {
         return fieldType switch
@@ -386,17 +397,20 @@ public static class FieldDefinitionExtensions
 
         if (flexible)
         {
-            /*
+            
             var taggedFields = fields
                 .Where(x => x.TaggedVersions.Includes(version))
                 .OrderBy(x => x.Tag)
                 .ToList();
+            
             if (!taggedFields.Any())
             {
-                source.AppendLine("PrimitiveSerializer.SerializeVarInt(output, 0); // tag section length");
+                source.AppendLine("PrimitiveSerializer.DeserializeVarInt(input); // tag section length");
             }
             else
             {
+                source.AppendLine("#warning tag section deserialization is not implemented.");
+                /*
                 source.AppendLine($$"""
                                     var tagSectionLength = {{string.Join(" + ", taggedFields.Select(x => $"(message.{x.Name} == null ? 0 : 1)"))}};
                                     """);
@@ -424,9 +438,8 @@ public static class FieldDefinitionExtensions
                                         """);
                 }
                 source.AppendLine("}"); // if (tagSectionLength > 0)
-            }
                 */
-            source.AppendLine("#warning tag section deserialization is not implemented.");
+            }
         }
         
         return source.ToString();
@@ -444,31 +457,40 @@ public static class FieldDefinitionExtensions
         {
             return GetDeserializationStatements($"message.{field.Name}", version, flexible, propertyType, input);
         }
-        
-        /*
-        var lengthSerialization = flexible
-            ? $"PrimitiveSerializer.SerializeVarInt({output}, message.{field.Name}?.Count ?? 0);"
-            : $"PrimitiveSerializer.SerializeInt({output}, message.{field.Name}?.Count ?? -1);";
+
+
+        var itemsCount = $"{field.Name.FirstCharToLowerCase()}Count";
+        var lengthDeserialization = flexible
+            ? $"var {itemsCount} = PrimitiveSerializer.DeserializeVarInt({input});"
+            : $"var {itemsCount} = PrimitiveSerializer.DeserializeInt({input});";
         if (!field.IsMap())
         {
             return $$"""
-                     {{lengthSerialization}}
-                     foreach (var item in message.{{field.Name}} ?? Enumerable.Empty<{{propertyType}}>())
+                     {{lengthDeserialization}}
+                     message.{{field.Name}} = new {{propertyType}}[{{itemsCount}}];
+                     for (var i = 0; i < {{itemsCount}}; i++)
                      {
-                        {{GetSerializationStatements("item", version, flexible, propertyType, output)}}
+                        {{GetDeserializationStatements($"message.{field.Name}[i]", version, flexible, propertyType, input)}}
                      }
                      """;
         }
-        
+
+        var keyType = field.GetMapKeyPropertyType();
+        var keyName = field.GetMapKeyPropertyName();
+        if (keyType != "string")
+        {
+            keyName += ".Value";
+        }
         return $$"""
-                 {{lengthSerialization}}
-                 foreach (var item in message.{{field.Name}}?.Values ?? Enumerable.Empty<{{propertyType}}>())
+                 {{lengthDeserialization}}
+                 message.{{field.Name}} = new Dictionary<{{keyType}}, {{propertyType}}>({{itemsCount}});
+                 for (var i = 0; i < {{itemsCount}}; i++)
                  {
-                    {{GetSerializationStatements("item", version, flexible, propertyType, output)}}
+                    {{propertyType}} item;
+                    {{GetDeserializationStatements("item", version, flexible, propertyType, input)}}
+                    message.{{field.Name}}[item.{{keyName}}] = item;
                  }
                  """;
-                 */
-        return "#warning collection deserialization is not implemented.";
     }
 
     private static string GetDeserializationStatements(string propertyPath, int version, bool flexible, string? propertyType, string input = "input")
