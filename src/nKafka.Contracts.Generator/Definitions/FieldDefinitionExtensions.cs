@@ -73,6 +73,10 @@ public static class FieldDefinitionExtensions
 
         if (field.IsCollection())
         {
+            if (type == "string")
+            {
+                type = "string?";
+            }
             var mapKeyPropertyType = field.GetMapKeyPropertyType();
             type = mapKeyPropertyType == null
                 ? $"IList<{type}>"
@@ -251,7 +255,7 @@ public static class FieldDefinitionExtensions
         {
             return $$"""
                      {{lengthSerialization}}
-                     foreach (var item in message.{{field.Name}} ?? Enumerable.Empty<{{propertyType}}>())
+                     foreach (var item in message.{{field.Name}} ?? [])
                      {
                         {{GetSerializationStatements("item", version, flexible, propertyType, output)}}
                      }
@@ -260,7 +264,7 @@ public static class FieldDefinitionExtensions
         
         return $$"""
                  {{lengthSerialization}}
-                 foreach (var item in message.{{field.Name}}?.Values ?? Enumerable.Empty<{{propertyType}}>())
+                 foreach (var item in message.{{field.Name}}?.Values ?? [])
                  {
                     {{GetSerializationStatements("item", version, flexible, propertyType, output)}}
                  }
@@ -477,10 +481,9 @@ public static class FieldDefinitionExtensions
 
         var keyType = field.GetMapKeyPropertyType();
         var keyName = field.GetMapKeyPropertyName();
-        if (keyType != "string")
-        {
-            keyName += ".Value";
-        }
+        var mapIndex = keyType == "string"
+            ? "key"
+            : "key.Value";
         return $$"""
                  {{lengthDeserialization}}
                  message.{{field.Name}} = new Dictionary<{{keyType}}, {{propertyType}}>({{itemsCount}});
@@ -488,7 +491,12 @@ public static class FieldDefinitionExtensions
                  {
                     {{propertyType}} item;
                     {{GetDeserializationStatements("item", version, flexible, propertyType, input)}}
-                    message.{{field.Name}}[item.{{keyName}}] = item;
+                    var key = item.{{keyName}};
+                    if (key == null)
+                    {
+                        throw new InvalidOperationException("{{keyName}} is used as a key, but value is null.");
+                    }
+                    message.{{field.Name}}[{{mapIndex}}] = item;
                  }
                  """;
     }
