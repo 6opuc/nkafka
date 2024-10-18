@@ -333,7 +333,13 @@ public static class FieldDefinitionExtensions
             return $"PrimitiveSerializer.SerializeGuid({output}, {propertyPath});";
         }
 
-        return $"{propertyType}SerializerV{version}.Serialize({output}, {propertyPath});";
+        return $$"""
+                 if ({{propertyPath}} == null)
+                 {
+                    throw new InvalidOperationException("Property {{propertyPath}} has not been initialized.");
+                 }
+                 {{propertyType}}SerializerV{{version}}.Serialize({{output}}, {{propertyPath}});
+                 """;
     }
 
     public static string ToNestedSerializerDeclaration(this FieldDefinition field, int version, bool flexible)

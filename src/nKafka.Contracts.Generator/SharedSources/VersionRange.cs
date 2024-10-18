@@ -107,7 +107,7 @@ public readonly struct VersionRange : IEnumerable<int>
 
         if (To == From)
         {
-            return From.ToString();
+            return $"{From}";
         }
         
         return $"{From}-{To}";
