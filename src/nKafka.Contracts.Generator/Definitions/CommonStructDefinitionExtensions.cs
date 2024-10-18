@@ -26,7 +26,7 @@ public static class CommonStructDefinitionExtensions
     
     public static string ToNestedSerializerDeclaration(this CommonStructDefinition commonStruct, int version, bool flexible)
     {
-        // TODO: refactor 3 similar fragments of code
+        #warning refactor 3 similar fragments of code
         if (!commonStruct.Versions.Includes(version))
         {
             return String.Empty;

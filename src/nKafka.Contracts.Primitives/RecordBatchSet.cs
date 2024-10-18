@@ -2,5 +2,5 @@ namespace nKafka.Contracts.Primitives;
 
 public class RecordBatchSet
 {
-    // TODO
+    #warning implement records
 }
