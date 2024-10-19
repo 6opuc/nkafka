@@ -267,12 +267,24 @@ public static class PrimitiveSerializer
     
     public static void SerializeGuid(MemoryStream output, Guid? value)
     {
-        #warning implement guid support
+        var availableSize = output.Length - output.Position;
+        var diff = 16 - availableSize;
+        if (diff > 0)
+        {
+            output.SetLength(output.Length + diff);
+        }
+
+        value!.Value.TryWriteBytes(output.GetBuffer()[(int)output.Position..]);
+        output.Position += 16;
     }
 
     public static Guid DeserializeGuid(MemoryStream input)
     {
-        #warning implement guid support
-        return Guid.Empty;
+        if (input.Position + 16 > input.Length)
+        {
+            throw new Exception($"DeserializeGuid needs 16 bytes but got only {input.Length - input.Position}");
+        }
+        var bytes = input.GetBuffer()[(int)input.Position..((int)input.Position+16)];
+        return new Guid(bytes);
     }
 }
