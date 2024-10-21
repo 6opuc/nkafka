@@ -12,8 +12,6 @@ public class ContractsSourceGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        Debugger.Launch();
-
         var messageDefinitions = ParseMessageDefinitions(context);
         context.RegisterSourceOutput(messageDefinitions, GenerateCodeForMessageDefinitions);
 
