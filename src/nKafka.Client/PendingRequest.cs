@@ -4,17 +4,17 @@ namespace nKafka.Client;
 
 public class PendingRequest
 {
-    public IRequest Request { get; init; }
+    public IRequestClient RequestClient { get; init; }
     public TaskCompletionSource<object> Response { get; init; }
     public CancellationToken CancellationToken { get; init; }
         
 
     public PendingRequest(
-        IRequest request, 
+        IRequestClient requestClient, 
         TaskCompletionSource<object> response,
         CancellationToken cancellationToken)
     {
-        Request = request;
+        RequestClient = requestClient;
         Response = response;
         CancellationToken = cancellationToken;
     }

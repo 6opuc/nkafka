@@ -1,6 +1,6 @@
 namespace nKafka.Contracts;
 
-public interface IRequest
+public interface IRequestClient
 {
     int CorrelationId { get; }
     void SerializeRequest(MemoryStream output);

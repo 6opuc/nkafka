@@ -105,10 +105,10 @@ public class Connection : IConnection
                         
                         _logger.LogDebug(
                             "Deserializing response for request {@correlationId}.",
-                            pendingRequest.Request.CorrelationId);
+                            pendingRequest.RequestClient.CorrelationId);
                         
                         using var input = new MemoryStream(payload);
-                        var response = pendingRequest.Request.DeserializeResponse(input);
+                        var response = pendingRequest.RequestClient.DeserializeResponse(input);
                         if (input.Length != input.Position)
                         {
                             _logger.LogError(
@@ -212,33 +212,33 @@ public class Connection : IConnection
                         _logger.LogDebug("No more requests to send.");
                         return;
                     }
-                    _logger.LogDebug("Processing request {@correlationId}", request.Request.CorrelationId);
+                    _logger.LogDebug("Processing request {@correlationId}", request.RequestClient.CorrelationId);
                     _pendingRequests.Enqueue(request);
                     
-                    _logger.LogDebug("Building request {@correlationId}", request.Request.CorrelationId);
+                    _logger.LogDebug("Building request {@correlationId}", request.RequestClient.CorrelationId);
                     #warning buffer pool
                     using var output = new MemoryStream();
-                    request.Request.SerializeRequest(output);
+                    request.RequestClient.SerializeRequest(output);
                     
-                    _logger.LogDebug("Sending request {@correlationId}", request.Request.CorrelationId);
+                    _logger.LogDebug("Sending request {@correlationId}", request.RequestClient.CorrelationId);
                     await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position);
-                    _logger.LogDebug("Sent request {@correlationId}", request.Request.CorrelationId);
+                    _logger.LogDebug("Sent request {@correlationId}", request.RequestClient.CorrelationId);
                 }
             });
     }
 
     public async ValueTask<TResponse> SendAsync<TResponse>(
-        Request<TResponse> request,
+        RequestClient<TResponse> requestClient,
         CancellationToken cancellationToken)
     {
         var completionPromise = new TaskCompletionSource<object>();
         var pendingRequest = new PendingRequest(
-            request,
+            requestClient,
             completionPromise,
             cancellationToken);
-        _logger.LogDebug("Queueing outgoing request {@correlationId}", pendingRequest.Request.CorrelationId);
+        _logger.LogDebug("Queueing outgoing request {@correlationId}", pendingRequest.RequestClient.CorrelationId);
         await _requestQueue.SendAsync(pendingRequest, cancellationToken);
-        _logger.LogDebug("Queued outgoing request {@correlationId}", pendingRequest.Request.CorrelationId);
+        _logger.LogDebug("Queued outgoing request {@correlationId}", pendingRequest.RequestClient.CorrelationId);
 
         var response = await completionPromise.Task;
         return (TResponse)response;

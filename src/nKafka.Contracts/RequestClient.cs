@@ -3,7 +3,7 @@ using nKafka.Contracts.MessageSerializers;
 
 namespace nKafka.Contracts;
 
-public abstract class Request<TResponsePayload> : IRequest
+public abstract class RequestClient<TResponsePayload> : IRequestClient
 {
     public int CorrelationId { get; } = IdGenerator.Next();
     public abstract ApiKey ApiKey { get; }
@@ -52,7 +52,7 @@ public abstract class Request<TResponsePayload> : IRequest
 
     protected abstract TResponsePayload DeserializeResponsePayload(MemoryStream input);
 
-    object IRequest.DeserializeResponse(MemoryStream input)
+    object IRequestClient.DeserializeResponse(MemoryStream input)
     {
         return DeserializeResponse(input)!;
     }

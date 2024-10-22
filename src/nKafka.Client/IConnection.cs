@@ -6,5 +6,7 @@ public interface IConnection : IAsyncDisposable
 {
     ValueTask OpenAsync(ConnectionConfig connectionConfig, CancellationToken cancellationToken);
     
-    ValueTask<TResponse> SendAsync<TResponse>(Request<TResponse> request, CancellationToken cancellationToken);
+    ValueTask<TResponse> SendAsync<TResponse>(
+        RequestClient<TResponse> requestClient,
+        CancellationToken cancellationToken);
 }
