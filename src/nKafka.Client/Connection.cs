@@ -94,7 +94,7 @@ public class Connection : IConnection
                         _logger.LogDebug("Received response ({@payloadSize} bytes).", payloadSize);
                         
                         var payload = await _pipe.Reader.ReadAsync(payloadSize, cancellationToken);
-                        _logger.LogDebug("Read response ({@payloadSize} bytes).", payloadSize);
+                        _logger.LogDebug("Read response payload ({@payloadSize} bytes).", payloadSize);
 
                         if (!_pendingRequests.TryDequeue(out var pendingRequest))
                         {
@@ -122,7 +122,13 @@ public class Connection : IConnection
                         }
 
                         var response = pendingRequest.Request.DeserializeResponse(input);
-                        #warning check if not in the end of input stream and throw?
+                        if (input.Length != input.Position)
+                        {
+                            _logger.LogError(
+                                "Received unexpected response length. Expected {@expectedLength}, but got {@actualLength}",
+                                input.Position,
+                                input.Length);
+                        }
 
                         pendingRequest.Response.SetResult(response);
                     }
