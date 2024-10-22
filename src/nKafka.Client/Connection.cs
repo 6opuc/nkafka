@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks.Dataflow;
 using Microsoft.Extensions.Logging;
+using nKafka.Contracts;
 using nKafka.Contracts.MessageDefinitions;
 using nKafka.Contracts.MessageSerializers;
 
@@ -101,26 +102,12 @@ public class Connection : IConnection
                             _logger.LogError("Received unexpected response: no pending requests.");
                             continue;
                         }
-                        using var input = new MemoryStream(payload);
-
-                        var header = ResponseHeaderSerializer.Deserialize(input, pendingRequest.Request.HeaderVersion);
-                        _logger.LogDebug("Received response for request {@correlationId}.", header.CorrelationId);
-
-                        if (header.CorrelationId == null)
-                        {
-                            _logger.LogError("Received response with empty correlation id.");
-                            continue;
-                        }
                         
-                        if (header.CorrelationId != pendingRequest.Request.CorrelationId)
-                        {
-                            _logger.LogError(
-                                "Received response with incorrect correlation id. Expected {@expectedCorrelationId}, but got {@actualCorrelationId}.",
-                                pendingRequest.Request.CorrelationId,
-                                header.CorrelationId);
-                            continue;
-                        }
-
+                        _logger.LogDebug(
+                            "Deserializing response for request {@correlationId}.",
+                            pendingRequest.Request.CorrelationId);
+                        
+                        using var input = new MemoryStream(payload);
                         var response = pendingRequest.Request.DeserializeResponse(input);
                         if (input.Length != input.Position)
                         {
@@ -238,6 +225,23 @@ public class Connection : IConnection
                     _logger.LogDebug("Sent request {@correlationId}", request.Request.CorrelationId);
                 }
             });
+    }
+
+    public async ValueTask<TResponse> SendAsync<TResponse>(
+        Request<TResponse> request,
+        CancellationToken cancellationToken)
+    {
+        var completionPromise = new TaskCompletionSource<object>();
+        var pendingRequest = new PendingRequest(
+            request,
+            completionPromise,
+            cancellationToken);
+        _logger.LogDebug("Queueing outgoing request {@correlationId}", pendingRequest.Request.CorrelationId);
+        await _requestQueue.SendAsync(pendingRequest, cancellationToken);
+        _logger.LogDebug("Queued outgoing request {@correlationId}", pendingRequest.Request.CorrelationId);
+
+        var response = await completionPromise.Task;
+        return (TResponse)response;
     }
 
     public async ValueTask DisposeAsync()
