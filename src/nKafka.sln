@@ -8,6 +8,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "nKafka.Contracts.Generator"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "nKafka.Contracts.Generator.Tests", "nKafka.Contracts.Generator.Tests\nKafka.Contracts.Generator.Tests.csproj", "{CF03D7B2-1304-4F0E-85C9-07C8D6696C84}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "nKafka.Client", "nKafka.Client\nKafka.Client.csproj", "{9BFEFB57-0507-404C-9DD6-60805ADBFA75}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "nKafka.Client.IntegrationTests", "nKafka.Client.IntegrationTests\nKafka.Client.IntegrationTests.csproj", "{495487F8-7F2D-4EE4-A69F-93374DFDE87E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +34,13 @@ Global
 		{CF03D7B2-1304-4F0E-85C9-07C8D6696C84}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CF03D7B2-1304-4F0E-85C9-07C8D6696C84}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CF03D7B2-1304-4F0E-85C9-07C8D6696C84}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9BFEFB57-0507-404C-9DD6-60805ADBFA75}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9BFEFB57-0507-404C-9DD6-60805ADBFA75}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9BFEFB57-0507-404C-9DD6-60805ADBFA75}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9BFEFB57-0507-404C-9DD6-60805ADBFA75}.Release|Any CPU.Build.0 = Release|Any CPU
+		{495487F8-7F2D-4EE4-A69F-93374DFDE87E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{495487F8-7F2D-4EE4-A69F-93374DFDE87E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{495487F8-7F2D-4EE4-A69F-93374DFDE87E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{495487F8-7F2D-4EE4-A69F-93374DFDE87E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
