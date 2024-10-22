@@ -10,7 +10,7 @@ public static class MessageDefinitionExtensions
             $$"""
               public static class {{messageDefinition.Name}}Serializer
               {
-                 public static void Serialize(MemoryStream output, {{messageDefinition.Name}} message, int version)
+                 public static void Serialize(MemoryStream output, {{messageDefinition.Name}} message, short version)
                  {
                     switch (version)
                     {
@@ -30,7 +30,7 @@ public static class MessageDefinitionExtensions
                                }
                             }
 
-                            public static {{messageDefinition.Name}} Deserialize(MemoryStream input, int version)
+                            public static {{messageDefinition.Name}} Deserialize(MemoryStream input, short version)
                             {
                                switch (version)
                                {

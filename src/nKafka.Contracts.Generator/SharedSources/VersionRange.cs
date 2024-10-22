@@ -2,16 +2,16 @@ using System.Collections;
 
 namespace nKafka.Contracts;
 
-public readonly struct VersionRange : IEnumerable<int>
+public readonly struct VersionRange : IEnumerable<short>
 {
     public static readonly VersionRange None = new VersionRange();
 
-    public int? From { get; }
-    public int? To { get; }
+    public short? From { get; }
+    public short? To { get; }
     public bool IsNone => From == null;
 
 
-    public VersionRange(int from, int? to = null)
+    public VersionRange(short from, short? to = null)
     {
         From = from;
         To = to;
@@ -37,7 +37,7 @@ public readonly struct VersionRange : IEnumerable<int>
             return false;
         }
 
-        if (!int.TryParse(versions.First(), out var from))
+        if (!short.TryParse(versions.First(), out var from))
         {
             return false;
         }
@@ -51,7 +51,7 @@ public readonly struct VersionRange : IEnumerable<int>
             return true;
         }
 
-        if (!int.TryParse(versions.Last(), out var to))
+        if (!short.TryParse(versions.Last(), out var to))
         {
             return false;
         }
@@ -60,7 +60,7 @@ public readonly struct VersionRange : IEnumerable<int>
         return true;
     }
 
-    public bool Includes(int version)
+    public bool Includes(short version)
     {
         if (IsNone)
         {
@@ -80,7 +80,7 @@ public readonly struct VersionRange : IEnumerable<int>
         return GetEnumerator();
     }
 
-    public IEnumerator<int> GetEnumerator()
+    public IEnumerator<short> GetEnumerator()
     {
         if (!To.HasValue || !From.HasValue)
         {

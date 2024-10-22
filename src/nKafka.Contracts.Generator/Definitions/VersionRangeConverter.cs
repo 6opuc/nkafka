@@ -10,13 +10,13 @@ public class VersionRangeConverter : JsonConverter<VersionRange>
         {
             JsonTokenType.None => VersionRange.None,
             JsonTokenType.Null => VersionRange.None,
-            JsonTokenType.Number => new VersionRange(reader.GetInt32()),
+            JsonTokenType.Number => new VersionRange(reader.GetInt16()),
             JsonTokenType.String => VersionRange.TryParse(reader.GetString() ?? string.Empty, out var result)
                 ? result
                 : throw new InvalidOperationException(
-                    $"Token {reader.TokenType} can not be converted to int."),
+                    $"Token {reader.TokenType} can not be converted to version range."),
             _ => throw new InvalidOperationException(
-                $"Token {reader.TokenType} can not be converted to int.")
+                $"Token {reader.TokenType} can not be converted to version range.")
         };
 
     public override void Write(Utf8JsonWriter writer, VersionRange value, JsonSerializerOptions options)

@@ -172,7 +172,7 @@ public static class FieldDefinitionExtensions
                  """;
     }
 
-    public static string ToSerializationStatements(this IList<FieldDefinition> fields, int version, bool flexible)
+    public static string ToSerializationStatements(this IList<FieldDefinition> fields, short version, bool flexible)
     {
         var source = new StringBuilder();
         foreach (var field in fields)
@@ -233,7 +233,7 @@ public static class FieldDefinitionExtensions
     }
 
 
-    public static string ToSerializationStatements(this FieldDefinition field, int version, bool flexible, string output = "output")
+    public static string ToSerializationStatements(this FieldDefinition field, short version, bool flexible, string output = "output")
     {
         if (!field.Versions.Includes(version))
         {
@@ -269,7 +269,7 @@ public static class FieldDefinitionExtensions
                  """;
     }
 
-    private static string GetSerializationStatements(string propertyPath, int version, bool flexible, string? propertyType, string output = "output")
+    private static string GetSerializationStatements(string propertyPath, short version, bool flexible, string? propertyType, string output = "output")
     {
         if (propertyType == "string")
         {
@@ -342,7 +342,7 @@ public static class FieldDefinitionExtensions
 
     public static string ToNestedSerializerDeclarations(
         this IList<FieldDefinition> fields,
-        int version,
+        short version,
         bool flexible,
         string nestedTypeName)
     {
@@ -382,7 +382,7 @@ public static class FieldDefinitionExtensions
         return source.ToString();
     }
 
-    public static string ToNestedSerializerDeclaration(this FieldDefinition field, int version, bool flexible)
+    public static string ToNestedSerializerDeclaration(this FieldDefinition field, short version, bool flexible)
     {
         if (!field.Versions.Includes(version))
         {
@@ -394,7 +394,7 @@ public static class FieldDefinitionExtensions
     }
     
     
-    public static string ToDeserializationStatements(this IList<FieldDefinition> fields, int version, bool flexible)
+    public static string ToDeserializationStatements(this IList<FieldDefinition> fields, short version, bool flexible)
     {
         var source = new StringBuilder();
         foreach (var field in fields)
@@ -461,7 +461,7 @@ public static class FieldDefinitionExtensions
         return source.ToString();
     }
     
-    public static string ToDeserializationStatements(this FieldDefinition field, int version, bool flexible, string input = "input")
+    public static string ToDeserializationStatements(this FieldDefinition field, short version, bool flexible, string input = "input")
     {
         if (!field.Versions.Includes(version))
         {
@@ -513,7 +513,7 @@ public static class FieldDefinitionExtensions
                  """;
     }
 
-    private static string GetDeserializationStatements(string propertyPath, int version, bool flexible, string? propertyType, string input = "input")
+    private static string GetDeserializationStatements(string propertyPath, short version, bool flexible, string? propertyType, string input = "input")
     {
         if (propertyType == "string")
         {

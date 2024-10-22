@@ -24,7 +24,7 @@ public static class CommonStructDefinitionExtensions
                  """;
     }
     
-    public static string ToNestedSerializerDeclaration(this CommonStructDefinition commonStruct, int version, bool flexible)
+    public static string ToNestedSerializerDeclaration(this CommonStructDefinition commonStruct, short version, bool flexible)
     {
         if (!commonStruct.Versions.Includes(version))
         {
