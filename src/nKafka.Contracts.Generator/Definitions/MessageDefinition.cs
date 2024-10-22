@@ -2,7 +2,7 @@
 
 public class MessageDefinition
 {
-    public ApiKey ApiKey { get; set; }
+    public short? ApiKey { get; set; }
     public string? Name { get; set; }
     public string? Type { get; set; }
     public List<string> Listeners { get; set; } = [];

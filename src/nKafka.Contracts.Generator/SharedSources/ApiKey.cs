@@ -1,6 +1,6 @@
 ﻿namespace nKafka.Contracts;
 
-public enum ApiKey
+public enum ApiKey : short
 {
     Produce = 0,
     Fetch = 1,

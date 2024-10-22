@@ -4,6 +4,8 @@ namespace nKafka.Contracts.Generator.Definitions;
 
 public static class FieldDefinitionExtensions
 {
+    #warning see request header ClientId/flexibleVersions: none != null
+    
     public static string ToPropertyDeclarations(this IList<FieldDefinition> fields)
     {
         var propertyDeclarations = string.Join("\n", fields.Select(x => x.ToPropertyDeclaration()));
@@ -143,6 +145,7 @@ public static class FieldDefinitionExtensions
             "int16" => "short",
             "int8" => "byte",
             "uint16" => "ushort",
+            "float64" => "double",
             "uuid" => "Guid",
             "bytes" => "byte[]",
             #warning implement records

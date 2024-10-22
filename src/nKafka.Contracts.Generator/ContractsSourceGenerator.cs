@@ -14,23 +14,27 @@ public class ContractsSourceGenerator : IIncrementalGenerator
     {
         var messageDefinitions = ParseMessageDefinitions(context);
         context.RegisterSourceOutput(messageDefinitions, GenerateCodeForMessageDefinitions);
-
-        var sharedSources = GetSharedSources(context);
-        context.RegisterSourceOutput(sharedSources, CopySources);
     }
 
+    #warning implement support for excluded messages
+    private static readonly string[] ExcludeMessages = [
+        "ListTransactionsResponse",
+        "DescribeTransactionsResponse",
+        "AlterClientQuotasRequest",
+        "DescribeClientQuotasResponse"
+    ];
     private static IncrementalValueProvider<ImmutableArray<MessageDefinition>> ParseMessageDefinitions(
         IncrementalGeneratorInitializationContext context)
     {
         var messageDefinitions = context.AdditionalTextsProvider
             .Where(x => x.Path.Contains("apache_kafka_message_definitions"))
             .Where(x => x.Path.EndsWith(".json"))
+            .Where(x => !ExcludeMessages.Any(e => x.Path.Contains(e)))
             .Select((x, token) => x.GetText(token))
             .Where(x => x != null)
             .Select((x, _) => JsonSerializer.Deserialize<MessageDefinition>(
                 x!.ToString(), MessageDefinitionJsonSerializerOptions.Default))
             .Where(x => x != null)
-            .Where(x => Enum.IsDefined(typeof(ApiKey), x!.ApiKey))
             .Select((x, _) => x!)
             .Collect();
         return messageDefinitions;
@@ -54,7 +58,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                           
                           public class {{messageDefinition.Name}}
                           {
-                             public static readonly ApiKey ApiKey = ApiKey.{{messageDefinition.ApiKey}};
+                             public static readonly short? ApiKey = {{messageDefinition.ApiKey?.ToString() ?? "null"}};
                              public static readonly VersionRange ValidVersions = {{messageDefinition.ValidVersions.ToLiteral()}};
                              public static readonly VersionRange DeprecatedVersions = {{messageDefinition.DeprecatedVersions.ToLiteral()}};
                              public static readonly VersionRange FlexibleVersions = {{messageDefinition.FlexibleVersions.ToLiteral()}};
@@ -101,37 +105,5 @@ public class ContractsSourceGenerator : IIncrementalGenerator
         var root = tree.GetRoot().NormalizeWhitespace();
         var formatted = root.ToFullString();
         return formatted;
-    }
-    
-    private IncrementalValueProvider<ImmutableArray<SharedSource>> GetSharedSources(
-        IncrementalGeneratorInitializationContext context)
-    {
-        var sharedSources = context.AdditionalTextsProvider
-            .Where(x => x.Path.Contains("SharedSources"))
-            .Where(x => x.Path.EndsWith(".cs"))
-            .Select((x, token) => new SharedSource
-            {
-                Name = Path.GetFileNameWithoutExtension(x.Path),
-                Content = x.GetText(token)?.ToString(),
-            })
-            .Where(x => x.Name != null && x.Content != null)
-            .Collect();
-        return sharedSources;
-    }
-
-    private class SharedSource
-    {
-        public string? Name { get; set; }
-        public string? Content { get; set; }
-    }
-
-    private void CopySources(SourceProductionContext context, ImmutableArray<SharedSource> sharedSources)
-    {
-        foreach (var source in sharedSources)
-        {
-            context.AddSource(
-                $"Shared/{source.Name}.g.cs",
-                Format(source.Content!));
-        }
     }
 }
