@@ -213,8 +213,6 @@ public static class FieldDefinitionExtensions
                                   """);
                 foreach (var taggedField in taggedFields)
                 {
-                    var propertyType = taggedField.GetFieldItemPropertyType();
-                    
                     source.AppendLine($$"""
                                         if (message.{{taggedField.Name}} != null)
                                         {
@@ -227,7 +225,7 @@ public static class FieldDefinitionExtensions
                                         }
                                         """);
                 }
-                source.AppendLine("}"); // if (tagSectionLength > 0)
+                source.AppendLine("}");
             }
         }
         
