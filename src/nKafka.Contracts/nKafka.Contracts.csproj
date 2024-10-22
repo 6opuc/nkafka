@@ -7,11 +7,12 @@
 
         <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
         <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
-      
+
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\nKafka.Contracts.Generator\nKafka.Contracts.Generator.csproj"  ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
+        <ProjectReference Include="..\nKafka.Contracts.Generator\nKafka.Contracts.Generator.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer"/>
+        <PackageReference Include="Microsoft.Net.Compilers.Toolset" Version="4.11.0"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -19,11 +20,11 @@
             <LinkBase>apache_kafka_message_definitions</LinkBase>
         </AdditionalFiles>
     </ItemGroup>
-    
+
     <ItemGroup>
         <Compile Remove="$(CompilerGeneratedFilesOutputPath)/**/*.cs"/>
         <None Include="$(CompilerGeneratedFilesOutputPath)/**/*.cs"/>
-        
+
         <Compile Include="..\nKafka.Contracts.Generator\SharedSources\*.cs">
             <LinkBase>SharedSources</LinkBase>
         </Compile>
