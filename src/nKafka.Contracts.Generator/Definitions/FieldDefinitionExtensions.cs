@@ -342,19 +342,16 @@ public static class FieldDefinitionExtensions
                  """;
     }
 
-    public static string ToNestedSerializerDeclaration(this FieldDefinition field, int version, bool flexible)
+    public static string ToNestedSerializerDeclarations(
+        this IList<FieldDefinition> fields,
+        int version,
+        bool flexible,
+        string nestedTypeName)
     {
-        if (!field.Fields.Any())
+        if (!fields.Any())
         {
             return string.Empty;
         }
-
-        if (!field.Versions.Includes(version))
-        {
-            return String.Empty;
-        }
-
-        var nestedTypeName = field.GetFieldItemType();
 
         var source = new StringBuilder();
         source.AppendLine(
@@ -363,19 +360,19 @@ public static class FieldDefinitionExtensions
               {
                  public static void Serialize(MemoryStream output, {{nestedTypeName}} message)
                  {
-                    {{field.Fields.ToSerializationStatements(version, flexible)}}
+                    {{fields.ToSerializationStatements(version, flexible)}}
                  }
                  
                  public static {{nestedTypeName}} Deserialize(MemoryStream input)
                  {
                     var message = new {{nestedTypeName}}();
-                    {{field.Fields.ToDeserializationStatements(version, flexible)}}
+                    {{fields.ToDeserializationStatements(version, flexible)}}
                     return message;
                  }
               }
               """);
 
-        foreach (var child in field.Fields)
+        foreach (var child in fields)
         {
             var childSerializer = child.ToNestedSerializerDeclaration(version, flexible);
             if (!string.IsNullOrWhiteSpace(childSerializer))
@@ -385,6 +382,17 @@ public static class FieldDefinitionExtensions
         }
 
         return source.ToString();
+    }
+
+    public static string ToNestedSerializerDeclaration(this FieldDefinition field, int version, bool flexible)
+    {
+        if (!field.Versions.Includes(version))
+        {
+            return String.Empty;
+        }
+
+        var nestedTypeName = field.GetFieldItemType();
+        return field.Fields.ToNestedSerializerDeclarations(version, flexible, nestedTypeName!);
     }
     
     
