@@ -58,10 +58,10 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                           
                           public class {{messageDefinition.Name}}
                           {
-                             public static readonly short? ApiKey = {{messageDefinition.ApiKey?.ToString() ?? "null"}};
-                             public static readonly VersionRange ValidVersions = {{messageDefinition.ValidVersions.ToLiteral()}};
-                             public static readonly VersionRange DeprecatedVersions = {{messageDefinition.DeprecatedVersions.ToLiteral()}};
-                             public static readonly VersionRange FlexibleVersions = {{messageDefinition.FlexibleVersions.ToLiteral()}};
+                             //public static readonly short? ApiKey = {{messageDefinition.ApiKey?.ToString() ?? "null"}};
+                             //public static readonly VersionRange ValidVersions = {{messageDefinition.ValidVersions.ToLiteral()}};
+                             //public static readonly VersionRange DeprecatedVersions = {{messageDefinition.DeprecatedVersions.ToLiteral()}};
+                             //public static readonly VersionRange FlexibleVersions = {{messageDefinition.FlexibleVersions.ToLiteral()}};
                              
                              {{messageDefinition.Fields.ToPropertyDeclarations()}}
                           }

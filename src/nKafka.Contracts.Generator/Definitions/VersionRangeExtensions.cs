@@ -2,12 +2,22 @@ namespace nKafka.Contracts.Generator.Definitions;
 
 public static class VersionRangeExtensions
 {
-    public static string ToLiteral(this VersionRange versions)
+    public static string ToLiteral(this VersionRange? versions)
     {
-        return versions.IsNone
+        if (versions == null)
+        {
+            return "null";
+        }
+        
+        return versions.Value.IsNone
             ? "VersionRange.None"
-            : versions.To != null
-                ? $"new VersionRange({versions.From}, {versions.To})"
-                : $"new VersionRange({versions.From}, null)";
+            : versions.Value.To != null
+                ? $"new VersionRange({versions.Value.From}, {versions.Value.To})"
+                : $"new VersionRange({versions.Value.From}, null)";
+    }
+
+    public static bool Includes(this VersionRange? versions, short version)
+    {
+        return versions != null && versions.Value.Includes(version);
     }
 }

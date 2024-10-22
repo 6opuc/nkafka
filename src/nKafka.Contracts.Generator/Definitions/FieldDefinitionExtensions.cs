@@ -4,8 +4,6 @@ namespace nKafka.Contracts.Generator.Definitions;
 
 public static class FieldDefinitionExtensions
 {
-    #warning see request header ClientId/flexibleVersions: none != null
-    
     public static string ToPropertyDeclarations(this IList<FieldDefinition> fields)
     {
         var propertyDeclarations = string.Join("\n", fields.Select(x => x.ToPropertyDeclaration()));
@@ -38,12 +36,12 @@ public static class FieldDefinitionExtensions
             remarks.AppendLine($"/// EntityType: {field.EntityType}.");
         }
 
-        if (!field.Versions.IsNone)
+        if (field.Versions.HasValue)
         {
             remarks.AppendLine($"/// Versions: {field.Versions}.");
         }
 
-        if (!field.NullableVersions.IsNone)
+        if (field.NullableVersions.HasValue)
         {
             remarks.AppendLine($"/// NullableVersions: {field.NullableVersions}.");
         }
@@ -241,6 +239,11 @@ public static class FieldDefinitionExtensions
         if (!field.Versions.Includes(version))
         {
             return string.Empty;
+        }
+        
+        if (field.FlexibleVersions.HasValue && flexible)
+        {
+            flexible = field.FlexibleVersions.Includes(version);
         }
 
         var propertyType = field.GetFieldItemPropertyType();
@@ -469,6 +472,11 @@ public static class FieldDefinitionExtensions
         if (!field.Versions.Includes(version))
         {
             return string.Empty;
+        }
+
+        if (field.FlexibleVersions.HasValue && flexible)
+        {
+            flexible = field.FlexibleVersions.Includes(version);
         }
 
         var propertyType = field.GetFieldItemPropertyType();
