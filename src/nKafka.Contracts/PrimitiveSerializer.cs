@@ -4,11 +4,11 @@ namespace nKafka.Contracts;
 
 public static class PrimitiveSerializer
 {
-    private static readonly byte[] MinusOneShort = [ 0xff, 0xff ];
+    private static readonly byte[] MinusOneShort = [0xff, 0xff];
     private static readonly byte[] MinusOneVarInt = { 0x01 };
     private const byte ZeroByte = 0x00;
     private const byte OneByte = 0x01;
-    
+
     public static void SerializeString(MemoryStream output, string? value)
     {
         if (value == null)
@@ -16,16 +16,18 @@ public static class PrimitiveSerializer
             output.Write(MinusOneShort, 0, MinusOneShort.Length);
             return;
         }
-        
+
         var length = Encoding.UTF8.GetByteCount(value);
         if (length > short.MaxValue)
         {
-            throw new InvalidOperationException($"value is too long. Max length: {short.MaxValue}. Current value length: {length}");
+            throw new InvalidOperationException(
+                $"value is too long. Max length: {short.MaxValue}. Current value length: {length}");
         }
+
         SerializeShort(output, (short)length);
-        
+
         output.SetLength(output.Length + length);
-        Encoding.UTF8.GetBytes(value, 0, value.Length, output.GetBuffer(), (int) output.Position);
+        Encoding.UTF8.GetBytes(value, 0, value.Length, output.GetBuffer(), (int)output.Position);
         output.Position += length;
     }
 
@@ -41,37 +43,37 @@ public static class PrimitiveSerializer
         {
             return string.Empty;
         }
-        
+
         if (input.Position + length > input.Length)
         {
             throw new InvalidOperationException(
                 $"DeserializeString needs {length} bytes but got only {input.Length - input.Position}");
         }
-        
+
         var value = Encoding.UTF8.GetString(input.GetBuffer(), (int)input.Position, length);
         input.Position += length;
         return value;
     }
-    
+
     public static void SerializeVarString(MemoryStream output, string? value)
     {
+        var length = value == null
+            ? -1
+            : Encoding.UTF8.GetByteCount(value);
+        SerializeUVarLong(output, (ulong)(length+1));
         if (value == null)
         {
-            output.Write(MinusOneVarInt, 0, MinusOneVarInt.Length);
             return;
         }
-        
-        var length = Encoding.UTF8.GetByteCount(value);
-        SerializeVarLong(output, length);
-        
+
         output.SetLength(output.Length + length);
-        Encoding.UTF8.GetBytes(value, 0, value.Length, output.GetBuffer(), (int) output.Position);
+        Encoding.UTF8.GetBytes(value, 0, value.Length, output.GetBuffer(), (int)output.Position);
         output.Position += length;
     }
 
     public static string? DeserializeVarString(MemoryStream input)
     {
-        var length = DeserializeVarLong(input);
+        var length = (long)DeserializeUVarLong(input) - 1;
         if (length == -1)
         {
             return null;
@@ -81,18 +83,19 @@ public static class PrimitiveSerializer
         {
             return string.Empty;
         }
-        
+
         if (length > int.MaxValue)
         {
-            throw new InvalidOperationException($"value is too long. Max length: {int.MaxValue}. Current value length: {length}");
+            throw new InvalidOperationException(
+                $"value is too long. Max length: {int.MaxValue}. Current value length: {length}");
         }
-        
+
         if (input.Position + length > input.Length)
         {
             throw new InvalidOperationException(
                 $"DeserializeVarString needs {length} bytes but got only {input.Length - input.Position}");
         }
-        
+
         var value = Encoding.UTF8.GetString(input.GetBuffer(), (int)input.Position, (int)length);
         input.Position += length;
         return value;
@@ -103,12 +106,12 @@ public static class PrimitiveSerializer
         SerializeIntAsByte(output, value!.Value >> 8);
         SerializeIntAsByte(output, value!.Value);
     }
-    
+
     private static void SerializeIntAsByte(MemoryStream output, int value)
     {
-        output.WriteByte((byte) (value & 0xff));
+        output.WriteByte((byte)(value & 0xff));
     }
-    
+
     public static short DeserializeShort(MemoryStream input)
     {
         if (input.Position + 2 > input.Length)
@@ -117,17 +120,17 @@ public static class PrimitiveSerializer
                 $"DeserializeShort needs 2 bytes but got only {input.Length - input.Position}");
         }
 
-        return (short) ((input.ReadByte() << 8) | input.ReadByte());
+        return (short)((input.ReadByte() << 8) | input.ReadByte());
     }
-    
+
     public static void SerializeUshort(MemoryStream output, ushort? value)
     {
         SerializeShort(output, (short)value!.Value);
     }
-    
+
     public static ushort DeserializeUshort(MemoryStream input)
     {
-        return (ushort) DeserializeShort(input);
+        return (ushort)DeserializeShort(input);
     }
 
     public static void SerializeByte(MemoryStream output, byte? value)
@@ -147,7 +150,7 @@ public static class PrimitiveSerializer
         SerializeIntAsByte(output, value!.Value >> 8);
         SerializeIntAsByte(output, value!.Value);
     }
-    
+
     public static int DeserializeInt(MemoryStream input)
     {
         if (input.Position + 4 > input.Length)
@@ -156,16 +159,16 @@ public static class PrimitiveSerializer
                 $"DeserializeInt needs 4 bytes but got only {input.Length - input.Position}");
         }
 
-        return input.ReadByte() << 3*8 | input.ReadByte() << 2*8 | input.ReadByte() << 8 | input.ReadByte();
+        return input.ReadByte() << 3 * 8 | input.ReadByte() << 2 * 8 | input.ReadByte() << 8 | input.ReadByte();
     }
 
     public static void SerializeLong(MemoryStream output, long? value)
     {
-        ulong ui = (ulong) value!.Value;
+        ulong ui = (ulong)value!.Value;
         for (int j = 7; j >= 0; j--)
-            output.WriteByte((byte) (ui >> j*8 & 0xff));
+            output.WriteByte((byte)(ui >> j * 8 & 0xff));
     }
-    
+
     public static long DeserializeLong(MemoryStream input)
     {
         if (input.Position + 8 > input.Length)
@@ -181,7 +184,7 @@ public static class PrimitiveSerializer
 
         return value;
     }
-    
+
     public static void SerializeBool(MemoryStream output, bool? value)
     {
         output.WriteByte(value == true ? OneByte : ZeroByte);
@@ -191,65 +194,60 @@ public static class PrimitiveSerializer
     {
         return input.ReadByte() != ZeroByte;
     }
-    
+
     public static void SerializeVarLong(MemoryStream output, long? value)
     {
         var asZigZag = ToZigZag(value!.Value);
+        SerializeUVarLong(output, asZigZag);
+    }
 
-        // value & 1111 1111 ... 1000 0000 will zero the last 7 bytes,
-        // if the result is zero, it means we only have those last 7 bytes
-        // to write.
-        while((asZigZag & 0xffffffffffffff80L) != 0L)
+    public static void SerializeUVarLong(MemoryStream output, ulong? value)
+    {
+        do
         {
-            // keep only the 7 most significant bytes:
-            // value = (value & 0111 1111)
-            // and add a 1 in the most significant bit of the byte, meaning
-            // it's not the last byte of the VarInt:
-            // value = (value | 1000 0000)
-            output.WriteByte((byte)((asZigZag & 0x7f) | 0x80));
-            // Shift the 7 bits we just wrote to the stream and continue:
-            asZigZag >>= 7;
-        }
-        output.WriteByte((byte)asZigZag);
+            // Take 7 bits
+            var byteValue = value & 0x7f;
+            // Remove 7 bits
+            value >>= 7;
+
+            // Value should be encoded to more than one byte?
+            if (value > 0)
+            {
+                // Add 1 to most significant bit to indicate more bytes will follow
+                byteValue |= 128;
+            }
+
+            output.WriteByte((byte)byteValue);
+        } while (value > 0);
     }
 
     public static long DeserializeVarLong(MemoryStream input)
     {
-        ulong asZigZag = 0L; // Result value
-        int i = 0; // Number of bits written
-        long b; // Byte read
-
-        // Check if the 8th bit of the byte is 1, meaning there will be more to read:
-        // b & 1000 0000
-        while (((b = input.ReadByte()) & 0x80) != 0) {
-            // Take the 7 bits of the byte we want to add and insert them at the
-            // right location (offset i)
-            asZigZag |= (ulong)(b & 0x7f) << i;
-            i += 7;
-            if (i > 63)
-                throw new OverflowException();
-        }
-
-        if (i == 63 && b != 0x01)
-        {
-            // We read 63 bits, we can only read one more (the most significant bit, MSB),
-            // or it means that the VarInt can't fit in a long.
-            // If the bit to read was 0, we would not have read it (as it's the MSB), thus, it must be 1.
-            throw new OverflowException();
-        }
-
-        asZigZag |= (ulong)b << i;
-
-        // The value is signed
-        if ((asZigZag & 0x1) == 0x1)
-        {
-            return (-1 * ((long)(asZigZag >> 1) + 1));
-        }
-
-
-        return (long)(asZigZag >> 1);
+        return FromZigZag(DeserializeUVarLong(input));
     }
     
+    private static long FromZigZag(this ulong value)
+    {
+        return unchecked((long)((value >> 1) - (value & 1) * value));
+    }
+
+    public static ulong DeserializeUVarLong(MemoryStream input)
+    {
+        var more = true;
+        ulong value = 0;
+        var shift = 0;
+        while (more)
+        {
+            var lowerBits = DeserializeByte(input);
+
+            more = (lowerBits & 128) != 0;
+            value |= (uint)((lowerBits & 0x7f) << shift);
+            shift += 7;
+        }
+
+        return value;
+    }
+
     private static ulong ToZigZag(long i)
     {
         return unchecked((ulong)((i << 1) ^ (i >> 63)));
@@ -264,7 +262,7 @@ public static class PrimitiveSerializer
     {
         return checked((int)DeserializeVarLong(input));
     }
-    
+
     public static void SerializeGuid(MemoryStream output, Guid? value)
     {
         var availableSize = output.Length - output.Position;
@@ -284,7 +282,8 @@ public static class PrimitiveSerializer
         {
             throw new Exception($"DeserializeGuid needs 16 bytes but got only {input.Length - input.Position}");
         }
-        var bytes = input.GetBuffer()[(int)input.Position..((int)input.Position+16)];
+
+        var bytes = input.GetBuffer()[(int)input.Position..((int)input.Position + 16)];
         return new Guid(bytes);
     }
 }
