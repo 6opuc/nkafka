@@ -106,18 +106,26 @@ public class Connection : IConnection
                         _logger.LogDebug(
                             "Deserializing response for request {@correlationId}.",
                             pendingRequest.RequestClient.CorrelationId);
-                        
-                        using var input = new MemoryStream(payload);
-                        var response = pendingRequest.RequestClient.DeserializeResponse(input);
-                        if (input.Length != input.Position)
-                        {
-                            _logger.LogError(
-                                "Received unexpected response length. Expected {@expectedLength}, but got {@actualLength}",
-                                input.Position,
-                                input.Length);
-                        }
 
-                        pendingRequest.Response.SetResult(response);
+                        try
+                        {
+                            using var input = new MemoryStream(payload, 0, payload.Length, false, true);
+                            var response = pendingRequest.RequestClient.DeserializeResponse(input);
+                            if (input.Length != input.Position)
+                            {
+                                _logger.LogError(
+                                    "Received unexpected response length. Expected {@expectedLength}, but got {@actualLength}",
+                                    input.Position,
+                                    input.Length);
+                            }
+
+                            pendingRequest.Response.SetResult(response);
+                        }
+                        catch (Exception exception)
+                        {
+                            pendingRequest.Response.SetException(exception);
+                        }
+                        
                     }
                     catch (OperationCanceledException)
                     {

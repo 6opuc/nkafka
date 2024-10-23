@@ -60,7 +60,7 @@ public static class PrimitiveSerializer
         var length = value == null
             ? -1
             : Encoding.UTF8.GetByteCount(value);
-        SerializeUVarLong(output, (ulong)(length+1));
+        SerializeLengthLong(output, length);
         if (value == null)
         {
             return;
@@ -73,7 +73,7 @@ public static class PrimitiveSerializer
 
     public static string? DeserializeVarString(MemoryStream input)
     {
-        var length = (long)DeserializeUVarLong(input) - 1;
+        var length = DeserializeLengthLong(input);
         if (length == -1)
         {
             return null;
@@ -220,6 +220,9 @@ public static class PrimitiveSerializer
             output.WriteByte((byte)byteValue!);
         } while (value > 0);
     }
+    
+    public static void SerializeLengthLong(MemoryStream output, long value) =>
+        SerializeUVarLong(output, (ulong)(value + 1));
 
     public static long DeserializeVarLong(MemoryStream input)
     {
@@ -247,6 +250,9 @@ public static class PrimitiveSerializer
 
         return value;
     }
+    
+    public static long DeserializeLengthLong(MemoryStream input) =>
+        (long)DeserializeUVarLong(input) - 1;
 
     private static ulong ToZigZag(long i)
     {
@@ -257,10 +263,30 @@ public static class PrimitiveSerializer
     {
         SerializeVarLong(output, value);
     }
+    
+    public static void SerializeUVarInt(MemoryStream output, uint? value)
+    {
+        SerializeUVarLong(output, value);
+    }
+    
+    public static void SerializeLength(MemoryStream output, int value)
+    {
+        SerializeLengthLong(output, value);
+    }
 
     public static int DeserializeVarInt(MemoryStream input)
     {
         return checked((int)DeserializeVarLong(input));
+    }
+
+    public static uint DeserializeUVarInt(MemoryStream input)
+    {
+        return checked((uint)DeserializeUVarLong(input));
+    }
+    
+    public static int DeserializeLength(MemoryStream input)
+    {
+        return checked((int)DeserializeLengthLong(input));
     }
 
     public static void SerializeGuid(MemoryStream output, Guid? value)

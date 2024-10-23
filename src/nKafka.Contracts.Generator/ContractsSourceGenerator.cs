@@ -11,7 +11,6 @@ namespace nKafka.Contracts.Generator;
 public class ContractsSourceGenerator : IIncrementalGenerator
 {
     #warning if message contain ErrorCode, when we should check value and throw exception without further deserialization
-    #warning check ApiVersionsResponse.ThrottleTimeMs deserialization(compare with native client)
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var messageDefinitions = ParseMessageDefinitions(context);

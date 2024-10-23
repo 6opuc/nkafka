@@ -198,14 +198,14 @@ public static class FieldDefinitionExtensions
                 .ToList();
             if (!taggedFields.Any())
             {
-                source.AppendLine("PrimitiveSerializer.SerializeVarInt(output, 0); // tag section length");
+                source.AppendLine("PrimitiveSerializer.SerializeUVarInt(output, 0); // tag section length");
             }
             else
             {
                 source.AppendLine($$"""
                                     var tagSectionLength = {{string.Join(" + ", taggedFields.Select(x => $"(message.{x.Name} == null ? 0 : 1)"))}};
                                     """);
-                source.AppendLine("PrimitiveSerializer.SerializeVarInt(output, tagSectionLength); // tag section length");
+                source.AppendLine("PrimitiveSerializer.SerializeUVarInt(output, (uint)tagSectionLength); // tag section length");
                 #warning consider buffer pool or message size calculation
                 source.AppendLine("""
                                   if (tagSectionLength > 0)
@@ -217,11 +217,11 @@ public static class FieldDefinitionExtensions
                     source.AppendLine($$"""
                                         if (message.{{taggedField.Name}} != null)
                                         {
-                                            PrimitiveSerializer.SerializeVarInt(output, {{taggedField.Tag}}); // tag number
+                                            PrimitiveSerializer.SerializeUVarInt(output, {{taggedField.Tag}}); // tag number
                                             buffer.Position = 0;
                                             {{taggedField.ToSerializationStatements(version, flexible, "buffer")}}
                                             var size = (int)buffer.Position;
-                                            PrimitiveSerializer.SerializeVarInt(output, size); // tag payload size
+                                            PrimitiveSerializer.SerializeUVarInt(output, (uint)size); // tag payload size
                                             output.Write(buffer.GetBuffer(), 0, size); // tag payload
                                         }
                                         """);
@@ -253,7 +253,7 @@ public static class FieldDefinitionExtensions
         }
         
         var lengthSerialization = flexible
-            ? $"PrimitiveSerializer.SerializeVarInt({output}, message.{field.Name}?.Count ?? 0);"
+            ? $"PrimitiveSerializer.SerializeLength({output}, message.{field.Name}?.Count ?? 0);"
             : $"PrimitiveSerializer.SerializeInt({output}, message.{field.Name}?.Count ?? -1);";
         if (!field.IsMap())
         {
@@ -317,7 +317,7 @@ public static class FieldDefinitionExtensions
         if (propertyType == "byte[]")
         {
             var lengthSerialization = flexible
-                ? $"PrimitiveSerializer.SerializeVarInt({output}, {propertyPath}?.Length ?? 0);"
+                ? $"PrimitiveSerializer.SerializeLength({output}, {propertyPath}?.Length ?? 0);"
                 : $"PrimitiveSerializer.SerializeInt({output}, {propertyPath}?.Length ?? -1);";
             return $$"""
                      {{lengthSerialization}}
@@ -422,16 +422,16 @@ public static class FieldDefinitionExtensions
             
             if (!taggedFields.Any())
             {
-                source.AppendLine("PrimitiveSerializer.DeserializeVarInt(input); // tag section length");
+                source.AppendLine("PrimitiveSerializer.DeserializeUVarInt(input); // tag section length");
             }
             else
             {
                 source.AppendLine("""
-                                    var tagSectionLength = PrimitiveSerializer.DeserializeVarInt(input);
+                                    var tagSectionLength = PrimitiveSerializer.DeserializeUVarInt(input);
                                     for (var tagIndex = 0; tagIndex < tagSectionLength; tagIndex++)
                                     {
-                                        var tagNumber = PrimitiveSerializer.DeserializeVarInt(input);
-                                        var tagSize = PrimitiveSerializer.DeserializeVarInt(input);
+                                        var tagNumber = PrimitiveSerializer.DeserializeUVarInt(input);
+                                        var tagSize = PrimitiveSerializer.DeserializeUVarInt(input);
                                         if (tagSize == 0)
                                         {
                                             continue;
@@ -488,7 +488,7 @@ public static class FieldDefinitionExtensions
 
         var itemsCount = $"{field.Name.FirstCharToLowerCase()}Count";
         var lengthDeserialization = flexible
-            ? $"var {itemsCount} = PrimitiveSerializer.DeserializeVarInt({input});"
+            ? $"var {itemsCount} = PrimitiveSerializer.DeserializeLength({input});"
             : $"var {itemsCount} = PrimitiveSerializer.DeserializeInt({input});";
         if (!field.IsMap())
         {
@@ -566,7 +566,7 @@ public static class FieldDefinitionExtensions
         if (propertyType == "byte[]")
         {
             var lengthDeserialization = flexible
-                ? $"PrimitiveSerializer.DeserializeVarInt({input})"
+                ? $"PrimitiveSerializer.DeserializeLength({input})"
                 : $"PrimitiveSerializer.DeserializeInt({input})";
             return $$"""
                      {{propertyPath}} = new byte[{{lengthDeserialization}}];
