@@ -27,8 +27,6 @@ public class ConnectionTests
     [TestCase(3)]
     public async Task SendAsync_ApiVersionsRequest_ShouldReturnExpectedResult(short apiVersion)
     {
-        TestContext.WriteLine();
-        
         var config = new ConnectionConfig("kafka-1", 9192);
         await using var connection = new Connection(TestLogger.Create<Connection>());
         await connection.OpenAsync(config, CancellationToken.None);
