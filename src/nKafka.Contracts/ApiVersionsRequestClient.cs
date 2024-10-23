@@ -6,23 +6,22 @@ namespace nKafka.Contracts;
 public class ApiVersionsRequestClient : RequestClient<ApiVersionsResponse>
 {
     protected override ApiKey ApiKey => ApiKey.ApiVersions;
-    protected override short RequestHeaderVersion => (short)(ApiVersion >= 3 ? 2 : 1);
-    protected override short ResponseHeaderVersion => 0;
+    protected override VersionRange FlexibleVersions { get; } = new VersionRange(3);
     protected override short ApiVersion { get; }
-    public ApiVersionsRequest Request { get; }
+    private readonly ApiVersionsRequest _request;
 
     public ApiVersionsRequestClient(short apiVersion, ApiVersionsRequest request)
     {
         #warning min/max version for header
         #warning min/max version for request
-        ApiVersion = apiVersion;
         #warning request property validation?
-        Request = request;
+        ApiVersion = apiVersion;
+        _request = request;
     }
     
     protected override void SerializeRequestPayload(MemoryStream output)
     {
-        ApiVersionsRequestSerializer.Serialize(output, Request, ApiVersion);
+        ApiVersionsRequestSerializer.Serialize(output, _request, ApiVersion);
     }
 
     protected override ApiVersionsResponse DeserializeResponsePayload(MemoryStream input)

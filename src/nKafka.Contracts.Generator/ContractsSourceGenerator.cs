@@ -15,6 +15,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
     {
         var messageDefinitions = ParseMessageDefinitions(context);
         context.RegisterSourceOutput(messageDefinitions, GenerateCodeForMessageDefinitions);
+        context.RegisterSourceOutput(messageDefinitions, GenerateCodeForRequestClients);
     }
 
     #warning implement support for excluded messages
@@ -98,6 +99,24 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                       }
                       """));
         }
+    }
+
+    private void GenerateCodeForRequestClients(
+        SourceProductionContext context,
+        ImmutableArray<MessageDefinition> messageDefinitions)
+    {
+        var requests = messageDefinitions
+            .Where(x =>
+                x.Type == "request" &&
+                x.ApiKey != null &&
+                Enum.IsDefined(typeof(ApiKey), x.ApiKey.Value))
+            .ToArray();
+        var responses = messageDefinitions
+            .Where(x =>
+                x.Type == "response" &&
+                x.ApiKey != null &&
+                Enum.IsDefined(typeof(ApiKey), x.ApiKey.Value))
+            .ToArray();
     }
 
     private string Format(string source)

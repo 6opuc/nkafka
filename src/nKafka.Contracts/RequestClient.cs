@@ -7,9 +7,33 @@ public abstract class RequestClient<TResponsePayload> : IRequestClient
 {
     public int CorrelationId { get; } = IdGenerator.Next();
     protected abstract ApiKey ApiKey { get; }
+    protected abstract VersionRange FlexibleVersions { get; }
 
-    protected abstract short RequestHeaderVersion { get; }
-    protected abstract short ResponseHeaderVersion { get; }
+    private short RequestHeaderVersion
+    {
+        get
+        {
+            if (ApiKey == ApiKey.ControlledShutdown &&ApiVersion == 0)
+            {
+                return 0;
+            }
+
+            return (short)(FlexibleVersions.Includes(ApiVersion) ? 2 : 1);
+        }
+    }
+
+    private short ResponseHeaderVersion
+    {
+        get
+        {
+            if (ApiKey == ApiKey.ApiVersions)
+            {
+                return 0;
+            }
+            
+            return (short)(FlexibleVersions.Includes(ApiVersion) ? 1 : 0);
+        }
+    }
 
     protected abstract short ApiVersion { get; }
     
