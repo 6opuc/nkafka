@@ -1,8 +1,6 @@
 using FluentAssertions;
-using Microsoft.Extensions.Logging;
-using nKafka.Contracts;
 using nKafka.Contracts.MessageDefinitions;
-using NUnit.Framework.Internal;
+using nKafka.Contracts.RequestClients;
 
 namespace nKafka.Client.IntegrationTests;
 

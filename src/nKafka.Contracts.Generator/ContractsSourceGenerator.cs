@@ -60,11 +60,6 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                           
                           public class {{messageDefinition.Name}}
                           {
-                             //public static readonly short? ApiKey = {{messageDefinition.ApiKey?.ToString() ?? "null"}};
-                             //public static readonly VersionRange ValidVersions = {{messageDefinition.ValidVersions.ToLiteral()}};
-                             //public static readonly VersionRange DeprecatedVersions = {{messageDefinition.DeprecatedVersions.ToLiteral()}};
-                             //public static readonly VersionRange FlexibleVersions = {{messageDefinition.FlexibleVersions.ToLiteral()}};
-                             
                              {{messageDefinition.Fields.ToPropertyDeclarations()}}
                           }
                       }   
@@ -117,6 +112,56 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                 x.ApiKey != null &&
                 Enum.IsDefined(typeof(ApiKey), x.ApiKey.Value))
             .ToArray();
+        var pairs = requests
+            .Select(request => new
+            {
+                Request = request,
+                Response = responses
+                    .FirstOrDefault(response => response.ApiKey == request.ApiKey)
+            })
+            .Where(x => x.Response != null)
+            .ToArray();
+
+        foreach (var pair in pairs)
+        {
+            #warning Validation for requests
+            context.AddSource(
+                $"RequestClients/{pair.Request.Name}Client.g.cs",
+                Format(
+                    $$"""
+                      #nullable enable
+
+                      namespace nKafka.Contracts.RequestClients
+                      {
+                          using nKafka.Contracts.MessageDefinitions;
+                          using nKafka.Contracts.MessageSerializers;
+                          
+                          public class {{pair.Request.Name}}Client : RequestClient<{{pair.Response!.Name}}>
+                          {
+                              protected override ApiKey ApiKey => ApiKey.{{Enum.GetName(typeof(ApiKey), pair.Request.ApiKey!)}};
+                              protected override VersionRange FlexibleVersions { get; } = {{pair.Request.FlexibleVersions.ToLiteral()}};
+                              protected override short ApiVersion { get; }
+                              private readonly {{pair.Request.Name}} _request;
+                              
+                              public {{pair.Request.Name}}Client(short apiVersion, {{pair.Request.Name}} request)
+                              {
+                                  ApiVersion = apiVersion;
+                                  _request = request;
+                              }
+                              
+                              protected override void SerializeRequestPayload(MemoryStream output)
+                              {
+                                  {{pair.Request.Name}}Serializer.Serialize(output, _request, ApiVersion);
+                              }
+                              
+                              protected override {{pair.Response!.Name}} DeserializeResponsePayload(MemoryStream input)
+                              {
+                                  return {{pair.Response!.Name}}Serializer.Deserialize(input, ApiVersion);
+                              }
+                          }
+                      }
+                      """));
+        }
     }
 
     private string Format(string source)
