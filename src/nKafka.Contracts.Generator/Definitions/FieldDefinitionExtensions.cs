@@ -494,10 +494,13 @@ public static class FieldDefinitionExtensions
         {
             return $$"""
                      {{lengthDeserialization}}
-                     message.{{field.Name}} = new {{propertyType}}[{{itemsCount}}];
-                     for (var i = 0; i < {{itemsCount}}; i++)
-                     {
-                        {{GetDeserializationStatements($"message.{field.Name}[i]", version, flexible, propertyType, input)}}
+                     if ({{itemsCount}} >= 0)
+                     {    
+                         message.{{field.Name}} = new {{propertyType}}[{{itemsCount}}];
+                         for (var i = 0; i < {{itemsCount}}; i++)
+                         {
+                            {{GetDeserializationStatements($"message.{field.Name}[i]", version, flexible, propertyType, input)}}
+                         }
                      }
                      """;
         }
@@ -509,17 +512,20 @@ public static class FieldDefinitionExtensions
             : "key.Value";
         return $$"""
                  {{lengthDeserialization}}
-                 message.{{field.Name}} = new Dictionary<{{keyType}}, {{propertyType}}>({{itemsCount}});
-                 for (var i = 0; i < {{itemsCount}}; i++)
+                 if ({{itemsCount}} >= 0)
                  {
-                    {{propertyType}} item;
-                    {{GetDeserializationStatements("item", version, flexible, propertyType, input)}}
-                    var key = item.{{keyName}};
-                    if (key == null)
-                    {
-                        throw new InvalidOperationException("{{keyName}} is used as a key, but value is null.");
-                    }
-                    message.{{field.Name}}[{{mapIndex}}] = item;
+                     message.{{field.Name}} = new Dictionary<{{keyType}}, {{propertyType}}>({{itemsCount}});
+                     for (var i = 0; i < {{itemsCount}}; i++)
+                     {
+                        {{propertyType}} item;
+                        {{GetDeserializationStatements("item", version, flexible, propertyType, input)}}
+                        var key = item.{{keyName}};
+                        if (key == null)
+                        {
+                            throw new InvalidOperationException("{{keyName}} is used as a key, but value is null.");
+                        }
+                        message.{{field.Name}}[{{mapIndex}}] = item;
+                     }
                  }
                  """;
     }
@@ -535,7 +541,20 @@ public static class FieldDefinitionExtensions
 
         if (propertyType == "short")
         {
-            return $"{propertyPath} = PrimitiveSerializer.DeserializeShort({input});";
+            var propertyDeserialization = $"{propertyPath} = PrimitiveSerializer.DeserializeShort({input});";
+            /*
+            if (propertyPath.EndsWith("ErrorCode"))
+            {
+                return $$"""
+                         {{propertyDeserialization}}
+                         if ({{propertyPath}} != 0)
+                         {
+                             throw new InvalidOperationException($"Error code {{{propertyPath}}} was received in response.");
+                         }
+                         """;
+            }
+            */
+            return propertyDeserialization;
         }
 
         if (propertyType == "ushort")

@@ -10,7 +10,6 @@ namespace nKafka.Contracts.Generator;
 [Generator]
 public class ContractsSourceGenerator : IIncrementalGenerator
 {
-    #warning if message contain ErrorCode, when we should check value and throw exception without further deserialization
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var messageDefinitions = ParseMessageDefinitions(context);
@@ -138,6 +137,8 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                           
                           public class {{pair.Request.Name}}Client : RequestClient<{{pair.Response!.Name}}>
                           {
+                              public VersionRange ValidVersions { get; } = {{pair.Request.ValidVersions.ToLiteral()}};
+                              
                               protected override ApiKey ApiKey => ApiKey.{{Enum.GetName(typeof(ApiKey), pair.Request.ApiKey!)}};
                               protected override VersionRange FlexibleVersions { get; } = {{pair.Request.FlexibleVersions.ToLiteral()}};
                               protected override short ApiVersion { get; }

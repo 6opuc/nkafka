@@ -39,5 +39,30 @@ public class ConnectionTests
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
+        #warning check response
+    }
+    
+    [Test]
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    public async Task SendAsync_FindCoordinatorRequest_ShouldReturnExpectedResult(short apiVersion)
+    {
+        var config = new ConnectionConfig("kafka-1", 9192);
+        await using var connection = new Connection(TestLogger.Create<Connection>());
+        await connection.OpenAsync(config, CancellationToken.None);
+        var requestClient = new FindCoordinatorRequestClient(apiVersion, new FindCoordinatorRequest
+        {
+            Key = Guid.NewGuid().ToString(), // consumer group id
+            KeyType = 0, // 0 = group, 1 = transaction
+            CoordinatorKeys = null // ???
+        });
+        
+        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+
+        response.Should().NotBeNull();
+        #warning check response
     }
 }
