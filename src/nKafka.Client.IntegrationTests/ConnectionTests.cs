@@ -53,11 +53,12 @@ public class ConnectionTests
         var config = new ConnectionConfig("kafka-1", 9192);
         await using var connection = new Connection(TestLogger.Create<Connection>());
         await connection.OpenAsync(config, CancellationToken.None);
+        var consumerGroupId = Guid.NewGuid().ToString();
         var requestClient = new FindCoordinatorRequestClient(apiVersion, new FindCoordinatorRequest
         {
-            Key = Guid.NewGuid().ToString(), // consumer group id
+            Key = consumerGroupId,
             KeyType = 0, // 0 = group, 1 = transaction
-            CoordinatorKeys = null // ???
+            CoordinatorKeys = [consumerGroupId], // for versions 4+
         });
         
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
