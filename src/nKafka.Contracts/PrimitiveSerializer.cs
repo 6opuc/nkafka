@@ -217,7 +217,7 @@ public static class PrimitiveSerializer
                 byteValue |= 128;
             }
 
-            output.WriteByte((byte)byteValue);
+            output.WriteByte((byte)byteValue!);
         } while (value > 0);
     }
 

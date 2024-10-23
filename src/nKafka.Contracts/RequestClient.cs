@@ -21,7 +21,7 @@ public abstract class RequestClient<TResponsePayload> : IRequestClient
             RequestApiVersion = ApiVersion,
             CorrelationId = CorrelationId,
             #warning client id (application name should be provided)
-            ClientId = null,
+            ClientId = "nKafka.Client",
         };
         PrimitiveSerializer.SerializeInt(output, 0); // placeholder for header + payload
         var start = output.Position;

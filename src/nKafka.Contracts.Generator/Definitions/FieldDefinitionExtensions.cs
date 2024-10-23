@@ -306,16 +306,12 @@ public static class FieldDefinitionExtensions
         
         if (propertyType == "int")
         {
-            return flexible
-                ? $"PrimitiveSerializer.SerializeVarInt({output}, {propertyPath});"
-                : $"PrimitiveSerializer.SerializeInt({output}, {propertyPath});";
+            return $"PrimitiveSerializer.SerializeInt({output}, {propertyPath});";
         }
         
         if (propertyType == "long")
         {
-            return flexible
-                ? $"PrimitiveSerializer.SerializeVarLong({output}, {propertyPath});"
-                : $"PrimitiveSerializer.SerializeLong({output}, {propertyPath});";
+            return $"PrimitiveSerializer.SerializeLong({output}, {propertyPath});";
         }
 
         if (propertyType == "byte[]")
@@ -555,16 +551,12 @@ public static class FieldDefinitionExtensions
         
         if (propertyType == "int")
         {
-            return flexible
-                ? $"{propertyPath} = PrimitiveSerializer.DeserializeVarInt({input});"
-                : $"{propertyPath} = PrimitiveSerializer.DeserializeInt({input});";
+            return $"{propertyPath} = PrimitiveSerializer.DeserializeInt({input});";
         }
         
         if (propertyType == "long")
         {
-            return flexible
-                ? $"{propertyPath} = PrimitiveSerializer.DeserializeVarLong({input});"
-                : $"{propertyPath} = PrimitiveSerializer.DeserializeLong({input});";
+            return $"{propertyPath} = PrimitiveSerializer.DeserializeLong({input});";
         }
 
         if (propertyType == "byte[]")
