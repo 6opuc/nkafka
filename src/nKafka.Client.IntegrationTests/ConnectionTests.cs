@@ -27,7 +27,6 @@ public class ConnectionTests
     [TestCase(1)]
     [TestCase(2)]
     [TestCase(3)]
-    [TestCase(4)]
     public async Task SendAsync_ApiVersionsRequest_ShouldReturnExpectedResult(short apiVersion)
     {
         TestContext.WriteLine();

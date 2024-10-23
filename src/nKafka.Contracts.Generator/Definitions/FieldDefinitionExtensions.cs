@@ -432,6 +432,10 @@ public static class FieldDefinitionExtensions
                                     {
                                         var tagNumber = PrimitiveSerializer.DeserializeVarInt(input);
                                         var tagSize = PrimitiveSerializer.DeserializeVarInt(input);
+                                        if (tagSize == 0)
+                                        {
+                                            continue;
+                                        }
                                         var position = (int)input.Position;
                                         switch (tagNumber)
                                         {

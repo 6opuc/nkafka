@@ -10,6 +10,7 @@ namespace nKafka.Contracts.Generator;
 [Generator]
 public class ContractsSourceGenerator : IIncrementalGenerator
 {
+    #warning if message contain ErrorCode, when we should check value and throw exception without further deserialization
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var messageDefinitions = ParseMessageDefinitions(context);
