@@ -6,9 +6,12 @@ namespace nKafka.Contracts;
 public abstract class RequestClient<TResponsePayload> : IRequestClient
 {
     public int CorrelationId { get; } = IdGenerator.Next();
-    public abstract ApiKey ApiKey { get; }
-    public abstract short HeaderVersion { get; }
-    public abstract short ApiVersion { get; }
+    protected abstract ApiKey ApiKey { get; }
+
+    protected abstract short RequestHeaderVersion { get; }
+    protected abstract short ResponseHeaderVersion { get; }
+
+    protected abstract short ApiVersion { get; }
     
     public void SerializeRequest(MemoryStream output)
     {
@@ -22,7 +25,7 @@ public abstract class RequestClient<TResponsePayload> : IRequestClient
         };
         PrimitiveSerializer.SerializeInt(output, 0); // placeholder for header + payload
         var start = output.Position;
-        RequestHeaderSerializer.Serialize(output, header, HeaderVersion);
+        RequestHeaderSerializer.Serialize(output, header, RequestHeaderVersion);
         SerializeRequestPayload(output);
         var end = output.Position;
         var size = (int)(end - start);
@@ -35,7 +38,7 @@ public abstract class RequestClient<TResponsePayload> : IRequestClient
 
     public TResponsePayload DeserializeResponse(MemoryStream input)
     {
-        var header = ResponseHeaderSerializer.Deserialize(input, HeaderVersion);
+        var header = ResponseHeaderSerializer.Deserialize(input, ResponseHeaderVersion);
         if (header.CorrelationId == null)
         {
             throw new InvalidOperationException("Received response with empty correlation id.");

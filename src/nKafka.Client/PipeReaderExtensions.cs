@@ -9,8 +9,12 @@ public static class PipeReaderExtensions
         this PipeReader reader,
         CancellationToken cancellationToken = default)
     {
-        return BitConverter.ToInt32(
-            await reader.ReadAsync(4, cancellationToken));
+        var bytes = await reader.ReadAsync(4, cancellationToken);
+        if (BitConverter.IsLittleEndian)
+        {
+            Array.Reverse(bytes);
+        }
+        return BitConverter.ToInt32(bytes);
     }
     
     public static async ValueTask<byte[]> ReadAsync(

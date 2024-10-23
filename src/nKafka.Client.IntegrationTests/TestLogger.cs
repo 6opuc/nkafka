@@ -12,7 +12,7 @@ public static class TestLogger
 
     class NUnitLogger<T> : ILogger<T>, IDisposable
     {
-        private readonly Action<string> _output = Console.WriteLine;
+        private readonly Action<string> _output = TestContext.Progress.WriteLine;
 
         public void Dispose()
         {

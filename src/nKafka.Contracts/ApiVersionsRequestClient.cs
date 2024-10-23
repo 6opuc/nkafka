@@ -5,15 +5,15 @@ namespace nKafka.Contracts;
 
 public class ApiVersionsRequestClient : RequestClient<ApiVersionsResponse>
 {
-    public override ApiKey ApiKey => ApiKey.ApiVersions;
-    public override short HeaderVersion { get; }
-    public override short ApiVersion { get; }
+    protected override ApiKey ApiKey => ApiKey.ApiVersions;
+    protected override short RequestHeaderVersion => (short)(ApiVersion >= 3 ? 2 : 1);
+    protected override short ResponseHeaderVersion => 0;
+    protected override short ApiVersion { get; }
     public ApiVersionsRequest Request { get; }
 
-    public ApiVersionsRequestClient(short headerVersion, short apiVersion, ApiVersionsRequest request)
+    public ApiVersionsRequestClient(short apiVersion, ApiVersionsRequest request)
     {
         #warning min/max version for header
-        HeaderVersion = headerVersion;
         #warning min/max version for request
         ApiVersion = apiVersion;
         #warning request property validation?

@@ -32,7 +32,7 @@ public class SocketWriterStream : Stream
 
     public override void Write(byte[] buffer, int offset, int count)
     {
-        throw new NotImplementedException();
+        _socket.Send(buffer, offset, count, SocketFlags.None);
     }
 
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,

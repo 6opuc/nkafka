@@ -23,13 +23,19 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCase(0, 0)]
-    public async Task SendAsync_ApiVersionsRequest_ShouldReturnExpectedResult(short headerVersion, short apiVersion)
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    public async Task SendAsync_ApiVersionsRequest_ShouldReturnExpectedResult(short apiVersion)
     {
+        TestContext.WriteLine();
+        
         var config = new ConnectionConfig("kafka-1", 9192);
         await using var connection = new Connection(TestLogger.Create<Connection>());
         await connection.OpenAsync(config, CancellationToken.None);
-        var requestClient = new ApiVersionsRequestClient(headerVersion, apiVersion, new ApiVersionsRequest
+        var requestClient = new ApiVersionsRequestClient(apiVersion, new ApiVersionsRequest
         {
             ClientSoftwareName = "nKafka.Client",
             ClientSoftwareVersion = "0.0.1",

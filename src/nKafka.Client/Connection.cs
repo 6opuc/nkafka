@@ -199,7 +199,6 @@ public class Connection : IConnection
         _sendBackgroundTask = Task.Run(
             async () =>
             {
-                // TODO: cancellation
                 while (!_requestQueue.Completion.IsCompleted)
                 {
                     PendingRequest? request = null;
@@ -212,17 +211,29 @@ public class Connection : IConnection
                         _logger.LogDebug("No more requests to send.");
                         return;
                     }
-                    _logger.LogDebug("Processing request {@correlationId}", request.RequestClient.CorrelationId);
-                    _pendingRequests.Enqueue(request);
-                    
-                    _logger.LogDebug("Building request {@correlationId}", request.RequestClient.CorrelationId);
-                    #warning buffer pool
-                    using var output = new MemoryStream();
-                    request.RequestClient.SerializeRequest(output);
-                    
-                    _logger.LogDebug("Sending request {@correlationId}", request.RequestClient.CorrelationId);
-                    await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position);
-                    _logger.LogDebug("Sent request {@correlationId}", request.RequestClient.CorrelationId);
+
+                    try
+                    {
+                        _logger.LogDebug("Processing request {@correlationId}", request.RequestClient.CorrelationId);
+                        _pendingRequests.Enqueue(request);
+
+                        _logger.LogDebug("Building request {@correlationId}", request.RequestClient.CorrelationId);
+#warning buffer pool
+                        using var output = new MemoryStream();
+                        request.RequestClient.SerializeRequest(output);
+
+                        _logger.LogDebug(
+                            "Sending request {@correlationId}({@size} bytes)",
+                            request.RequestClient.CorrelationId,
+                            output.Position);
+#warning cancellation, timeouts, other exceptions
+                        await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position);
+                        _logger.LogDebug("Sent request {@correlationId}", request.RequestClient.CorrelationId);
+                    }
+                    catch (Exception exception)
+                    {
+                        request.Response.SetException(exception);
+                    }
                 }
             });
     }
