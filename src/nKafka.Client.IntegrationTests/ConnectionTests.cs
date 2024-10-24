@@ -2,6 +2,7 @@ using FluentAssertions;
 using nKafka.Contracts;
 using nKafka.Contracts.MessageDefinitions;
 using nKafka.Contracts.MessageDefinitions.ConsumerProtocolAssignmentNested;
+using nKafka.Contracts.MessageDefinitions.FetchRequestNested;
 using nKafka.Contracts.MessageDefinitions.JoinGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.LeaveGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
@@ -342,6 +343,69 @@ public class ConnectionTests
         }
 
         return response;
+    }
+    
+    [Test]
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [TestCase(6)]
+    [TestCase(7)]
+    [TestCase(8)]
+    [TestCase(9)]
+    [TestCase(10)]
+    [TestCase(11)]
+    [TestCase(12)]
+    [TestCase(13)]
+    public async Task SendAsync_FetchRequest_ShouldReturnExpectedResult(short apiVersion)
+    {
+        var consumerGroupId = Guid.NewGuid().ToString();
+        await using var connection = await OpenCoordinatorConnection(consumerGroupId);
+        var joinGroupResponse = await JoinGroup(connection, consumerGroupId);
+        var requestClient = new FetchRequestClient(apiVersion, new FetchRequest
+        {
+            ClusterId = null, // ???
+            ReplicaId = -1, // ???
+            ReplicaState = null, // ???
+            MaxWaitMs = 0, // ???
+            MinBytes = 0, // ???
+            MaxBytes = 0x7fffffff,
+            IsolationLevel = 0, // !!!
+            SessionId = 0, // ???
+            SessionEpoch = -1, // ???
+            Topics = [
+                new FetchTopic
+                {
+                    Topic = "test",
+                    TopicId = Guid.Empty, // ???
+                    Partitions = [
+                        new FetchPartition
+                        {
+                            Partition = 1,
+                            CurrentLeaderEpoch = -1, // ???
+                            FetchOffset = 0, // ???
+                            LastFetchedEpoch = -1, // ???
+                            LogStartOffset = -1, // ???
+                            PartitionMaxBytes = 512 * 1024, // !!!
+                            ReplicaDirectoryId = Guid.Empty, // ???
+                        }
+                    ]
+                },
+            ],
+            ForgottenTopicsData = [], // ???
+            RackId = string.Empty, // ???
+        });
+        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+
+        response.Should().NotBeNull();
+        if (apiVersion >= 7)
+        {
+            response.ErrorCode.Should().Be(0);
+        }
+#warning check response
     }
     
     private async Task<Connection> OpenCoordinatorConnection(string groupId)
