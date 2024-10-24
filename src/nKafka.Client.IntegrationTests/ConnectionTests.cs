@@ -139,7 +139,7 @@ public class ConnectionTests
     {
         var consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId);
-        var requestClient = new JoinGroupRequestClient(apiVersion, new JoinGroupRequest
+        var request = new JoinGroupRequest
         {
             GroupId = consumerGroupId,
             SessionTimeoutMs = (int)TimeSpan.FromSeconds(45).TotalMilliseconds,
@@ -161,17 +161,25 @@ public class ConnectionTests
                                 GenerationId = -1, // ???
                                 RackId = null // ???
                             }
-                            .AsMetadata(0), 
-                        #warning metadata version vs request version
+                            .AsMetadata(0),
+#warning metadata version vs request version
                     }
                 }
             },
             Reason = null
-        });
-        
+        };
+        var requestClient = new JoinGroupRequestClient(apiVersion, request);
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
+        if (response.ErrorCode == (short)ErrorCode.MemberIdRequired)
+        {
+            response.MemberId.Should().NotBeNullOrEmpty();
+            // retry with given member id
+            request.MemberId = response.MemberId;
+            response = await connection.SendAsync(requestClient, CancellationToken.None);
+            response.Should().NotBeNull();
+        }
         response.ErrorCode.Should().Be(0);
 #warning check response
     }
