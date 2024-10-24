@@ -137,14 +137,14 @@ public class ConnectionTests
     [TestCase(9)]
     public async Task SendAsync_JoinGroupRequest_ShouldReturnExpectedResult(short apiVersion)
     {
-        await using var connection = await OpenConnection();
         var consumerGroupId = Guid.NewGuid().ToString();
+        await using var connection = await OpenCoordinatorConnection(consumerGroupId);
         var requestClient = new JoinGroupRequestClient(apiVersion, new JoinGroupRequest
         {
             GroupId = consumerGroupId,
             SessionTimeoutMs = (int)TimeSpan.FromSeconds(45).TotalMilliseconds,
             RebalanceTimeoutMs = -1,
-            MemberId = Guid.NewGuid().ToString(), // ???
+            MemberId = string.Empty, // ???
             GroupInstanceId = null, // ???
             ProtocolType = "consumer",
             Protocols = new Dictionary<string, JoinGroupRequestProtocol>
@@ -174,5 +174,36 @@ public class ConnectionTests
         response.Should().NotBeNull();
         response.ErrorCode.Should().Be(0);
 #warning check response
+    }
+    
+    private async Task<Connection> OpenCoordinatorConnection(string groupId)
+    {
+        var config = new ConnectionConfig("kafka-1", 9192);
+        await using var connection = new Connection(TestLogger.Create<Connection>());
+        await connection.OpenAsync(config, CancellationToken.None);
+
+        var requestClient = new FindCoordinatorRequestClient(4, new FindCoordinatorRequest
+        {
+            KeyType = 0, // 0 = group, 1 = transaction
+            CoordinatorKeys = [groupId], // for versions 4+
+        });
+        
+        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        if (response == null)
+        {
+            throw new Exception("Empty response from find coordinator request.");
+        }
+
+        var coordinator = response.Coordinators!.Single();
+        if (coordinator.ErrorCode != 0)
+        {
+            throw new Exception($"Non-zero error code in response from find coordinator request: {coordinator.ErrorCode}.");
+        }
+
+        var coordinatorConfig = new ConnectionConfig(coordinator.Host!, coordinator.Port!.Value);
+        var coordinatorConnection = new Connection(TestLogger.Create<Connection>());
+        await coordinatorConnection.OpenAsync(coordinatorConfig, CancellationToken.None);
+
+        return coordinatorConnection;
     }
 }
