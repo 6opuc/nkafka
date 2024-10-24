@@ -2,6 +2,7 @@ using FluentAssertions;
 using nKafka.Contracts;
 using nKafka.Contracts.MessageDefinitions;
 using nKafka.Contracts.MessageDefinitions.JoinGroupRequestNested;
+using nKafka.Contracts.MessageDefinitions.LeaveGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
 using nKafka.Contracts.RequestClients;
 
@@ -161,7 +162,7 @@ public class ConnectionTests
                                 GenerationId = -1, // ???
                                 RackId = null // ???
                             }
-                            .AsMetadata(0),
+                            .AsMetadata(3),
 #warning metadata version vs request version
                     }
                 }
@@ -184,6 +185,86 @@ public class ConnectionTests
         
         response.ErrorCode.Should().Be(0);
 #warning check response
+    }
+    
+    [Test]
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    public async Task SendAsync_LeaveGroupRequest_ShouldReturnExpectedResult(short apiVersion)
+    {
+        var consumerGroupId = Guid.NewGuid().ToString();
+        await using var connection = await OpenCoordinatorConnection(consumerGroupId);
+        var memberId = await JoinGroup(connection, consumerGroupId);
+        var requestClient = new LeaveGroupRequestClient(apiVersion, new LeaveGroupRequest
+        {
+            GroupId = consumerGroupId,
+            MemberId = memberId,
+            Members = [
+                new MemberIdentity
+                {
+                    MemberId = memberId,
+                    GroupInstanceId = null,
+                    Reason = "bla-bla-bla",
+                }
+            ],
+        });
+        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+
+        response.Should().NotBeNull();
+        response.ErrorCode.Should().Be(0);
+#warning check response
+    }
+
+    private async Task<string> JoinGroup(Connection connection, string groupId)
+    {
+        var request = new JoinGroupRequest
+        {
+            GroupId = groupId,
+            SessionTimeoutMs = (int)TimeSpan.FromSeconds(45).TotalMilliseconds,
+            RebalanceTimeoutMs = -1,
+            MemberId = string.Empty, // ???
+            GroupInstanceId = Guid.NewGuid().ToString(),
+            ProtocolType = "consumer",
+            Protocols = new Dictionary<string, JoinGroupRequestProtocol>
+            {
+                {
+                    "nkafka-consumer", new JoinGroupRequestProtocol
+                    {
+                        Name = "nkafka-consumer",
+                        Metadata = new ConsumerProtocolSubscription
+                            {
+                                Topics = ["test"],
+                                UserData = null, // ???
+                                OwnedPartitions = null, // ???
+                                GenerationId = -1, // ???
+                                RackId = null // ???
+                            }
+                            .AsMetadata(3),
+                    }
+                }
+            },
+            Reason = null
+        };
+        var requestClient = new JoinGroupRequestClient(0, request);
+        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        if (response == null)
+        {
+            throw new Exception("Empty response on join request.");
+        }
+        if (response.ErrorCode != 0)
+        {
+            throw new Exception($"Non-zero error code in response on join request: {response.ErrorCode}.");
+        }
+        if (response.MemberId == null)
+        {
+            throw new Exception("Empty member id in response on join request.");
+        }
+
+        return response.MemberId;
     }
     
     private async Task<Connection> OpenCoordinatorConnection(string groupId)
