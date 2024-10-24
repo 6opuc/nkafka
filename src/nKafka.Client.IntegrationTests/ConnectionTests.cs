@@ -161,7 +161,7 @@ public class ConnectionTests
                                 GenerationId = -1, // ???
                                 RackId = null // ???
                             }
-                            .AsMetadata(3), 
+                            .AsMetadata(0), 
                         #warning metadata version vs request version
                     }
                 }

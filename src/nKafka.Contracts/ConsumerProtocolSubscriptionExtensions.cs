@@ -7,8 +7,10 @@ public static class ConsumerProtocolSubscriptionExtensions
 {
     public static byte[] AsMetadata(this ConsumerProtocolSubscription value, short version)
     {
+        #warning reduce allocations, use buffer pools!!
         using var output = new MemoryStream();
+        PrimitiveSerializer.SerializeShort(output, version);
         ConsumerProtocolSubscriptionSerializer.Serialize(output, value, version);
-        return output.GetBuffer();
+        return output.ToArray();
     }
 }
