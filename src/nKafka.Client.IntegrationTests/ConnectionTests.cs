@@ -130,7 +130,7 @@ public class ConnectionTests
             GroupId = consumerGroupId,
             SessionTimeoutMs = (int)TimeSpan.FromSeconds(45).TotalMilliseconds,
             RebalanceTimeoutMs = -1,
-            MemberId = string.Empty, // ???
+            MemberId = Guid.NewGuid().ToString(), // ???
             GroupInstanceId = null, // ???
             ProtocolType = "consumer",
             Protocols = new Dictionary<string, JoinGroupRequestProtocol>
@@ -144,10 +144,11 @@ public class ConnectionTests
                                 Topics = ["test"],
                                 UserData = null, // ???
                                 OwnedPartitions = null, // ???
-                                GenerationId = null, // ???
+                                GenerationId = -1, // ???
                                 RackId = null // ???
                             }
-                            .AsMetadata(0),
+                            .AsMetadata(3), 
+                        #warning metadata version vs request version
                     }
                 }
             },
