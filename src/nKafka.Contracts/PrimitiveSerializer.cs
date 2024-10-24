@@ -310,6 +310,7 @@ public static class PrimitiveSerializer
         }
 
         var bytes = input.GetBuffer()[(int)input.Position..((int)input.Position + 16)];
+        input.Position += 16;
         return new Guid(bytes);
     }
 }

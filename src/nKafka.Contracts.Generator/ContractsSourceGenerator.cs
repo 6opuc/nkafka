@@ -10,6 +10,8 @@ namespace nKafka.Contracts.Generator;
 [Generator]
 public class ContractsSourceGenerator : IIncrementalGenerator
 {
+    #warning nullable versions: write -1 byte if null and 1 byte if not null in front of value
+    
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var messageDefinitions = ParseMessageDefinitions(context);
@@ -123,7 +125,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
 
         foreach (var pair in pairs)
         {
-            #warning Validation for requests
+            #warning Validation for requests: nullable, ignorable
             context.AddSource(
                 $"RequestClients/{pair.Request.Name}Client.g.cs",
                 Format(
