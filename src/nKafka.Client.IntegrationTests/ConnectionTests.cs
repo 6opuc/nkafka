@@ -1,5 +1,7 @@
 using FluentAssertions;
+using nKafka.Contracts;
 using nKafka.Contracts.MessageDefinitions;
+using nKafka.Contracts.MessageDefinitions.JoinGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
 using nKafka.Contracts.RequestClients;
 
@@ -100,6 +102,56 @@ public class ConnectionTests
             AllowAutoTopicCreation = false,
             IncludeClusterAuthorizedOperations = true,
             IncludeTopicAuthorizedOperations = true,
+        });
+        
+        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+
+        response.Should().NotBeNull();
+#warning check response
+    }
+    
+    [Test]
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [TestCase(6)]
+    [TestCase(7)]
+    [TestCase(8)]
+    [TestCase(9)]
+    public async Task SendAsync_JoinGroupRequest_ShouldReturnExpectedResult(short apiVersion)
+    {
+        await using var connection = await OpenConnection();
+        var consumerGroupId = Guid.NewGuid().ToString();
+        var requestClient = new JoinGroupRequestClient(apiVersion, new JoinGroupRequest
+        {
+            GroupId = consumerGroupId,
+            SessionTimeoutMs = (int)TimeSpan.FromSeconds(45).TotalMilliseconds,
+            RebalanceTimeoutMs = -1,
+            MemberId = string.Empty, // ???
+            GroupInstanceId = null, // ???
+            ProtocolType = "consumer",
+            Protocols = new Dictionary<string, JoinGroupRequestProtocol>
+            {
+                {
+                    "nkafka-consumer", new JoinGroupRequestProtocol
+                    {
+                        Name = "nkafka-consumer",
+                        Metadata = new ConsumerProtocolSubscription
+                            {
+                                Topics = ["test"],
+                                UserData = null, // ???
+                                OwnedPartitions = null, // ???
+                                GenerationId = null, // ???
+                                RackId = null // ???
+                            }
+                            .AsMetadata(0),
+                    }
+                }
+            },
+            Reason = null
         });
         
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
