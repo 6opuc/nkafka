@@ -47,6 +47,7 @@ public class ConnectionTests
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
+        response.ErrorCode.Should().Be(0);
         #warning check response
     }
     
@@ -70,6 +71,17 @@ public class ConnectionTests
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
+        if (response.Coordinators == null)
+        {
+            response.ErrorCode.Should().Be(0);
+        }
+        else
+        {
+
+            response.ErrorCode.Should().BeNull();
+            response.Coordinators.Should().AllSatisfy(x =>
+                x.ErrorCode.Should().Be(0));
+        }
         #warning check response
     }
     
@@ -107,6 +119,8 @@ public class ConnectionTests
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
+        response.Topics.Should().AllSatisfy(x =>
+            x.Value.ErrorCode.Should().Be(0));
 #warning check response
     }
     
@@ -158,6 +172,7 @@ public class ConnectionTests
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
+        response.ErrorCode.Should().Be(0);
 #warning check response
     }
 }
