@@ -270,9 +270,6 @@ public class ConnectionTests
         response.ErrorCode.Should().Be(0);
         var actualAssignment = response.Assignment!.ConsumerProtocolAssignmentFromMetadata();
         actualAssignment.Should().BeEquivalentTo(requestedAssignment);
-        
-#warning deserialize assignemnt from response
-#warning check response
     }
 
     private async Task<JoinGroupResponse> JoinGroup(Connection connection, string groupId)

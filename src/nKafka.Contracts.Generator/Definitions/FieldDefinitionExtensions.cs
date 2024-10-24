@@ -584,12 +584,17 @@ public static class FieldDefinitionExtensions
 
         if (propertyType == "byte[]")
         {
+            var lengthVariableName = $"{propertyPath.Replace(".", "")}Length";
             var lengthDeserialization = flexible
-                ? $"PrimitiveSerializer.DeserializeLength({input})"
-                : $"PrimitiveSerializer.DeserializeInt({input})";
+                ? $"var {lengthVariableName} = PrimitiveSerializer.DeserializeLength({input});"
+                : $"var {lengthVariableName} = PrimitiveSerializer.DeserializeInt({input});";
             return $$"""
-                     {{propertyPath}} = new byte[{{lengthDeserialization}}];
-                     {{input}}.Read({{propertyPath}}, 0, {{propertyPath}}.Length);
+                     {{lengthDeserialization}}
+                     if ({{lengthVariableName}} >= 0)
+                     {
+                         {{propertyPath}} = new byte[{{lengthVariableName}}];
+                         {{input}}.Read({{propertyPath}}, 0, {{lengthVariableName}});
+                     }
                      """;
         }
 
