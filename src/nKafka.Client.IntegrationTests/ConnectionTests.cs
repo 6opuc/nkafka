@@ -145,7 +145,7 @@ public class ConnectionTests
             SessionTimeoutMs = (int)TimeSpan.FromSeconds(45).TotalMilliseconds,
             RebalanceTimeoutMs = -1,
             MemberId = string.Empty, // ???
-            GroupInstanceId = null, // ???
+            GroupInstanceId = Guid.NewGuid().ToString(),
             ProtocolType = "consumer",
             Protocols = new Dictionary<string, JoinGroupRequestProtocol>
             {
@@ -172,7 +172,8 @@ public class ConnectionTests
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
-        if (response.ErrorCode == (short)ErrorCode.MemberIdRequired)
+        
+        if (apiVersion == 4 && response.ErrorCode == (short)ErrorCode.MemberIdRequired)
         {
             response.MemberId.Should().NotBeNullOrEmpty();
             // retry with given member id
@@ -180,6 +181,7 @@ public class ConnectionTests
             response = await connection.SendAsync(requestClient, CancellationToken.None);
             response.Should().NotBeNull();
         }
+        
         response.ErrorCode.Should().Be(0);
 #warning check response
     }
