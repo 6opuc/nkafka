@@ -234,6 +234,20 @@ public class ConnectionTests
         var consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId);
         var joinGroupResponse = await JoinGroup(connection, consumerGroupId);
+        var requestedAssignment = new ConsumerProtocolAssignment
+        {
+            AssignedPartitions = new Dictionary<string, TopicPartition>
+            {
+                {
+                    "test", new TopicPartition
+                    {
+                        Topic = "test",
+                        Partitions = Enumerable.Range(0, 12).ToArray(),
+                    }
+                }
+            },
+            UserData = null, // ???
+        };
         var requestClient = new SyncGroupRequestClient(apiVersion, new SyncGroupRequest
         {
             GroupId = consumerGroupId,
@@ -246,19 +260,7 @@ public class ConnectionTests
                 new SyncGroupRequestAssignment
                 {
                     MemberId = joinGroupResponse.MemberId,
-                    Assignment = new ConsumerProtocolAssignment
-                    {
-                        AssignedPartitions = new Dictionary<string, TopicPartition>
-                        {
-                            { "test", new TopicPartition
-                                {
-                                    Topic = "test",
-                                    Partitions = Enumerable.Range(0, 12).ToArray(),
-                                }
-                            }
-                        },
-                        UserData = null, // ???
-                    }.AsMetadata(3),
+                    Assignment = requestedAssignment.AsMetadata(3),
                 }
             ],
         });
@@ -266,6 +268,10 @@ public class ConnectionTests
 
         response.Should().NotBeNull();
         response.ErrorCode.Should().Be(0);
+        var actualAssignment = response.Assignment!.ConsumerProtocolAssignmentFromMetadata();
+        actualAssignment.Should().BeEquivalentTo(requestedAssignment);
+        
+#warning deserialize assignemnt from response
 #warning check response
     }
 

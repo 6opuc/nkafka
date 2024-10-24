@@ -13,4 +13,11 @@ public static class ConsumerProtocolAssignmentExtensions
         ConsumerProtocolAssignmentSerializer.Serialize(output, value, version);
         return output.ToArray();
     }
+
+    public static ConsumerProtocolAssignment ConsumerProtocolAssignmentFromMetadata(this byte[] value)
+    {
+        using var input = new MemoryStream(value, 0, value.Length, false, true);
+        var version = PrimitiveSerializer.DeserializeShort(input);
+        return ConsumerProtocolAssignmentSerializer.Deserialize(input, version);
+    }
 }

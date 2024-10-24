@@ -11,6 +11,7 @@ namespace nKafka.Contracts.Generator;
 public class ContractsSourceGenerator : IIncrementalGenerator
 {
     #warning nullable versions: write -1 byte if null and 1 byte if not null in front of value
+    #warning zeroCopy attribute in fields
     
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
