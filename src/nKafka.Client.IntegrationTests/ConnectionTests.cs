@@ -271,6 +271,30 @@ public class ConnectionTests
         var actualAssignment = response.Assignment!.ConsumerProtocolAssignmentFromMetadata();
         actualAssignment.Should().BeEquivalentTo(requestedAssignment);
     }
+    
+    [Test]
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    public async Task SendAsync_HeartbeatRequest_ShouldReturnExpectedResult(short apiVersion)
+    {
+        var consumerGroupId = Guid.NewGuid().ToString();
+        await using var connection = await OpenCoordinatorConnection(consumerGroupId);
+        var joinGroupResponse = await JoinGroup(connection, consumerGroupId);
+        var requestClient = new HeartbeatRequestClient(apiVersion, new HeartbeatRequest
+        {
+            GroupId = consumerGroupId,
+            GenerationId = joinGroupResponse.GenerationId,
+            MemberId = joinGroupResponse.MemberId,
+            GroupInstanceId = null, // ???
+        });
+        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+
+        response.Should().NotBeNull();
+        response.ErrorCode.Should().Be(0);
+    }
 
     private async Task<JoinGroupResponse> JoinGroup(Connection connection, string groupId)
     {
