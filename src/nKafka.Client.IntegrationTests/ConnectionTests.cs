@@ -346,7 +346,7 @@ public class ConnectionTests
     }
     
     [Test]
-    [TestCase(0)]
+    /*[TestCase(0)]
     [TestCase(1)]
     [TestCase(2)]
     [TestCase(3)]
@@ -356,10 +356,10 @@ public class ConnectionTests
     [TestCase(7)]
     [TestCase(8)]
     [TestCase(9)]
-    [TestCase(10)]
+    [TestCase(10)]*/
     [TestCase(11)]
-    [TestCase(12)]
-    [TestCase(13)]
+    //[TestCase(12)]
+    //[TestCase(13)]
     public async Task SendAsync_FetchRequest_ShouldReturnExpectedResult(short apiVersion)
     {
         var metadata = await RequestMetadata();

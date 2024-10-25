@@ -151,6 +151,11 @@ public static class PrimitiveSerializer
         SerializeIntAsByte(output, value!.Value);
     }
 
+    public static void SerializeUint(MemoryStream output, uint? value)
+    {
+        SerializeInt(output, (int)value!.Value);
+    }
+
     public static int DeserializeInt(MemoryStream input)
     {
         if (input.Position + 4 > input.Length)
@@ -162,6 +167,11 @@ public static class PrimitiveSerializer
         return input.ReadByte() << 3 * 8 | input.ReadByte() << 2 * 8 | input.ReadByte() << 8 | input.ReadByte();
     }
 
+    public static uint DeserializeUint(MemoryStream input)
+    {
+        return (uint)DeserializeInt(input);
+    }
+    
     public static void SerializeLong(MemoryStream output, long? value)
     {
         ulong ui = (ulong)value!.Value;

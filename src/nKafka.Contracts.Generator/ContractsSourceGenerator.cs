@@ -55,6 +55,8 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                 Format(
                     $$"""
                       #nullable enable
+                      
+                      using nKafka.Contracts.Records;
 
                       namespace nKafka.Contracts.MessageDefinitions
                       {
@@ -80,6 +82,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                     $$"""
                       #nullable enable
 
+                      using nKafka.Contracts.Records;
                       using nKafka.Contracts.MessageDefinitions;
                       using nKafka.Contracts.MessageDefinitions.{{messageDefinition.Name}}Nested;
 
