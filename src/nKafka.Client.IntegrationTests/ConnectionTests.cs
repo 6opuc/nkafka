@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using nKafka.Contracts;
 using nKafka.Contracts.MessageDefinitions;
 using nKafka.Contracts.MessageDefinitions.ConsumerProtocolAssignmentNested;
@@ -420,6 +421,86 @@ public class ConnectionTests
             }
         }
         
+    }
+    
+    [Test]
+    [TestCase(11)]
+    public async Task SendAsync_FetchRequest_ShouldFetchAllRecords(short apiVersion)
+    {
+        var metadata = await RequestMetadata();
+        var partitions = metadata
+            .Topics!
+            .Where(x => x.Key == "test")
+            .SelectMany(x => x.Value.Partitions!)
+            .GroupBy(x => x.LeaderId!.Value);
+        var recordCount = 0;
+        foreach (var group in partitions)
+        {
+            var broker = metadata.Brokers![group.Key];
+            var config = new ConnectionConfig(broker.Host!, broker.Port!.Value);
+            await using var connection = new Connection(NullLogger<Connection>.Instance);
+            await connection.OpenAsync(config, CancellationToken.None);
+
+            foreach (var partition in group)
+            {
+                long offset = 0;
+                while (true)
+                {
+                    var requestClient = new FetchRequestClient(apiVersion, new FetchRequest
+                    {
+                        ClusterId = null, // ???
+                        ReplicaId = -1, // ???
+                        ReplicaState = null, // ???
+                        MaxWaitMs = 0, // ???
+                        MinBytes = 0, // ???
+                        MaxBytes = 0x7fffffff,
+                        IsolationLevel = 0, // !!!
+                        SessionId = 0, // ???
+                        SessionEpoch = -1, // ???
+                        Topics =
+                        [
+                            new FetchTopic
+                            {
+                                Topic = "test",
+                                TopicId = Guid.Empty, // ???
+                                Partitions =
+                                [
+                                    new FetchPartition
+                                    {
+                                        Partition = partition.PartitionIndex!.Value,
+                                        CurrentLeaderEpoch = -1, // ???
+                                        FetchOffset = offset, // ???
+                                        LastFetchedEpoch = -1, // ???
+                                        LogStartOffset = -1, // ???
+                                        PartitionMaxBytes = 512 * 1024, // !!!
+                                        ReplicaDirectoryId = Guid.Empty, // ???
+                                    }
+                                ]
+                            },
+                        ],
+                        ForgottenTopicsData = [], // ???
+                        RackId = string.Empty, // ???
+                    });
+                    var response = await connection.SendAsync(requestClient, CancellationToken.None);
+
+                    var lastBatch = response
+                        .Responses?.LastOrDefault()?
+                        .Partitions?.LastOrDefault()?
+                        .Records?.RecordBatches?.LastOrDefault();
+                    if (lastBatch == null)
+                    {
+                        break;
+                    }
+                    offset = lastBatch.BaseOffset + lastBatch.LastOffsetDelta + 1;
+                    recordCount += response.Responses
+                        .SelectMany(x => x.Partitions)
+                        .SelectMany(x => x.Records.RecordBatches)
+                        .Sum(x => x.Records.Count);
+                }
+            }
+        }
+
+        recordCount.Should().Be(1000000);
     }
     
     private async Task<Connection> OpenCoordinatorConnection(string groupId)
