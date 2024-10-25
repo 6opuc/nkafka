@@ -362,50 +362,64 @@ public class ConnectionTests
     [TestCase(13)]
     public async Task SendAsync_FetchRequest_ShouldReturnExpectedResult(short apiVersion)
     {
-        var consumerGroupId = Guid.NewGuid().ToString();
-        await using var connection = await OpenCoordinatorConnection(consumerGroupId);
-        var joinGroupResponse = await JoinGroup(connection, consumerGroupId);
-        var requestClient = new FetchRequestClient(apiVersion, new FetchRequest
+        var metadata = await RequestMetadata();
+        var partitions = metadata
+            .Topics!
+            .Where(x => x.Key == "test")
+            .SelectMany(x => x.Value.Partitions!)
+            .GroupBy(x => x.LeaderId!.Value);
+        foreach (var group in partitions)
         {
-            ClusterId = null, // ???
-            ReplicaId = -1, // ???
-            ReplicaState = null, // ???
-            MaxWaitMs = 0, // ???
-            MinBytes = 0, // ???
-            MaxBytes = 0x7fffffff,
-            IsolationLevel = 0, // !!!
-            SessionId = 0, // ???
-            SessionEpoch = -1, // ???
-            Topics = [
-                new FetchTopic
-                {
-                    Topic = "test",
-                    TopicId = Guid.Empty, // ???
-                    Partitions = [
-                        new FetchPartition
-                        {
-                            Partition = 1,
-                            CurrentLeaderEpoch = -1, // ???
-                            FetchOffset = 0, // ???
-                            LastFetchedEpoch = -1, // ???
-                            LogStartOffset = -1, // ???
-                            PartitionMaxBytes = 512 * 1024, // !!!
-                            ReplicaDirectoryId = Guid.Empty, // ???
-                        }
-                    ]
-                },
-            ],
-            ForgottenTopicsData = [], // ???
-            RackId = string.Empty, // ???
-        });
-        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+            var broker = metadata.Brokers![group.Key];
+            var config = new ConnectionConfig(broker.Host!, broker.Port!.Value);
+            await using var connection = new Connection(TestLogger.Create<Connection>());
+            await connection.OpenAsync(config, CancellationToken.None);
 
-        response.Should().NotBeNull();
-        if (apiVersion >= 7)
-        {
-            response.ErrorCode.Should().Be(0);
+            foreach (var partition in group)
+            {
+                var requestClient = new FetchRequestClient(apiVersion, new FetchRequest
+                {
+                    ClusterId = null, // ???
+                    ReplicaId = -1, // ???
+                    ReplicaState = null, // ???
+                    MaxWaitMs = 0, // ???
+                    MinBytes = 0, // ???
+                    MaxBytes = 0x7fffffff,
+                    IsolationLevel = 0, // !!!
+                    SessionId = 0, // ???
+                    SessionEpoch = -1, // ???
+                    Topics = [
+                        new FetchTopic
+                        {
+                            Topic = "test",
+                            TopicId = Guid.Empty, // ???
+                            Partitions = [
+                                new FetchPartition
+                                {
+                                    Partition = partition.PartitionIndex!.Value,
+                                    CurrentLeaderEpoch = -1, // ???
+                                    FetchOffset = 0, // ???
+                                    LastFetchedEpoch = -1, // ???
+                                    LogStartOffset = -1, // ???
+                                    PartitionMaxBytes = 512 * 1024, // !!!
+                                    ReplicaDirectoryId = Guid.Empty, // ???
+                                }
+                            ]
+                        },
+                    ],
+                    ForgottenTopicsData = [], // ???
+                    RackId = string.Empty, // ???
+                });
+                var response = await connection.SendAsync(requestClient, CancellationToken.None);
+
+                response.Should().NotBeNull();
+                if (apiVersion >= 7)
+                {
+                    response.ErrorCode.Should().Be(0);
+                }
+            }
         }
-#warning check response
+        
     }
     
     private async Task<Connection> OpenCoordinatorConnection(string groupId)
@@ -437,5 +451,26 @@ public class ConnectionTests
         await coordinatorConnection.OpenAsync(coordinatorConfig, CancellationToken.None);
 
         return coordinatorConnection;
+    }
+
+    private async Task<MetadataResponse> RequestMetadata()
+    {
+        await using var connection = await OpenConnection();
+        var requestClient = new MetadataRequestClient(12, new MetadataRequest
+        {
+            Topics = [
+                new MetadataRequestTopic
+                {
+                    Name = "test",
+                    TopicId = Guid.Empty,
+                }
+            ],
+            AllowAutoTopicCreation = false,
+            IncludeClusterAuthorizedOperations = true,
+            IncludeTopicAuthorizedOperations = true,
+        });
+        
+        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        return response;
     }
 }
