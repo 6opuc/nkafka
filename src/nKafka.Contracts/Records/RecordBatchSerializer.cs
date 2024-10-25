@@ -44,18 +44,21 @@ public static class RecordBatchSerializer
         if (recordsCount >= 0)
         {
             recordBatch.Records = new List<Record>(recordsCount);
-#warning read each record
-            input.Position = recordBatchStart + recordBatch.BatchLength;
+            for (int i = 0; i < recordsCount; i++)
+            {
+                var record = RecordSerializer.Deserialize(input);
+                if (record != null)
+                {
+                    recordBatch.Records.Add(record);
+                }
+            }
         }
 
 #warning validate actual crc
 #warning validate actual batch length
+        
+        input.Position = recordBatchStart + recordBatch.BatchLength;
 
         return recordBatch;
-    }
-
-    public static RecordBatch? DeserializeFlexible(MemoryStream input)
-    {
-        throw new NotImplementedException();
     }
 }
