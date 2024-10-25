@@ -8,6 +8,7 @@ public static class ConsumerProtocolAssignmentExtensions
     public static byte[] AsMetadata(this ConsumerProtocolAssignment value, short version)
     {
 #warning reduce allocations, use buffer pools!!
+#warning create override in message definitions: read size, version and payload        
         using var output = new MemoryStream();
         PrimitiveSerializer.SerializeShort(output, version);
         ConsumerProtocolAssignmentSerializer.Serialize(output, value, version);

@@ -7,6 +7,7 @@ public static class ConsumerProtocolSubscriptionExtensions
 {
     public static byte[] AsMetadata(this ConsumerProtocolSubscription value, short version)
     {
+#warning create override in message definitions: read size, version and payload    
         #warning reduce allocations, use buffer pools!!
         using var output = new MemoryStream();
         PrimitiveSerializer.SerializeShort(output, version);

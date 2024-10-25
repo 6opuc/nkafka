@@ -146,8 +146,7 @@ public static class FieldDefinitionExtensions
             "float64" => "double",
             "uuid" => "Guid",
             "bytes" => "byte[]",
-            #warning implement records
-            "records" => "byte[]",
+            "records" => "RecordBatchContainer",
             _ => fieldType
         };
     }
@@ -331,6 +330,14 @@ public static class FieldDefinitionExtensions
         if (propertyType == "Guid")
         {
             return $"PrimitiveSerializer.SerializeGuid({output}, {propertyPath});";
+        }
+        
+
+        if (propertyType == "RecordBatchContainer")
+        {
+            return flexible
+                ? $"RecordBatchContainerSerializer.SerializeFlexible({output}, {propertyPath});"
+                : $"RecordBatchContainerSerializer.Serialize({output}, {propertyPath});";
         }
 
         return $$"""
@@ -601,6 +608,13 @@ public static class FieldDefinitionExtensions
         if (propertyType == "Guid")
         {
             return $"{propertyPath} = PrimitiveSerializer.DeserializeGuid({input});";
+        }
+
+        if (propertyType == "RecordBatchContainer")
+        {
+            return flexible
+                ? $"{propertyPath} = RecordBatchContainerSerializer.DeserializeFlexible({input});"
+                : $"{propertyPath} = RecordBatchContainerSerializer.Deserialize({input});";
         }
 
         return $"{propertyPath} = {propertyType}SerializerV{version}.Deserialize({input});";
