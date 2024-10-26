@@ -426,6 +426,19 @@ public class ConnectionTests
     }
     
     [Test]
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [TestCase(6)]
+    [TestCase(7)]
+    [TestCase(8)]
+    [TestCase(9)]
+    [TestCase(10)]
+    [TestCase(11)]
+    [TestCase(12)]
     [TestCase(13)]
     public async Task SendAsync_FetchRequest_ShouldFetchAllRecords(short apiVersion)
     {
@@ -483,19 +496,20 @@ public class ConnectionTests
                     });
                     var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
-                    var lastBatch = response
+                    var lastOffset = response
                         .Responses?.LastOrDefault()?
                         .Partitions?.LastOrDefault()?
-                        .Records?.RecordBatches?.LastOrDefault();
-                    if (lastBatch == null)
+                        .Records?.LastOffset ?? -1;
+                    offset = lastOffset + 1;
+                    
+                    var responseRecordCount = response.Responses!
+                        .SelectMany(x => x.Partitions!)
+                        .Sum(x => x.Records!.RecordCount);
+                    if (responseRecordCount == 0)
                     {
                         break;
                     }
-                    offset = lastBatch.BaseOffset + lastBatch.LastOffsetDelta + 1;
-                    recordCount += response.Responses
-                        .SelectMany(x => x.Partitions)
-                        .SelectMany(x => x.Records.RecordBatches)
-                        .Sum(x => x.Records.Count);
+                    recordCount += responseRecordCount;
                 }
             }
         }

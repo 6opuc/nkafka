@@ -22,7 +22,6 @@ public static class RecordBatchSerializerV2
         if (input.Position + recordBatch.BatchLength > input.Length)
         {
             // we will not be able to read full batch
-#warning try to read as much records as possible
             input.Position = start;
             return null;
         }
@@ -60,8 +59,11 @@ public static class RecordBatchSerializerV2
 
 #warning validate actual crc
 #warning validate actual batch length
-        
-        input.Position = recordBatchStart + recordBatch.BatchLength;
+
+        if (input.Position != recordBatchStart + recordBatch.BatchLength)
+        {
+            input.Position = recordBatchStart + recordBatch.BatchLength;
+        }
 
         return recordBatch;
     }

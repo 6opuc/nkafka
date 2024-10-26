@@ -1,27 +1,27 @@
 namespace nKafka.Contracts.Records;
 
-public static class RecordBatchContainerSerializerV3
+public static class RecordsContainerSerializerV3
 {
-    public static void Serialize(MemoryStream output, RecordBatchContainer? message)
+    public static void Serialize(MemoryStream output, RecordsContainer? message)
     {
         throw new NotImplementedException();
     }
 
-    public static RecordBatchContainer? Deserialize(MemoryStream input)
+    public static RecordsContainer? Deserialize(MemoryStream input)
     {
         var size = PrimitiveSerializer.DeserializeLength(input);
         if (size < 0)
         {
-            throw new Exception($"Negative record batch container size: {size}.");
+            throw new Exception($"Negative record container size: {size}.");
         }
 
         var start = input.Position;
         if (start + size > input.Length)
         {
-            throw new Exception($"RecordBatchContainer expected {size} bytes but got only {input.Length - input.Position}.");
+            throw new Exception($"Record container expected {size} bytes but got only {input.Length - input.Position}.");
         }
         
-        var message = new RecordBatchContainer
+        var message = new RecordsContainer
         {
             SizeInBytes = size,
 #warning decide on capacity
