@@ -363,12 +363,9 @@ public class ConnectionTests
     [TestCase(13)]
     public async Task SendAsync_FetchRequest_ShouldReturnExpectedResult(short apiVersion)
     {
-        #warning only v11 is implemented in records
         var metadata = await RequestMetadata();
-        var partitions = metadata
-            .Topics!
-            .Where(x => x.Key == "test")
-            .SelectMany(x => x.Value.Partitions!)
+        var topicMetadata = metadata.Topics!["test"];
+        var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
         foreach (var group in partitions)
         {
@@ -382,7 +379,7 @@ public class ConnectionTests
                 var requestClient = new FetchRequestClient(apiVersion, new FetchRequest
                 {
                     ClusterId = null, // ???
-                    ReplicaId = -1, // ???
+                    ReplicaId = -1,
                     ReplicaState = null, // ???
                     MaxWaitMs = 0, // ???
                     MinBytes = 0, // ???
@@ -393,8 +390,8 @@ public class ConnectionTests
                     Topics = [
                         new FetchTopic
                         {
-                            Topic = "test",
-                            TopicId = Guid.Empty, // ???
+                            Topic = topicMetadata.Name,
+                            TopicId = topicMetadata.TopicId,
                             Partitions = [
                                 new FetchPartition
                                 {
@@ -419,13 +416,17 @@ public class ConnectionTests
                 {
                     response.ErrorCode.Should().Be(0);
                 }
+                
+                response.Responses.Should().AllSatisfy(r =>
+                    r.Partitions.Should().AllSatisfy(p => 
+                        p.ErrorCode.Should().Be(0)));
             }
         }
         
     }
     
     [Test]
-    [TestCase(11)]
+    [TestCase(13)]
     public async Task SendAsync_FetchRequest_ShouldFetchAllRecords(short apiVersion)
     {
         var metadata = await RequestMetadata();

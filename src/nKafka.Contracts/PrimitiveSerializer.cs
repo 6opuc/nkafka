@@ -301,6 +301,7 @@ public static class PrimitiveSerializer
 
     public static void SerializeGuid(MemoryStream output, Guid? value)
     {
+        #warning test it! looks like it does not work as expected(see fetch v13 test)
         var availableSize = output.Length - output.Position;
         var diff = 16 - availableSize;
         if (diff > 0)
