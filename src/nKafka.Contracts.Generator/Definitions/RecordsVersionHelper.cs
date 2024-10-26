@@ -11,6 +11,7 @@ public static class RecordsVersionHelper
                 >= 0 and < 2 => "V0",
                 >= 2 and < 4 => "V1",
                 >= 4 and < 12 => "V2",
+                >= 12 and < 14 => "V3",
                 _ => "NotImplemented"
             };
         }
