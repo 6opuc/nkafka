@@ -24,7 +24,11 @@ public static class CommonStructDefinitionExtensions
                  """;
     }
     
-    public static string ToNestedSerializerDeclaration(this CommonStructDefinition commonStruct, short version, bool flexible)
+    public static string ToNestedSerializerDeclaration(
+        this CommonStructDefinition commonStruct,
+        short? apiKey,
+        short version,
+        bool flexible)
     {
         if (!commonStruct.Versions.Includes(version))
         {
@@ -33,6 +37,6 @@ public static class CommonStructDefinitionExtensions
 
         var nestedTypeName = commonStruct.Name;
 
-        return commonStruct.Fields.ToNestedSerializerDeclarations(version, flexible, nestedTypeName!);
+        return commonStruct.Fields.ToNestedSerializerDeclarations(apiKey, version, flexible, nestedTypeName!);
     }
 }

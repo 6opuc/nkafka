@@ -70,13 +70,13 @@ public static class MessageDefinitionExtensions
                       {
                          public static void Serialize(MemoryStream output, {{messageDefinition.Name}} message)
                          {
-                            {{messageDefinition.Fields.ToSerializationStatements(version, flexible)}}
+                            {{messageDefinition.Fields.ToSerializationStatements(messageDefinition.ApiKey, version, flexible)}}
                          }
                          
                          public static {{messageDefinition.Name}} Deserialize(MemoryStream input)
                          {
                             var message = new {{messageDefinition.Name}}();
-                            {{messageDefinition.Fields.ToDeserializationStatements(version, flexible)}}
+                            {{messageDefinition.Fields.ToDeserializationStatements(messageDefinition.ApiKey, version, flexible)}}
                             return message;
                          }
                       }
@@ -98,7 +98,7 @@ public static class MessageDefinitionExtensions
 
                 foreach (var fieldDefinition in messageDefinition.Fields)
                 {
-                    var nestedSerializer = fieldDefinition.ToNestedSerializerDeclaration(version, flexible);
+                    var nestedSerializer = fieldDefinition.ToNestedSerializerDeclaration(messageDefinition.ApiKey, version, flexible);
                     if (!string.IsNullOrEmpty(nestedSerializer))
                     {
                         source.AppendLine(nestedSerializer);
@@ -107,7 +107,7 @@ public static class MessageDefinitionExtensions
 
                 foreach (var commonStruct in messageDefinition.CommonStructs)
                 {
-                    var nestedSerializer = commonStruct.ToNestedSerializerDeclaration(version, flexible);
+                    var nestedSerializer = commonStruct.ToNestedSerializerDeclaration(messageDefinition.ApiKey, version, flexible);
                     if (!string.IsNullOrEmpty(nestedSerializer))
                     {
                         source.AppendLine(nestedSerializer);

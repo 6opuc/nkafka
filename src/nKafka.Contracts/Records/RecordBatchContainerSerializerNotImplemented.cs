@@ -1,6 +1,6 @@
 namespace nKafka.Contracts.Records;
 
-public static class RecordBatchContainerSerializerV1
+public static class RecordBatchContainerSerializerNotImplemented
 {
     public static void Serialize(MemoryStream output, RecordBatchContainer? message)
     {

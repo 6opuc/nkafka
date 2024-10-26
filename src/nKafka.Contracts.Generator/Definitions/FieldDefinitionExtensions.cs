@@ -172,7 +172,11 @@ public static class FieldDefinitionExtensions
                  """;
     }
 
-    public static string ToSerializationStatements(this IList<FieldDefinition> fields, short version, bool flexible)
+    public static string ToSerializationStatements(
+        this IList<FieldDefinition> fields,
+        short? apiKey,
+        short version,
+        bool flexible)
     {
         var source = new StringBuilder();
         foreach (var field in fields)
@@ -182,7 +186,7 @@ public static class FieldDefinitionExtensions
                 continue;
             }
             
-            var fieldStatements = field.ToSerializationStatements(version, flexible);
+            var fieldStatements = field.ToSerializationStatements(apiKey, version, flexible);
             if (!string.IsNullOrEmpty(fieldStatements))
             {
                 source.AppendLine(fieldStatements);
@@ -218,7 +222,7 @@ public static class FieldDefinitionExtensions
                                         {
                                             PrimitiveSerializer.SerializeUVarInt(output, {{taggedField.Tag}}); // tag number
                                             buffer.Position = 0;
-                                            {{taggedField.ToSerializationStatements(version, flexible, "buffer")}}
+                                            {{taggedField.ToSerializationStatements(apiKey, version, flexible, "buffer")}}
                                             var size = (int)buffer.Position;
                                             PrimitiveSerializer.SerializeUVarInt(output, (uint)size); // tag payload size
                                             output.Write(buffer.GetBuffer(), 0, size); // tag payload
@@ -233,7 +237,12 @@ public static class FieldDefinitionExtensions
     }
 
 
-    public static string ToSerializationStatements(this FieldDefinition field, short version, bool flexible, string output = "output")
+    public static string ToSerializationStatements(
+        this FieldDefinition field,
+        short? apiKey,
+        short version,
+        bool flexible,
+        string output = "output")
     {
         if (!field.Versions.Includes(version))
         {
@@ -248,7 +257,13 @@ public static class FieldDefinitionExtensions
         var propertyType = field.GetFieldItemPropertyType();
         if (!field.IsCollection())
         {
-            return GetSerializationStatements($"message.{field.Name}", version, flexible, propertyType, output);
+            return GetSerializationStatements(
+                $"message.{field.Name}",
+                apiKey,
+                version,
+                flexible,
+                propertyType, 
+                output);
         }
         
         var lengthSerialization = flexible
@@ -260,7 +275,7 @@ public static class FieldDefinitionExtensions
                      {{lengthSerialization}}
                      foreach (var item in message.{{field.Name}} ?? [])
                      {
-                        {{GetSerializationStatements("item", version, flexible, propertyType, output)}}
+                        {{GetSerializationStatements("item", apiKey, version, flexible, propertyType, output)}}
                      }
                      """;
         }
@@ -269,13 +284,14 @@ public static class FieldDefinitionExtensions
                  {{lengthSerialization}}
                  foreach (var item in message.{{field.Name}}?.Values ?? [])
                  {
-                    {{GetSerializationStatements("item", version, flexible, propertyType, output)}}
+                    {{GetSerializationStatements("item", apiKey, version, flexible, propertyType, output)}}
                  }
                  """;
     }
 
     private static string GetSerializationStatements(
         string propertyPath,
+        short? apiKey,
         short version,
         bool flexible,
         string? propertyType,
@@ -340,7 +356,7 @@ public static class FieldDefinitionExtensions
 
         if (propertyType == "RecordBatchContainer")
         {
-            var recordsVersion = "V2";
+            var recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
             return $"RecordBatchContainerSerializer{recordsVersion}.Serialize({output}, {propertyPath});";
         }
 
@@ -355,6 +371,7 @@ public static class FieldDefinitionExtensions
 
     public static string ToNestedSerializerDeclarations(
         this IList<FieldDefinition> fields,
+        short? apiKey,
         short version,
         bool flexible,
         string nestedTypeName)
@@ -371,13 +388,13 @@ public static class FieldDefinitionExtensions
               {
                  public static void Serialize(MemoryStream output, {{nestedTypeName}} message)
                  {
-                    {{fields.ToSerializationStatements(version, flexible)}}
+                    {{fields.ToSerializationStatements(apiKey, version, flexible)}}
                  }
                  
                  public static {{nestedTypeName}} Deserialize(MemoryStream input)
                  {
                     var message = new {{nestedTypeName}}();
-                    {{fields.ToDeserializationStatements(version, flexible)}}
+                    {{fields.ToDeserializationStatements(apiKey, version, flexible)}}
                     return message;
                  }
               }
@@ -385,7 +402,7 @@ public static class FieldDefinitionExtensions
 
         foreach (var child in fields)
         {
-            var childSerializer = child.ToNestedSerializerDeclaration(version, flexible);
+            var childSerializer = child.ToNestedSerializerDeclaration(apiKey, version, flexible);
             if (!string.IsNullOrWhiteSpace(childSerializer))
             {
                 source.AppendLine(childSerializer);
@@ -395,7 +412,11 @@ public static class FieldDefinitionExtensions
         return source.ToString();
     }
 
-    public static string ToNestedSerializerDeclaration(this FieldDefinition field, short version, bool flexible)
+    public static string ToNestedSerializerDeclaration(
+        this FieldDefinition field,
+        short? apiKey,
+        short version, 
+        bool flexible)
     {
         if (!field.Versions.Includes(version))
         {
@@ -403,11 +424,15 @@ public static class FieldDefinitionExtensions
         }
 
         var nestedTypeName = field.GetFieldItemType();
-        return field.Fields.ToNestedSerializerDeclarations(version, flexible, nestedTypeName!);
+        return field.Fields.ToNestedSerializerDeclarations(apiKey, version, flexible, nestedTypeName!);
     }
     
     
-    public static string ToDeserializationStatements(this IList<FieldDefinition> fields, short version, bool flexible)
+    public static string ToDeserializationStatements(
+        this IList<FieldDefinition> fields,
+        short? apiKey,
+        short version,
+        bool flexible)
     {
         var source = new StringBuilder();
         foreach (var field in fields)
@@ -417,7 +442,7 @@ public static class FieldDefinitionExtensions
                 continue;
             }
             
-            var fieldStatements = field.ToDeserializationStatements(version, flexible);
+            var fieldStatements = field.ToDeserializationStatements(apiKey, version, flexible);
             if (!string.IsNullOrEmpty(fieldStatements))
             {
                 source.AppendLine(fieldStatements);
@@ -456,7 +481,7 @@ public static class FieldDefinitionExtensions
                 {
                     source.AppendLine($$"""
                                         case {{taggedField.Tag}}:
-                                            {{taggedField.ToDeserializationStatements(version, flexible)}}
+                                            {{taggedField.ToDeserializationStatements(apiKey, version, flexible)}}
                                             break;
                                         """);
                 }
@@ -478,7 +503,12 @@ public static class FieldDefinitionExtensions
         return source.ToString();
     }
     
-    public static string ToDeserializationStatements(this FieldDefinition field, short version, bool flexible, string input = "input")
+    public static string ToDeserializationStatements(
+        this FieldDefinition field,
+        short? apiKey,
+        short version,
+        bool flexible,
+        string input = "input")
     {
         if (!field.Versions.Includes(version))
         {
@@ -493,7 +523,13 @@ public static class FieldDefinitionExtensions
         var propertyType = field.GetFieldItemPropertyType();
         if (!field.IsCollection())
         {
-            return GetDeserializationStatements($"message.{field.Name}", version, flexible, propertyType, input);
+            return GetDeserializationStatements(
+                $"message.{field.Name}",
+                apiKey,
+                version,
+                flexible,
+                propertyType,
+                input);
         }
 
 
@@ -510,7 +546,7 @@ public static class FieldDefinitionExtensions
                          message.{{field.Name}} = new {{propertyType}}[{{itemsCount}}];
                          for (var i = 0; i < {{itemsCount}}; i++)
                          {
-                            {{GetDeserializationStatements($"message.{field.Name}[i]", version, flexible, propertyType, input)}}
+                            {{GetDeserializationStatements($"message.{field.Name}[i]", apiKey, version, flexible, propertyType, input)}}
                          }
                      }
                      """;
@@ -529,7 +565,7 @@ public static class FieldDefinitionExtensions
                      for (var i = 0; i < {{itemsCount}}; i++)
                      {
                         {{propertyType}} item;
-                        {{GetDeserializationStatements("item", version, flexible, propertyType, input)}}
+                        {{GetDeserializationStatements("item", apiKey, version, flexible, propertyType, input)}}
                         var key = item.{{keyName}};
                         if (key == null)
                         {
@@ -541,7 +577,13 @@ public static class FieldDefinitionExtensions
                  """;
     }
 
-    private static string GetDeserializationStatements(string propertyPath, short version, bool flexible, string? propertyType, string input = "input")
+    private static string GetDeserializationStatements(
+        string propertyPath,
+        short? apiKey,
+        short version,
+        bool flexible,
+        string? propertyType,
+        string input = "input")
     {
         if (propertyType == "string")
         {
@@ -616,7 +658,7 @@ public static class FieldDefinitionExtensions
 
         if (propertyType == "RecordBatchContainer")
         {
-            var recordsVersion = "V2";
+            var recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
             return $"{propertyPath} = RecordBatchContainerSerializer{recordsVersion}.Deserialize({input});";
         }
 
