@@ -25,7 +25,6 @@ public static class RecordsContainerSerializerV0
         var container = new RecordsContainer
         {
             SizeInBytes = size,
-#warning decide on capacity
             Messages = new List<Message>(),
         };
         var endOfLastMessage = start;

@@ -34,8 +34,7 @@ public static class RecordBatchSerializerV2
         }
         recordBatch.Crc = PrimitiveSerializer.DeserializeUint(input);
 
-#warning check crc from this position
-
+        var crcStart = input.Position;
         recordBatch.Attributes = PrimitiveSerializer.DeserializeShort(input);
         recordBatch.LastOffsetDelta = PrimitiveSerializer.DeserializeInt(input);
         recordBatch.FirstTimestamp = PrimitiveSerializer.DeserializeLong(input);
@@ -56,13 +55,12 @@ public static class RecordBatchSerializerV2
                 }
             }
         }
+        Crc32.CheckCrcCastagnoli(recordBatch.Crc, input, crcStart);
 
-#warning validate actual crc
-#warning validate actual batch length
-
-        if (input.Position != recordBatchStart + recordBatch.BatchLength)
+        var actualBatchLength = input.Position - recordBatchStart;
+        if (actualBatchLength != recordBatch.BatchLength)
         {
-            input.Position = recordBatchStart + recordBatch.BatchLength;
+            throw new Exception($"Expected batch length was {recordBatch.BatchLength}, but got {actualBatchLength}.");
         }
 
         return recordBatch;

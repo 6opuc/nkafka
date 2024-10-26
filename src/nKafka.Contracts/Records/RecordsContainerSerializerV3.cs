@@ -24,7 +24,6 @@ public static class RecordsContainerSerializerV3
         var message = new RecordsContainer
         {
             SizeInBytes = size,
-#warning decide on capacity
             RecordBatches = new List<RecordBatch>(),
         };
         var endOfLastRecordBatch = start;

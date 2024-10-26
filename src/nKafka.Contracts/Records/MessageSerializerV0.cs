@@ -27,7 +27,8 @@ public static class MessageSerializerV0
         }
         
         message.Crc = PrimitiveSerializer.DeserializeUint(input);
-#warning check crc from this position
+
+        var crcStart = input.Position;
         message.Magic = PrimitiveSerializer.DeserializeByte(input);
         if (message.Magic != 0)
         {
@@ -55,13 +56,12 @@ public static class MessageSerializerV0
         {
             input.Read(message.Value!, 0, valueLength);
         }
-
-#warning validate actual crc
-#warning validate actual message length
+        Crc32.CheckCrc(message.Crc, input, crcStart);
         
-        if (input.Position != messageStart + message.MessageSize)
+        var actualMessageSize = input.Position - messageStart;
+        if (actualMessageSize != message.MessageSize)
         {
-            input.Position = messageStart + message.MessageSize;
+            throw new Exception($"Expected message size was {message.MessageSize}, but got {actualMessageSize}.");
         }
 
         return message;
