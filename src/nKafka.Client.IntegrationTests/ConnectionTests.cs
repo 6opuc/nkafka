@@ -430,10 +430,8 @@ public class ConnectionTests
     public async Task SendAsync_FetchRequest_ShouldFetchAllRecords(short apiVersion)
     {
         var metadata = await RequestMetadata();
-        var partitions = metadata
-            .Topics!
-            .Where(x => x.Key == "test")
-            .SelectMany(x => x.Value.Partitions!)
+        var topicMetadata = metadata.Topics!["test"];
+        var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
         var recordCount = 0;
         foreach (var group in partitions)
@@ -451,7 +449,7 @@ public class ConnectionTests
                     var requestClient = new FetchRequestClient(apiVersion, new FetchRequest
                     {
                         ClusterId = null, // ???
-                        ReplicaId = -1, // ???
+                        ReplicaId = -1,
                         ReplicaState = null, // ???
                         MaxWaitMs = 0, // ???
                         MinBytes = 0, // ???
@@ -464,7 +462,7 @@ public class ConnectionTests
                             new FetchTopic
                             {
                                 Topic = "test",
-                                TopicId = Guid.Empty, // ???
+                                TopicId = topicMetadata.TopicId,
                                 Partitions =
                                 [
                                     new FetchPartition

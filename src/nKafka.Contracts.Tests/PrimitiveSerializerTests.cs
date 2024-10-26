@@ -142,6 +142,37 @@ public class PrimitiveSerializerTests
 
     #endregion Int
     
+    #region Guid
+
+    [Test]
+    [TestCaseSource(nameof(GetGuidCases))]
+    public void SerializeGuid_ByTestCase_ProducesExpectedOutput(SerializeTestCase<Guid> testCase)
+    {
+        using var stream = new MemoryStream(0);
+        PrimitiveSerializer.SerializeGuid(stream, testCase.Value);
+
+        var actual = stream.ToArray();
+
+        actual.Should().BeEquivalentTo(testCase.Bytes);
+    }
+
+    [Test]
+    [TestCaseSource(nameof(GetGuidCases))]
+    public void DeserializeGuid_ByTestCase_ProducesExpectedOutput(SerializeTestCase<Guid> testCase)
+    {
+        using var stream = new MemoryStream(testCase.Bytes, 0, testCase.Bytes.Length, false, true);
+        var actual = PrimitiveSerializer.DeserializeGuid(stream);
+
+        actual.Should().Be(testCase.Value);
+    }
+
+    public static IEnumerable<SerializeTestCase<Guid>> GetGuidCases()
+    {
+        yield return new SerializeTestCase<Guid>(new Guid("f3c3e4cc-09d9-8f40-8194-17b59016aba8"), [0xCC, 0xE4, 0xC3, 0xF3, 0xD9, 0x09, 0x40, 0x8F, 0x81, 0x94, 0x17, 0xB5, 0x90, 0x16, 0xAB, 0xA8]);
+    }
+
+    #endregion Guid
+    
     public class SerializeTestCase<T>
     {
         public T Value { get; }

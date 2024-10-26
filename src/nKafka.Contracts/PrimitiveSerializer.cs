@@ -301,7 +301,6 @@ public static class PrimitiveSerializer
 
     public static void SerializeGuid(MemoryStream output, Guid? value)
     {
-        #warning test it! looks like it does not work as expected(see fetch v13 test)
         var availableSize = output.Length - output.Position;
         var diff = 16 - availableSize;
         if (diff > 0)
@@ -309,7 +308,7 @@ public static class PrimitiveSerializer
             output.SetLength(output.Length + diff);
         }
 
-        value!.Value.TryWriteBytes(output.GetBuffer()[(int)output.Position..]);
+        value!.Value.TryWriteBytes(output.GetBuffer().AsSpan()[(int)output.Position..]);
         output.Position += 16;
     }
 
@@ -320,7 +319,7 @@ public static class PrimitiveSerializer
             throw new Exception($"DeserializeGuid needs 16 bytes but got only {input.Length - input.Position}");
         }
 
-        var bytes = input.GetBuffer()[(int)input.Position..((int)input.Position + 16)];
+        var bytes = input.GetBuffer().AsSpan()[(int)input.Position..((int)input.Position + 16)];
         input.Position += 16;
         return new Guid(bytes);
     }
