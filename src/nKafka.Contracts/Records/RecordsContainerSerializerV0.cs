@@ -18,9 +18,10 @@ public static class RecordsContainerSerializerV0
         var start = input.Position;
         if (start + size > input.Length)
         {
-            throw new Exception($"Record container expected {size} bytes but got only {input.Length - input.Position}.");
+            throw new Exception(
+                $"Record container expected {size} bytes but got only {input.Length - input.Position}.");
         }
-        
+
         var container = new RecordsContainer
         {
             SizeInBytes = size,
@@ -40,11 +41,13 @@ public static class RecordsContainerSerializerV0
             endOfLastMessage = input.Position;
             container.Messages.Add(message);
         }
-        container.RemainderInBytes = size - (int)(endOfLastMessage-start);
+
+        container.RemainderInBytes = size - (int)(endOfLastMessage - start);
         if (container.RemainderInBytes > 0)
         {
             input.Position = endOfLastMessage + container.RemainderInBytes;
         }
+
         return container;
     }
 }
