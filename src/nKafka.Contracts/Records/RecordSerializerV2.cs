@@ -1,6 +1,6 @@
 namespace nKafka.Contracts.Records;
 
-public class RecordSerializer
+public class RecordSerializerV2
 {
     public static Record? Deserialize(MemoryStream input)
     {

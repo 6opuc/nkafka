@@ -274,7 +274,12 @@ public static class FieldDefinitionExtensions
                  """;
     }
 
-    private static string GetSerializationStatements(string propertyPath, short version, bool flexible, string? propertyType, string output = "output")
+    private static string GetSerializationStatements(
+        string propertyPath,
+        short version,
+        bool flexible,
+        string? propertyType,
+        string output = "output")
     {
         if (propertyType == "string")
         {
@@ -335,9 +340,8 @@ public static class FieldDefinitionExtensions
 
         if (propertyType == "RecordBatchContainer")
         {
-            return flexible
-                ? $"RecordBatchContainerSerializer.SerializeFlexible({output}, {propertyPath});"
-                : $"RecordBatchContainerSerializer.Serialize({output}, {propertyPath});";
+            var recordsVersion = "V2";
+            return $"RecordBatchContainerSerializer{recordsVersion}.Serialize({output}, {propertyPath});";
         }
 
         return $$"""
@@ -612,9 +616,8 @@ public static class FieldDefinitionExtensions
 
         if (propertyType == "RecordBatchContainer")
         {
-            return flexible
-                ? $"{propertyPath} = RecordBatchContainerSerializer.DeserializeFlexible({input});"
-                : $"{propertyPath} = RecordBatchContainerSerializer.Deserialize({input});";
+            var recordsVersion = "V2";
+            return $"{propertyPath} = RecordBatchContainerSerializer{recordsVersion}.Deserialize({input});";
         }
 
         return $"{propertyPath} = {propertyType}SerializerV{version}.Deserialize({input});";

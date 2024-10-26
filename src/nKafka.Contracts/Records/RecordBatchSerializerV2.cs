@@ -1,6 +1,6 @@
 namespace nKafka.Contracts.Records;
 
-public static class RecordBatchSerializer
+public static class RecordBatchSerializerV2
 {
     public static RecordBatch? Deserialize(MemoryStream input)
     {
@@ -29,6 +29,10 @@ public static class RecordBatchSerializer
 
         recordBatch.PartitionLeaderEpoch = PrimitiveSerializer.DeserializeInt(input);
         recordBatch.Magic = PrimitiveSerializer.DeserializeByte(input);
+        if (recordBatch.Magic != 2)
+        {
+            throw new Exception($"Version 2 was expected, but received version {recordBatch.Magic}.");
+        }
         recordBatch.Crc = PrimitiveSerializer.DeserializeUint(input);
 
 #warning check crc from this position
@@ -46,7 +50,7 @@ public static class RecordBatchSerializer
             recordBatch.Records = new List<Record>(recordsCount);
             for (int i = 0; i < recordsCount; i++)
             {
-                var record = RecordSerializer.Deserialize(input);
+                var record = RecordSerializerV2.Deserialize(input);
                 if (record != null)
                 {
                     recordBatch.Records.Add(record);
