@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+
 namespace nKafka.Contracts.Records;
 
 public class RecordSerializerV0
@@ -45,7 +47,11 @@ public class RecordSerializerV0
         }
 
         var headerCount = PrimitiveSerializer.DeserializeVarInt(input);
-        if (headerCount >= 0)
+        if (headerCount == 0)
+        {
+            record.Headers = ReadOnlyDictionary<string, byte[]>.Empty;
+        }
+        else if (headerCount > 0)
         {
             var headers = new Dictionary<string, byte[]>(headerCount);
             for (var i = 0; i < headerCount; i++)

@@ -9,5 +9,5 @@ public class Record
     public int OffsetDelta { get; set; }
     public byte[]? Key { get; set; }
     public byte[]? Value { get; set; }
-    public IDictionary<string, byte[]>? Headers { get; set; }
+    public IReadOnlyDictionary<string, byte[]>? Headers { get; set; }
 }
