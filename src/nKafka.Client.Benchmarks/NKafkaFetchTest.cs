@@ -8,10 +8,10 @@ namespace nKafka.Client.Benchmarks;
 
 public static class NKafkaFetchTest
 {
-    public static async Task Test()
+    public static async Task Test(FetchScenario scenario)
     {
-        var metadata = await RequestMetadata();
-        var topicMetadata = metadata.Topics!["test"];
+        var metadata = await RequestMetadata(scenario);
+        var topicMetadata = metadata.Topics![scenario.TopicName];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
         var recordCount = 0;
@@ -42,7 +42,7 @@ public static class NKafkaFetchTest
                         [
                             new FetchTopic
                             {
-                                Topic = "test",
+                                Topic = topicMetadata.Name,
                                 TopicId = topicMetadata.TopicId,
                                 Partitions =
                                 [
@@ -86,7 +86,7 @@ public static class NKafkaFetchTest
         Console.WriteLine(recordCount);
     }
 
-    private static async Task<MetadataResponse> RequestMetadata()
+    private static async Task<MetadataResponse> RequestMetadata(FetchScenario scenario)
     {
         var config = new ConnectionConfig("kafka-1", 9192);
         var connection = new Connection(NullLogger<Connection>.Instance);
@@ -99,7 +99,7 @@ public static class NKafkaFetchTest
             [
                 new MetadataRequestTopic
                 {
-                    Name = "test",
+                    Name = scenario.TopicName,
                     TopicId = Guid.Empty,
                 }
             ],

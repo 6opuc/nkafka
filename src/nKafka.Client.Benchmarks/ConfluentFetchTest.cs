@@ -4,7 +4,7 @@ namespace nKafka.Client.Benchmarks;
 
 public class ConfluentFetchTest
 {
-    public static Task Test()
+    public static Task Test(FetchScenario scenario)
     {
         var config = new ConsumerConfig
         {
@@ -14,10 +14,10 @@ public class ConfluentFetchTest
         };
 
         using var consumer = new ConsumerBuilder<Ignore, string>(config).Build();
-        consumer.Subscribe("test");
+        consumer.Subscribe(scenario.TopicName);
 
         var counter = 0;
-        while (counter < 1_000_000)
+        while (counter < scenario.MessageCount)
         {
             var consumeResult = consumer.Consume(CancellationToken.None);
 
