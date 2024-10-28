@@ -112,7 +112,7 @@ public class ConnectionTests
             Topics = [
                 new MetadataRequestTopic
                 {
-                    Name = "test",
+                    Name = "test_p12_m1M_s4B",
                     TopicId = Guid.Empty,
                 }
             ],
@@ -160,7 +160,7 @@ public class ConnectionTests
                         Name = "nkafka-consumer",
                         Metadata = new ConsumerProtocolSubscription
                             {
-                                Topics = ["test"],
+                                Topics = ["test_p12_m1M_s4B"],
                                 UserData = null, // ???
                                 OwnedPartitions = null, // ???
                                 GenerationId = -1, // ???
@@ -241,9 +241,9 @@ public class ConnectionTests
             AssignedPartitions = new Dictionary<string, TopicPartition>
             {
                 {
-                    "test", new TopicPartition
+                    "test_p12_m1M_s4B", new TopicPartition
                     {
-                        Topic = "test",
+                        Topic = "test_p12_m1M_s4B",
                         Partitions = Enumerable.Range(0, 12).ToArray(),
                     }
                 }
@@ -316,7 +316,7 @@ public class ConnectionTests
                         Name = "nkafka-consumer",
                         Metadata = new ConsumerProtocolSubscription
                             {
-                                Topics = ["test"],
+                                Topics = ["test_p12_m1M_s4B"],
                                 UserData = null, // ???
                                 OwnedPartitions = null, // ???
                                 GenerationId = -1, // ???
@@ -364,7 +364,7 @@ public class ConnectionTests
     public async Task SendAsync_FetchRequest_ShouldReturnExpectedResult(short apiVersion)
     {
         var metadata = await RequestMetadata();
-        var topicMetadata = metadata.Topics!["test"];
+        var topicMetadata = metadata.Topics!["test_p12_m1M_s4B"];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
         foreach (var group in partitions)
@@ -443,7 +443,7 @@ public class ConnectionTests
     public async Task SendAsync_FetchRequest_ShouldFetchAllRecords(short apiVersion)
     {
         var metadata = await RequestMetadata();
-        var topicMetadata = metadata.Topics!["test"];
+        var topicMetadata = metadata.Topics!["test_p12_m1M_s4B"];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
         var recordCount = 0;
@@ -474,7 +474,7 @@ public class ConnectionTests
                         [
                             new FetchTopic
                             {
-                                Topic = "test",
+                                Topic = "test_p12_m1M_s4B",
                                 TopicId = topicMetadata.TopicId,
                                 Partitions =
                                 [
@@ -556,7 +556,7 @@ public class ConnectionTests
             Topics = [
                 new MetadataRequestTopic
                 {
-                    Name = "test",
+                    Name = "test_p12_m1M_s4B",
                     TopicId = Guid.Empty,
                 }
             ],

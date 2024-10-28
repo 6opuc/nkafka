@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\nKafka.Client\nKafka.Client.csproj" />
+      <ProjectReference Include="..\nKafka.Client.Benchmarks\nKafka.Client.Benchmarks.csproj" />
     </ItemGroup>
 
 </Project>
