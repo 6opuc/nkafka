@@ -41,15 +41,18 @@ public class TopicInitializer
             Debug = "protocol",
         };
 
-        using var producer = new ProducerBuilder<Null, byte[]>(config).Build();
+        using var producer = new ProducerBuilder<Null, string>(config).Build();
 
         var random = new Random();
         var messages = Enumerable.Range(1, scenario.MessageCount)
             .Select(_ =>
             {
-                var value = new byte[scenario.MessageSize];
-                random.NextBytes(value);
-                return new Message<Null, byte[]>
+                var value = string.Join(
+                    "",
+                    Enumerable
+                        .Repeat(0, scenario.MessageSize)
+                        .Select(n => (char)random.Next(32,127)));;
+                return new Message<Null, string>
                 {
                     Value = value,
                 };
