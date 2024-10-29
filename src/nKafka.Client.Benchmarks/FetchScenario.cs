@@ -13,7 +13,7 @@ public class FetchScenario
         return $"{PartitionCount}p {CountToString(MessageCount)}x{BytesToString(MessageSize)}";
     }
     
-    static String BytesToString(int byteCount)
+    static string BytesToString(int byteCount)
     {
         string[] suf = { "B", "KB", "MB", "GB" };
         if (byteCount == 0)
@@ -24,11 +24,14 @@ public class FetchScenario
         return (Math.Sign(byteCount) * num) + suf[place];
     }
     
-    static String CountToString(int count)
+    static string CountToString(int count)
     {
         string[] suf = { "K", "M", "G" };
-        if (count == 0)
-            return "0";
+        if (count < 1000)
+        {
+            return count.ToString();
+        }
+
         long bytes = Math.Abs(count);
         int place = Convert.ToInt32(Math.Floor(Math.Log(bytes, 1000)));
         double num = Math.Round(bytes / Math.Pow(1000, place), 1);

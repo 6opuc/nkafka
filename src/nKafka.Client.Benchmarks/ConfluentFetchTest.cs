@@ -13,7 +13,7 @@ public class ConfluentFetchTest
             AutoOffsetReset = AutoOffsetReset.Earliest
         };
 
-        using var consumer = new ConsumerBuilder<Ignore, byte[]>(config).Build();
+        using var consumer = new ConsumerBuilder<Null, byte[]>(config).Build();
         consumer.Subscribe(scenario.TopicName);
 
         var counter = 0;

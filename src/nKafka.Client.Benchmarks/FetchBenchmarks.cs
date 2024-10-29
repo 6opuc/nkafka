@@ -13,7 +13,8 @@ public class FetchBenchmarks
         new FetchScenario { PartitionCount = 12, MessageCount = 1_000_000, MessageSize = 4 },
         new FetchScenario { PartitionCount = 12, MessageCount = 10_000, MessageSize = 4 * 1024 },
         new FetchScenario { PartitionCount = 12, MessageCount = 1_000, MessageSize = 40 * 1024 },
-        new FetchScenario { PartitionCount = 12, MessageCount = 1_000, MessageSize = 400 * 1024 },
+        new FetchScenario { PartitionCount = 12, MessageCount = 400, MessageSize = 100 * 1024 },
+        //new FetchScenario { PartitionCount = 12, MessageCount = 1_000, MessageSize = 400 * 1024 },
     };
 
 
