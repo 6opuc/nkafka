@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.IO.Pipelines;
 using System.Net;
@@ -5,8 +6,6 @@ using System.Net.Sockets;
 using System.Threading.Tasks.Dataflow;
 using Microsoft.Extensions.Logging;
 using nKafka.Contracts;
-using nKafka.Contracts.MessageDefinitions;
-using nKafka.Contracts.MessageSerializers;
 
 namespace nKafka.Client;
 
@@ -30,6 +29,8 @@ public class Connection : IConnection
     private BufferBlock<PendingRequest> _requestQueue = new();
     private Task _sendBackgroundTask = default!;
     private ConcurrentQueue<PendingRequest> _pendingRequests = new();
+    
+    private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
     public Connection(ILogger<Connection> logger)
     {
@@ -93,39 +94,51 @@ public class Connection : IConnection
                     {
                         var payloadSize = await _pipe.Reader.ReadIntAsync(cancellationToken);
                         _logger.LogDebug("Received response ({@payloadSize} bytes).", payloadSize);
-                        
-                        var payload = await _pipe.Reader.ReadAsync(payloadSize, cancellationToken);
-                        _logger.LogDebug("Read response payload ({@payloadSize} bytes).", payloadSize);
 
-                        if (!_pendingRequests.TryDequeue(out var pendingRequest))
-                        {
-                            _logger.LogError("Received unexpected response: no pending requests.");
-                            continue;
-                        }
-                        
-                        _logger.LogDebug(
-                            "Deserializing response for request {@correlationId}.",
-                            pendingRequest.RequestClient.CorrelationId);
-
+                        var payload = _arrayPool.Rent(payloadSize);
                         try
                         {
-                            using var input = new MemoryStream(payload, 0, payload.Length, false, true);
-                            var response = pendingRequest.RequestClient.DeserializeResponse(input);
-                            if (input.Length != input.Position)
+                            var read = await _pipe.Reader.ReadAsync(payload, payloadSize, cancellationToken);
+                            if (read != payloadSize)
                             {
-                                _logger.LogError(
-                                    "Received unexpected response length. Expected {@expectedLength}, but got {@actualLength}",
-                                    input.Position,
-                                    input.Length);
+                                throw new EndOfStreamException("Received unexpected end of stream.");
+                            }
+                            _logger.LogDebug("Read response payload ({@payloadSize} bytes).", payloadSize);
+
+                            if (!_pendingRequests.TryDequeue(out var pendingRequest))
+                            {
+                                _logger.LogError("Received unexpected response: no pending requests.");
+                                continue;
                             }
 
-                            pendingRequest.Response.SetResult(response);
+                            _logger.LogDebug(
+                                "Deserializing response for request {@correlationId}.",
+                                pendingRequest.RequestClient.CorrelationId);
+
+                            try
+                            {
+                                using var input = new MemoryStream(payload, 0, payloadSize, false, true);
+                                var response = pendingRequest.RequestClient.DeserializeResponse(input);
+                                if (input.Length != input.Position)
+                                {
+                                    _logger.LogError(
+                                        "Received unexpected response length. Expected {@expectedLength}, but got {@actualLength}",
+                                        input.Position,
+                                        input.Length);
+                                }
+
+                                pendingRequest.Response.SetResult(response);
+                            }
+                            catch (Exception exception)
+                            {
+                                pendingRequest.Response.SetException(exception);
+                            }
                         }
-                        catch (Exception exception)
+                        finally
                         {
-                            pendingRequest.Response.SetException(exception);
+                            _arrayPool.Return(payload);
                         }
-                        
+
                     }
                     catch (OperationCanceledException)
                     {

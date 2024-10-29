@@ -9,27 +9,32 @@ public static class PipeReaderExtensions
         this PipeReader reader,
         CancellationToken cancellationToken = default)
     {
-        var bytes = await reader.ReadAsync(4, cancellationToken);
+        #warning stackalloc if possible
+        var buffer = new byte[4];
+        var read = await reader.ReadAsync(buffer, 4, cancellationToken);
+        if (read != buffer.Length)
+        {
+            throw new EndOfStreamException();
+        }
         if (BitConverter.IsLittleEndian)
         {
-            Array.Reverse(bytes);
+            Array.Reverse(buffer);
         }
-        return BitConverter.ToInt32(bytes);
+        return BitConverter.ToInt32(buffer);
     }
     
-    public static async ValueTask<byte[]> ReadAsync(
+    public static async ValueTask<int> ReadAsync(
         this PipeReader reader,
+        byte[] output,
         int length,
         CancellationToken cancellationToken = default)
     {
         if (length <= 0)
         {
-            return Array.Empty<byte>();
+            return 0;
         }
 
-        #warning consider buffer pool
-        var bytes = new byte[length];
-        var writtenCount = 0;
+        var readCount = 0;
 
         ReadResult result;
         do
@@ -37,27 +42,17 @@ public static class PipeReaderExtensions
             result = await reader.ReadAsync(cancellationToken)
                 .ConfigureAwait(false);
             var buffer = result.Buffer.Slice(
-                0, Math.Min(length - writtenCount, result.Buffer.Length));
-            buffer.CopyTo(bytes.AsSpan()[writtenCount..]);
-            writtenCount += (int)buffer.Length;
+                0, Math.Min(length - readCount, result.Buffer.Length));
+            buffer.CopyTo(output.AsSpan()[readCount..]);
+            readCount += (int)buffer.Length;
             reader.AdvanceTo(buffer.GetPosition(buffer.Length));
 
-            if (writtenCount == length)
+            if (readCount == length)
             {
-                return bytes;
+                return readCount;
             }
         } while (!result.IsCanceled && !result.IsCompleted);
 
-        if (writtenCount == 0)
-        {
-            reader.Complete();
-            throw new OperationCanceledException(cancellationToken);
-        }
-
-        var exception = new OperationCanceledException(
-            $"Expected {length} bytes, got {writtenCount}",
-            cancellationToken);
-        reader.Complete(exception);
-        throw exception;
+        return readCount;
     }
 }
