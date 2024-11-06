@@ -5,6 +5,8 @@
 
 // The original code has been stripped of all non used parts and adapted to our use.
 
+using System.Runtime.Intrinsics.X86;
+
 namespace nKafka.Contracts
 {
     /// <summary>
@@ -51,26 +53,60 @@ namespace nKafka.Contracts
         public static uint ComputeCastagnoli(MemoryStream stream, long start, long size) =>
             CastagnoliCrc32.ComputeForStream(stream, start, size);
 
-        private Crc32(uint polynomial, uint seed)
+        private readonly bool _x64Available;
+        
+        private readonly bool _sse42Available;
+        
+        private Crc32(uint polynomial, uint seed, bool tryUseHardwareCrc = false)
         {
             _polynomial = polynomial;
             _seed = seed;
             _table = InitializeTable();
+            _sse42Available = Sse42.IsSupported;
+            _x64Available =  Sse42.X64.IsSupported;
         }
 
         static Crc32()
         {
             DefaultCrc32 = new Crc32(DefaultPolynomial, DefaultSeed);
-            CastagnoliCrc32 = new Crc32(CastagnoliPolynomial, CastagnoliSeed);
+            CastagnoliCrc32 = new Crc32(CastagnoliPolynomial, CastagnoliSeed, true);
         }
 
         private uint ComputeForStream(MemoryStream stream, long start, long size)
         {
             var crc = _seed;
-
             var buffer = stream.GetBuffer();
-            for (var i = start; i < start + size; ++i)
-                crc = (crc >> 8) ^ _table[buffer[i] ^ crc & 0xff];
+            
+            if (_sse42Available)
+            {
+                if (_x64Available)
+                {
+                    while (size >= 8)
+                    {
+                        crc = (uint)Sse42.X64.Crc32(crc, BitConverter.ToUInt64(buffer, (int)start));
+                        start += 8;
+                        size -= 8;
+                    }
+                }
+                
+                while (size >= 4)
+                {
+                    crc = Sse42.Crc32(crc, BitConverter.ToUInt32(buffer, (int)start));
+                    start += 4;
+                    size -= 4;
+                }
+                while (size > 0)
+                {
+                    crc = Sse42.Crc32(crc, buffer[start]);
+                    start++;
+                    size--;
+                }
+            }
+            else
+            {
+                for (var i = start; i < start + size; ++i)
+                    crc = (crc >> 8) ^ _table[buffer[i] ^ crc & 0xff];
+            }
 
             return ~crc;
         }
