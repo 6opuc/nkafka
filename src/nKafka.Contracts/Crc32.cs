@@ -7,6 +7,9 @@
 
 using System.Runtime.Intrinsics.X86;
 
+#warning rewrite: 3 versions of Crc32
+#warning try avx + vector 512
+
 namespace nKafka.Contracts
 {
     /// <summary>
@@ -95,6 +98,7 @@ namespace nKafka.Contracts
                     start += 4;
                     size -= 4;
                 }
+                
                 while (size > 0)
                 {
                     crc = Sse42.Crc32(crc, buffer[start]);
