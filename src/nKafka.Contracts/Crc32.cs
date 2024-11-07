@@ -65,8 +65,11 @@ namespace nKafka.Contracts
             _polynomial = polynomial;
             _seed = seed;
             _table = InitializeTable();
-            _sse42Available = Sse42.IsSupported;
-            _x64Available =  Sse42.X64.IsSupported;
+            if (tryUseHardwareCrc)
+            {
+                _sse42Available = Sse42.IsSupported;
+                _x64Available = Sse42.X64.IsSupported;
+            }
         }
 
         static Crc32()
