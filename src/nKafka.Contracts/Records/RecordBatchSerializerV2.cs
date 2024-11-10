@@ -55,7 +55,7 @@ public static class RecordBatchSerializerV2
                 }
             }
         }
-        Crc32.CheckCrcCastagnoli(recordBatch.Crc, input, crcStart);
+        ChecksumValidator.ValidateCrc32c(recordBatch.Crc, input, crcStart);
 
         var actualBatchLength = input.Position - recordBatchStart;
         if (actualBatchLength != recordBatch.BatchLength)

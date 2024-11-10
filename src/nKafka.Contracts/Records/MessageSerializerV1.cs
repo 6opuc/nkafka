@@ -57,7 +57,7 @@ public static class MessageSerializerV1
         {
             input.Read(message.Value!, 0, valueLength);
         }
-        Crc32.CheckCrc(message.Crc, input, crcStart);
+        ChecksumValidator.ValidateCrc32(message.Crc, input, crcStart);
         
         var actualMessageSize = input.Position - messageStart;
         if (actualMessageSize != message.MessageSize)

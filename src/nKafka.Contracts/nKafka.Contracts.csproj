@@ -11,6 +11,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="System.IO.Hashing" Version="8.0.0" />
         <ProjectReference Include="..\nKafka.Contracts.Generator\nKafka.Contracts.Generator.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer"/>
         <PackageReference Include="Microsoft.Net.Compilers.Toolset" Version="4.11.0"/>
     </ItemGroup>
