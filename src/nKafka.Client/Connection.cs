@@ -136,6 +136,7 @@ public class Connection : IConnection
                         }
                         finally
                         {
+                            #warning consider use of IDisposable in all responses: keep a reference to payload and do not copy byte arrays during deserialization.
                             _arrayPool.Return(payload);
                         }
 
