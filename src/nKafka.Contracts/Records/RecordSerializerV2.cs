@@ -29,31 +29,31 @@ public class RecordSerializerV2
         record.Key = keyLength == -1
             ? null
             : keyLength == 0
-                ? Array.Empty<byte>()
-                : new byte[keyLength];
+                ? Memory<byte>.Empty
+                : input.GetBuffer().AsMemory((int)input.Position, keyLength);
         if (keyLength > 0)
         {
-            input.Read(record.Key!, 0, keyLength);
+            input.Position += keyLength;
         }
         var valueLength = PrimitiveSerializer.DeserializeVarInt(input);
         record.Value = valueLength == -1
             ? null
             : valueLength == 0
-                ? Array.Empty<byte>()
-                : new byte[valueLength];
+                ? Memory<byte>.Empty
+                : input.GetBuffer().AsMemory((int)input.Position, valueLength);
         if (valueLength > 0)
         {
-            input.Read(record.Value!, 0, valueLength);
+            input.Position += valueLength;
         }
 
         var headerCount = PrimitiveSerializer.DeserializeVarInt(input);
         if (headerCount == 0)
         {
-            record.Headers = ReadOnlyDictionary<string, byte[]>.Empty;
+            record.Headers = ReadOnlyDictionary<string, Memory<byte>?>.Empty;
         }
         else if (headerCount >= 0)
         {
-            var headers = new Dictionary<string, byte[]>(headerCount);
+            var headers = new Dictionary<string, Memory<byte>?>(headerCount);
             for (var i = 0; i < headerCount; i++)
             {
                 var headerKey = PrimitiveSerializer.DeserializeVarString(input);
@@ -61,11 +61,11 @@ public class RecordSerializerV2
                 var headerValue = headerValueLength == -1
                     ? null
                     : headerValueLength == 0
-                        ? Array.Empty<byte>()
-                        : new byte[headerValueLength];
+                        ? Memory<byte>.Empty
+                        : input.GetBuffer().AsMemory((int)input.Position, headerValueLength);
                 if (headerValueLength > 0)
                 {
-                    input.Read(headerValue!, 0, headerValueLength);
+                    input.Position += headerValueLength;
                 }
 
                 headers[headerKey!] = headerValue!;

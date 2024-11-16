@@ -11,10 +11,10 @@ public class FetchBenchmarks
     public IEnumerable<FetchScenario> Scenarios => new[]
     {
         //new FetchScenario { PartitionCount = 12, MessageCount = 1_000_000, MessageSize = 4 },
-        new FetchScenario { PartitionCount = 12, MessageCount = 10_000, MessageSize = 4 * 1024 },
-        new FetchScenario { PartitionCount = 12, MessageCount = 1_000, MessageSize = 40 * 1024 },
-        new FetchScenario { PartitionCount = 12, MessageCount = 400, MessageSize = 100 * 1024 },
-        new FetchScenario { PartitionCount = 12, MessageCount = 4000, MessageSize = 10 * 1024 },
+        //new FetchScenario { PartitionCount = 12, MessageCount = 100_000, MessageSize = 4 * 1024 },
+        new FetchScenario { PartitionCount = 12, MessageCount = 10_000, MessageSize = 40 * 1024 },
+        //new FetchScenario { PartitionCount = 12, MessageCount = 4_000, MessageSize = 100 * 1024 },
+        //new FetchScenario { PartitionCount = 12, MessageCount = 40_000, MessageSize = 10 * 1024 },
         //new FetchScenario { PartitionCount = 12, MessageCount = 1_000, MessageSize = 400 * 1024 },
     };
 
