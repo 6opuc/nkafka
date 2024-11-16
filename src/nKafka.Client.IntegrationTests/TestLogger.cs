@@ -2,27 +2,18 @@ using Microsoft.Extensions.Logging;
 
 namespace nKafka.Client.IntegrationTests;
 
-public static class TestLogger
+public class TestLogger : ILogger, IDisposable
 {
-    public static ILogger<T> Create<T>()
+    private readonly Action<string> _output = TestContext.Progress.WriteLine;
+
+    public void Dispose()
     {
-        var logger = new NUnitLogger<T>();
-        return logger;
     }
 
-    class NUnitLogger<T> : ILogger<T>, IDisposable
-    {
-        private readonly Action<string> _output = TestContext.Progress.WriteLine;
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+        Func<TState, Exception?, string> formatter) => _output(formatter(state, exception));
 
-        public void Dispose()
-        {
-        }
+    public bool IsEnabled(LogLevel logLevel) => true;
 
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter) => _output(formatter(state, exception));
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public IDisposable BeginScope<TState>(TState state) where TState : notnull => this;
-    }
+    public IDisposable BeginScope<TState>(TState state) where TState : notnull => this;
 }

@@ -11,7 +11,7 @@ namespace nKafka.Client;
 
 public class Connection : IConnection
 {
-    private readonly ILogger<Connection> _logger;
+    private readonly ILogger _logger;
     private Socket? _socket;
     private ConnectionConfig? _config;
     
@@ -29,11 +29,11 @@ public class Connection : IConnection
     private Task _sendBackgroundTask = default!;
     private ConcurrentQueue<PendingRequest> _pendingRequests = new();
     
-    private ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+    private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
-    public Connection(ILogger<Connection> logger)
+    public Connection(ILoggerFactory loggerFactory)
     {
-        _logger = logger;
+        _logger = loggerFactory.CreateLogger<Connection>();
     }
     
     public async ValueTask OpenAsync(ConnectionConfig config, CancellationToken cancellationToken)
