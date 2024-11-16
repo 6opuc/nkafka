@@ -24,7 +24,6 @@ public class Connection : IConnection
 
     private Task _receiveBackgroundTask = default!;
     private Task _processResponseBackgroundTask = default!;
-    private const int MinimumBufferSize = 512 * 1024; // TODO: config
 
     private BufferBlock<PendingRequest> _requestQueue = new();
     private Task _sendBackgroundTask = default!;
@@ -169,7 +168,7 @@ public class Connection : IConnection
                     FlushResult result;
                     do
                     {
-                        var memory = writer.GetMemory(MinimumBufferSize);
+                        var memory = writer.GetMemory(_config.BufferSize);
                         var bytesRead = await _socket.ReceiveAsync(
                             memory,
                             SocketFlags.None,
