@@ -28,9 +28,9 @@ public class ConnectionTests
     private async Task<Connection> OpenConnection()
     {
         var config = new ConnectionConfig("kafka-1", 9192);
-        var connection = new Connection(TestLoggerFactory.Instance);
+        var connection = new Connection(config, TestLoggerFactory.Instance);
         
-        await connection.OpenAsync(config, CancellationToken.None);
+        await connection.OpenAsync(CancellationToken.None);
 
         return connection;
     }
@@ -417,8 +417,8 @@ public class ConnectionTests
         {
             var broker = metadata.Brokers![group.Key];
             var config = new ConnectionConfig(broker.Host!, broker.Port!.Value);
-            await using var connection = new Connection(TestLoggerFactory.Instance);
-            await connection.OpenAsync(config, CancellationToken.None);
+            await using var connection = new Connection(config, TestLoggerFactory.Instance);
+            await connection.OpenAsync(CancellationToken.None);
 
             foreach (var partition in group)
             {
@@ -497,8 +497,8 @@ public class ConnectionTests
         {
             var broker = metadata.Brokers![group.Key];
             var config = new ConnectionConfig(broker.Host!, broker.Port!.Value);
-            await using var connection = new Connection(NullLoggerFactory.Instance);
-            await connection.OpenAsync(config, CancellationToken.None);
+            await using var connection = new Connection(config, NullLoggerFactory.Instance);
+            await connection.OpenAsync(CancellationToken.None);
 
             foreach (var partition in group)
             {
@@ -566,8 +566,8 @@ public class ConnectionTests
     private async Task<Connection> OpenCoordinatorConnection(string groupId)
     {
         var config = new ConnectionConfig("kafka-1", 9192);
-        await using var connection = new Connection(TestLoggerFactory.Instance);
-        await connection.OpenAsync(config, CancellationToken.None);
+        await using var connection = new Connection(config, TestLoggerFactory.Instance);
+        await connection.OpenAsync(CancellationToken.None);
 
         var requestClient = new FindCoordinatorRequestClient(4, new FindCoordinatorRequest
         {
@@ -588,8 +588,8 @@ public class ConnectionTests
         }
 
         var coordinatorConfig = new ConnectionConfig(coordinator.Host!, coordinator.Port!.Value);
-        var coordinatorConnection = new Connection(TestLoggerFactory.Instance);
-        await coordinatorConnection.OpenAsync(coordinatorConfig, CancellationToken.None);
+        var coordinatorConnection = new Connection(coordinatorConfig, TestLoggerFactory.Instance);
+        await coordinatorConnection.OpenAsync(CancellationToken.None);
 
         return coordinatorConnection;
     }

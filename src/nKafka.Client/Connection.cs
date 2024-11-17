@@ -13,7 +13,7 @@ public class Connection : IConnection
 {
     private readonly ILogger _logger;
     private Socket? _socket;
-    private ConnectionConfig? _config;
+    private readonly ConnectionConfig _config;
     
     private SocketWriterStream? _writerStream;
     private CancellationTokenSource? _signalNoMoreDataToWrite;
@@ -31,16 +31,16 @@ public class Connection : IConnection
     
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
-    public Connection(ILoggerFactory loggerFactory)
+    public Connection(ConnectionConfig config, ILoggerFactory loggerFactory)
     {
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        _config = config;
         _logger = loggerFactory.CreateLogger<Connection>();
     }
     
-    public async ValueTask OpenAsync(ConnectionConfig config, CancellationToken cancellationToken)
+    public async ValueTask OpenAsync(CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(config);
-        _config = config;
-        
         await OpenSocketAsync(cancellationToken);
         
         StartProcessing();
@@ -233,7 +233,7 @@ public class Connection : IConnection
                         return;
                     }
 
-                    var payload = _arrayPool.Rent(_config!.RequestBufferSize);
+                    var payload = _arrayPool.Rent(_config.RequestBufferSize);
                     try
                     {
                         _logger.LogDebug("Processing request {@correlationId}", request.RequestClient.CorrelationId);

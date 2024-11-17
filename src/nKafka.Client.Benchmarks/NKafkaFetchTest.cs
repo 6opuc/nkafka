@@ -19,8 +19,8 @@ public static class NKafkaFetchTest
         {
             var broker = metadata.Brokers![group.Key];
             var config = new ConnectionConfig(broker.Host!, broker.Port!.Value);
-            await using var connection = new Connection(NullLoggerFactory.Instance);
-            await connection.OpenAsync(config, CancellationToken.None);
+            await using var connection = new Connection(config, NullLoggerFactory.Instance);
+            await connection.OpenAsync(CancellationToken.None);
 
             foreach (var partition in group)
             {
@@ -89,9 +89,9 @@ public static class NKafkaFetchTest
     private static async Task<MetadataResponse> RequestMetadata(FetchScenario scenario)
     {
         var config = new ConnectionConfig("kafka-1", 9192);
-        var connection = new Connection(NullLoggerFactory.Instance);
+        var connection = new Connection(config, NullLoggerFactory.Instance);
 
-        await connection.OpenAsync(config, CancellationToken.None);
+        await connection.OpenAsync(CancellationToken.None);
 
         var requestClient = new MetadataRequestClient(12, new MetadataRequest
         {
