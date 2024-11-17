@@ -26,7 +26,12 @@ public static class PrimitiveSerializer
 
         SerializeShort(output, (short)length);
 
-        output.SetLength(output.Length + length);
+        var diff = output.Length - output.Position - length;
+        if (diff < 0)
+        {
+            output.SetLength(output.Length - diff);
+        }
+
         Encoding.UTF8.GetBytes(value, 0, value.Length, output.GetBuffer(), (int)output.Position);
         output.Position += length;
     }
@@ -66,7 +71,11 @@ public static class PrimitiveSerializer
             return;
         }
 
-        output.SetLength(output.Length + length);
+        var diff = output.Length - output.Position - length;
+        if (diff < 0)
+        {
+            output.SetLength(output.Length - diff);
+        }
         Encoding.UTF8.GetBytes(value, 0, value.Length, output.GetBuffer(), (int)output.Position);
         output.Position += length;
     }

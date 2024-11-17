@@ -168,7 +168,7 @@ public class Connection : IConnection
                     FlushResult result;
                     do
                     {
-                        var memory = writer.GetMemory(_config.BufferSize);
+                        var memory = writer.GetMemory(_config.ResponseBufferSize);
                         var bytesRead = await _socket.ReceiveAsync(
                             memory,
                             SocketFlags.None,
@@ -233,14 +233,14 @@ public class Connection : IConnection
                         return;
                     }
 
+                    var payload = _arrayPool.Rent(_config!.RequestBufferSize);
                     try
                     {
                         _logger.LogDebug("Processing request {@correlationId}", request.RequestClient.CorrelationId);
                         _pendingRequests.Enqueue(request);
 
                         _logger.LogDebug("Building request {@correlationId}", request.RequestClient.CorrelationId);
-#warning buffer pool
-                        using var output = new MemoryStream();
+                        using var output = new MemoryStream(payload, 0, payload.Length, true, true);
                         request.RequestClient.SerializeRequest(output);
 
                         _logger.LogDebug(
@@ -254,6 +254,10 @@ public class Connection : IConnection
                     catch (Exception exception)
                     {
                         request.Response.SetException(exception);
+                    }
+                    finally
+                    {
+                        _arrayPool.Return(payload);
                     }
                 }
             });

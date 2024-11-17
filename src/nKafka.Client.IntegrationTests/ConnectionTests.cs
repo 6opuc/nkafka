@@ -267,7 +267,6 @@ public class ConnectionTests
 
         response.Should().NotBeNull();
         response.ErrorCode.Should().Be(0);
-#warning check response
     }
     
     
