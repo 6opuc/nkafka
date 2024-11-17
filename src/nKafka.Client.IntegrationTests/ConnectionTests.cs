@@ -53,7 +53,22 @@ public class ConnectionTests
 
         response.Should().NotBeNull();
         response.ErrorCode.Should().Be(0);
-        #warning check response
+        foreach (var apiKey in Enum.GetValues<ApiKey>())
+        {
+            if (apiKey is ApiKey.LeaderAndIsr or ApiKey.StopReplica or ApiKey.UpdateMetadata or ApiKey.ControlledShutdown)
+            {
+                continue;
+            }
+            response.ApiKeys!.Should().ContainKey((short)apiKey, $"api key {apiKey} not found");
+        }
+
+        response.ApiKeys.Should().AllSatisfy(x =>
+        {
+            x.Value.ApiKey.Should().NotBeNull();
+            x.Value.ApiKey.Should().Be(x.Key);
+            x.Value.MinVersion.Should().NotBeNull();
+            x.Value.MaxVersion.Should().NotBeNull();
+        });
     }
     
     [Test]
