@@ -75,6 +75,26 @@ public readonly struct VersionRange : IEnumerable<short>
         return true;
     }
 
+    public VersionRange Intersect(VersionRange other)
+    {
+        if (IsNone)
+        {
+            return None;
+        }
+
+        if (other.IsNone)
+        {
+            return None;
+        }
+        
+        var from = Math.Max(From ?? 0, other.From ?? 0);
+        var to = (To ?? short.MaxValue) > (other.To ?? short.MaxValue)
+            ? other.To
+            : To;
+
+        return new VersionRange(from, to);
+    }
+
     IEnumerator IEnumerable.GetEnumerator()
     {
         return GetEnumerator();

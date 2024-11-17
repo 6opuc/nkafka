@@ -6,11 +6,11 @@ public class ConfluentFetchTest
 {
     public static Task Test(FetchScenario scenario)
     {
-        var config = new ConsumerConfig
+        var config = new Confluent.Kafka.ConsumerConfig
         {
             BootstrapServers = "PLAINTEXT://kafka-1:9192, PLAINTEXT://kafka-2:9292, PLAINTEXT://kafka-3:9392",
             GroupId = Guid.NewGuid().ToString(),
-            AutoOffsetReset = AutoOffsetReset.Earliest
+            AutoOffsetReset = AutoOffsetReset.Earliest,
         };
 
         using var consumer = new ConsumerBuilder<Null, byte[]>(config).Build();

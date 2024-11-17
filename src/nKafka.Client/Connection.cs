@@ -287,6 +287,11 @@ public class Connection : IConnection
             return;
         }
         
+        _logger.LogInformation(
+            "Closing socket connection to broker at {@host}:{@port}.",
+            _config.Host,
+            _config.Port);
+        
         _requestQueue.Complete();
         await _requestQueue.Completion;
         await _sendBackgroundTask;

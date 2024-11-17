@@ -27,7 +27,7 @@ public class ConnectionTests
 
     private async Task<Connection> OpenConnection()
     {
-        var config = new ConnectionConfig("kafka-1", 9192);
+        var config = new ConnectionConfig("PLAINTEXT", "kafka-1", 9192);
         var connection = new Connection(config, TestLoggerFactory.Instance);
         
         await connection.OpenAsync(CancellationToken.None);
@@ -97,6 +97,7 @@ public class ConnectionTests
             response.Coordinators.Should().BeNull();
             response.Host.Should().NotBeNullOrEmpty();
             response.Port.Should().NotBeNull();
+            response.NodeId.Should().NotBeNull();
         }
         else
         {
@@ -107,6 +108,7 @@ public class ConnectionTests
                 x.Key.Should().BeEquivalentTo(consumerGroupId);
                 x.Host.Should().NotBeNullOrEmpty();
                 x.Port.Should().NotBeNull();
+                x.NodeId.Should().NotBeNull();
             });
         }
     }
@@ -416,7 +418,7 @@ public class ConnectionTests
         foreach (var group in partitions)
         {
             var broker = metadata.Brokers![group.Key];
-            var config = new ConnectionConfig(broker.Host!, broker.Port!.Value);
+            var config = new ConnectionConfig("PLAINTEXT", broker.Host!, broker.Port!.Value);
             await using var connection = new Connection(config, TestLoggerFactory.Instance);
             await connection.OpenAsync(CancellationToken.None);
 
@@ -496,7 +498,7 @@ public class ConnectionTests
         foreach (var group in partitions)
         {
             var broker = metadata.Brokers![group.Key];
-            var config = new ConnectionConfig(broker.Host!, broker.Port!.Value);
+            var config = new ConnectionConfig("PLAINTEXT", broker.Host!, broker.Port!.Value);
             await using var connection = new Connection(config, NullLoggerFactory.Instance);
             await connection.OpenAsync(CancellationToken.None);
 
@@ -565,7 +567,7 @@ public class ConnectionTests
     
     private async Task<Connection> OpenCoordinatorConnection(string groupId)
     {
-        var config = new ConnectionConfig("kafka-1", 9192);
+        var config = new ConnectionConfig("PLAINTEXT", "kafka-1", 9192);
         await using var connection = new Connection(config, TestLoggerFactory.Instance);
         await connection.OpenAsync(CancellationToken.None);
 
@@ -587,7 +589,7 @@ public class ConnectionTests
             throw new Exception($"Non-zero error code in response from find coordinator request: {coordinator.ErrorCode}.");
         }
 
-        var coordinatorConfig = new ConnectionConfig(coordinator.Host!, coordinator.Port!.Value);
+        var coordinatorConfig = new ConnectionConfig("PLAINTEXT", coordinator.Host!, coordinator.Port!.Value);
         var coordinatorConnection = new Connection(coordinatorConfig, TestLoggerFactory.Instance);
         await coordinatorConnection.OpenAsync(CancellationToken.None);
 

@@ -143,7 +143,8 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                           
                           public class {{pair.Request.Name}}Client : RequestClient<{{pair.Response!.Name}}>
                           {
-                              public VersionRange ValidVersions { get; } = {{pair.Request.ValidVersions.ToLiteral()}};
+                              public static VersionRange ValidVersions { get; } = {{pair.Request.ValidVersions.ToLiteral()}};
+                              public static ApiKey Api => ApiKey.{{Enum.GetName(typeof(ApiKey), pair.Request.ApiKey!)}};
                               
                               protected override ApiKey ApiKey => ApiKey.{{Enum.GetName(typeof(ApiKey), pair.Request.ApiKey!)}};
                               protected override VersionRange FlexibleVersions { get; } = {{pair.Request.FlexibleVersions.ToLiteral()}};
