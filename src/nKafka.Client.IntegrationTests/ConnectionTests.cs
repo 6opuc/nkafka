@@ -91,18 +91,24 @@ public class ConnectionTests
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
-        if (response.Coordinators == null)
+        if (apiVersion < 4)
         {
             response.ErrorCode.Should().Be(0);
+            response.Coordinators.Should().BeNull();
+            response.Host.Should().NotBeNullOrEmpty();
+            response.Port.Should().NotBeNull();
         }
         else
         {
-
             response.ErrorCode.Should().BeNull();
             response.Coordinators.Should().AllSatisfy(x =>
-                x.ErrorCode.Should().Be(0));
+            {
+                x.ErrorCode.Should().Be(0);
+                x.Key.Should().BeEquivalentTo(consumerGroupId);
+                x.Host.Should().NotBeNullOrEmpty();
+                x.Port.Should().NotBeNull();
+            });
         }
-        #warning check response
     }
     
     [Test]
