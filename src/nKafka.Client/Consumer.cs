@@ -292,10 +292,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             GroupId = _config.GroupId,
             SessionTimeoutMs = _config.SessionTimeoutMs,
-            #warning RebalanceTimeoutMs in config
-            RebalanceTimeoutMs = 600_000, // ???
-            MemberId = string.Empty, // ???
-            GroupInstanceId = Guid.NewGuid().ToString(),
+            RebalanceTimeoutMs = _config.MaxPollIntervalMs,
+            MemberId = string.Empty,
+            GroupInstanceId = _config.InstanceId,
             ProtocolType = "consumer",
             Protocols = new Dictionary<string, JoinGroupRequestProtocol>
             {
@@ -401,6 +400,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private void StartSendingHeartbeats()
     {
         //return;
+        #warning if no poll request for more than MaxPollIntervalMs, then leave the group
         
         if (_stop == null)
         {

@@ -21,6 +21,7 @@ var consumerConfig = new ConsumerConfig(
     "PLAINTEXT://kafka-1:9192, PLAINTEXT://kafka-2:9292, PLAINTEXT://kafka-3:9392",
     scenario.TopicName,
     "test-consumer-group",
+    $"testapp-{DateTime.UtcNow.Ticks}",
     "PLAINTEXT");
 using var loggerFactory = LoggerFactory.Create(loggingBuilder => loggingBuilder
     .SetMinimumLevel(LogLevel.Information)
