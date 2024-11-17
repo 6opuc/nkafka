@@ -113,27 +113,29 @@ public class Connection : IConnection
                                 continue;
                             }
 
-                            _logger.LogDebug(
-                                "Deserializing response for request {@correlationId}.",
-                                pendingRequest.RequestClient.CorrelationId);
-
-                            try
+                            using (BeginRequestLoggingScope(pendingRequest.RequestClient.CorrelationId))
                             {
-                                using var input = new MemoryStream(payload, 0, payloadSize, false, true);
-                                var response = pendingRequest.RequestClient.DeserializeResponse(input);
-                                if (input.Length != input.Position)
+                                _logger.LogDebug("Deserializing response.");
+
+                                try
                                 {
-                                    _logger.LogError(
-                                        "Received unexpected response length. Expected {@expectedLength}, but got {@actualLength}",
-                                        input.Position,
-                                        input.Length);
-                                }
+                                    using var input = new MemoryStream(payload, 0, payloadSize, false, true);
+                                    var response = pendingRequest.RequestClient.DeserializeResponse(input);
+                                    if (input.Length != input.Position)
+                                    {
+                                        _logger.LogError(
+                                            "Received unexpected response length. Expected {@expectedLength}, but got {@actualLength}.",
+                                            input.Position,
+                                            input.Length);
+                                    }
+                                    _logger.LogDebug("Deserialized.");
 
-                                pendingRequest.Response.SetResult(response);
-                            }
-                            catch (Exception exception)
-                            {
-                                pendingRequest.Response.SetException(exception);
+                                    pendingRequest.Response.SetResult(response);
+                                }
+                                catch (Exception exception)
+                                {
+                                    pendingRequest.Response.SetException(exception);
+                                }
                             }
                         }
                         finally
@@ -148,7 +150,7 @@ public class Connection : IConnection
                         break;
                     }
                 }
-                _logger.LogDebug("Response processing was stopped");
+                _logger.LogDebug("Response processing was stopped.");
             }, cancellationToken);
     }
 
@@ -182,7 +184,7 @@ public class Connection : IConnection
                             break;
                         }
 
-                        _logger.LogDebug("Received {bytesRead} bytes", bytesRead);
+                        _logger.LogDebug("Received {bytesRead} bytes.", bytesRead);
                         writer.Advance(bytesRead);
 
                         result = await writer
@@ -239,20 +241,20 @@ public class Connection : IConnection
                     var payload = _arrayPool.Rent(_config.RequestBufferSize);
                     try
                     {
-                        _logger.LogDebug("Processing request {@correlationId}", request.RequestClient.CorrelationId);
-                        _pendingRequests.Enqueue(request);
+                        using (BeginRequestLoggingScope(request.RequestClient.CorrelationId))
+                        {
+                            _logger.LogDebug("Processing.");
+                            _pendingRequests.Enqueue(request);
 
-                        _logger.LogDebug("Building request {@correlationId}", request.RequestClient.CorrelationId);
-                        using var output = new MemoryStream(payload, 0, payload.Length, true, true);
-                        request.RequestClient.SerializeRequest(output);
+                            _logger.LogDebug("Serializing.");
+                            using var output = new MemoryStream(payload, 0, payload.Length, true, true);
+                            request.RequestClient.SerializeRequest(output);
 
-                        _logger.LogDebug(
-                            "Sending request {@correlationId}({@size} bytes)",
-                            request.RequestClient.CorrelationId,
-                            output.Position);
+                            _logger.LogDebug("Sending {@size} bytes.", output.Position);
 #warning cancellation, timeouts, other exceptions
-                        await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position);
-                        _logger.LogDebug("Sent request {@correlationId}", request.RequestClient.CorrelationId);
+                            await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position);
+                            _logger.LogDebug("Sent.");
+                        }
                     }
                     catch (Exception exception)
                     {
@@ -270,18 +272,29 @@ public class Connection : IConnection
         RequestClient<TResponse> requestClient,
         CancellationToken cancellationToken)
     {
-        using var _ = BeginDefaultLoggingScope();
-        var completionPromise = new TaskCompletionSource<object>();
-        var pendingRequest = new PendingRequest(
-            requestClient,
-            completionPromise,
-            cancellationToken);
-        _logger.LogDebug("Queueing outgoing request {@correlationId}", pendingRequest.RequestClient.CorrelationId);
-        await _requestQueue.SendAsync(pendingRequest, cancellationToken);
-        _logger.LogDebug("Queued outgoing request {@correlationId}", pendingRequest.RequestClient.CorrelationId);
+        using (BeginDefaultLoggingScope())
+        {
+            var completionPromise = new TaskCompletionSource<object>();
+            var pendingRequest = new PendingRequest(
+                requestClient,
+                completionPromise,
+                cancellationToken);
+            using (BeginRequestLoggingScope(pendingRequest.RequestClient.CorrelationId))
+            {
+                _logger.LogDebug("Enqueueing {request}.", pendingRequest.RequestClient.GetType().Name);
+                await _requestQueue.SendAsync(pendingRequest, cancellationToken);
+                _logger.LogDebug("Enqueued.");
+            }
 
-        var response = await completionPromise.Task;
-        return (TResponse)response;
+            var response = await completionPromise.Task;
+            return (TResponse)response;
+        }
+    }
+    
+    
+    private IDisposable? BeginRequestLoggingScope(int correlationId)
+    {
+        return _logger.BeginScope($"request #{correlationId}");
     }
 
     public async ValueTask DisposeAsync()

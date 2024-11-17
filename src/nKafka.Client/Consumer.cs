@@ -56,7 +56,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         _joinGroupResponse = await JoinGroupRequestAsync(connection, cancellationToken);
         if (_joinGroupResponse.MemberId == _joinGroupResponse.Leader)
         {
-            _logger.LogInformation("Promoted as a leader");
+            _logger.LogInformation("Promoted as a leader.");
             IList<SyncGroupRequestAssignment> assignments = ReassignGroup();
             await SyncGroup(connection, assignments, cancellationToken);
         }
@@ -104,7 +104,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private async ValueTask<IConnection> OpenBootstrapConnectionAsync(
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Opening bootstrap connection");
+        _logger.LogInformation("Opening bootstrap connection.");
         
         var connectionStrings = _config.BootstrapServers.Split(
             ",",
@@ -134,7 +134,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         IConnection connection,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Requesting API versions");
+        _logger.LogInformation("Requesting API versions.");
         
         var requestClient = new ApiVersionsRequestClient(0, new ApiVersionsRequest
         {
@@ -156,7 +156,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         IConnection connection,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Opening coordinator connection");
+        _logger.LogInformation("Opening coordinator connection.");
         
         var apiVersion = GetApiVersion(
             FindCoordinatorRequestClient.Api,
@@ -245,7 +245,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     
     private async ValueTask<MetadataResponse> RequestMetadata(IConnection connection, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Requesting metadata");
+        _logger.LogInformation("Requesting metadata.");
         
         var apiVersion = GetApiVersion(
             MetadataRequestClient.Api,
@@ -268,13 +268,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             if (!response.Topics!.TryGetValue(topicName, out var topic))
             {
-                _logger.LogInformation($"No topic metadata found for topic {topicName}");
+                _logger.LogInformation($"No topic metadata found for topic {topicName}.");
                 continue;
             }
             
             if (topic.ErrorCode != 0)
             {
-                throw new Exception($"Metadata request failed for topic {topic.Name}. Error code {topic.ErrorCode}");
+                throw new Exception($"Metadata request failed for topic {topic.Name}. Error code {topic.ErrorCode}.");
             }
 
             foreach (var partition in topic.Partitions!)
@@ -293,7 +293,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         IConnection connection,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Joining consumer group");
+        _logger.LogInformation("Joining consumer group.");
         var request = new JoinGroupRequest
         {
             GroupId = _config.GroupId,
@@ -380,7 +380,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         IList<SyncGroupRequestAssignment> assignments,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Synchronizing consumer group");
+        _logger.LogInformation("Synchronizing consumer group.");
         
         var apiVersion = GetApiVersion(
             SyncGroupRequestClient.Api,
@@ -456,7 +456,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                         break;
                     }
                 }
-                _logger.LogDebug("Heartbeats sending was stopped");
+                _logger.LogDebug("Heartbeats sending was stopped.");
             }, cancellationToken);
     }
 
@@ -495,7 +495,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             return;
         }
-        _logger.LogInformation("Leaving consumer group");
+        _logger.LogInformation("Leaving consumer group.");
         
         var apiVersion = GetApiVersion(
             LeaveGroupRequestClient.Api,
