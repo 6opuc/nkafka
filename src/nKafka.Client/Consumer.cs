@@ -49,7 +49,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         #warning move to heartbeats?
         _stop = new CancellationTokenSource();
-
+        
+        using var _ = BeginDefaultLoggingScope();
         await OpenConnectionsAsync(cancellationToken);
         var connection = GetCoordinatorConnection();
         _joinGroupResponse = await JoinGroupRequestAsync(connection, cancellationToken);
@@ -61,6 +62,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
         
         StartSendingHeartbeats();
+    }
+
+    private IDisposable? BeginDefaultLoggingScope()
+    {
+        return _logger.BeginScope(_config.InstanceId);
     }
 
     private IConnection GetCoordinatorConnection()
@@ -456,6 +462,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     public ValueTask<ConsumeResult<TMessage>> ConsumeAsync(CancellationToken cancellationToken)
     {
+        using var _ = BeginDefaultLoggingScope();
+        
         return ValueTask.FromResult(
             new ConsumeResult<TMessage>(
                 ReadOnlyCollection<TMessage>.Empty,
@@ -464,6 +472,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     
     public async ValueTask DisposeAsync()
     {
+        using var _ = BeginDefaultLoggingScope();
+        
         if (_stop != null)
         {
             await _stop.CancelAsync();

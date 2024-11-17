@@ -41,11 +41,17 @@ public class Connection : IConnection
     
     public async ValueTask OpenAsync(CancellationToken cancellationToken)
     {
+        using var _ = BeginDefaultLoggingScope();
         await OpenSocketAsync(cancellationToken);
         
         StartProcessing();
         StartReceiving();
         StartSending();
+    }
+
+    private IDisposable? BeginDefaultLoggingScope()
+    {
+        return _logger.BeginScope($"{_config.Host}:{_config.Port}");
     }
 
     private async ValueTask OpenSocketAsync(CancellationToken cancellationToken)
@@ -59,10 +65,7 @@ public class Connection : IConnection
             throw new InvalidOperationException("Socket connection is already open.");
         }
         
-        _logger.LogInformation(
-            "Opening socket connection to broker at {@host}:{@port}.",
-            _config.Host,
-            _config.Port);
+        _logger.LogInformation("Opening socket connection.");
         
         var ip = await Dns.GetHostAddressesAsync(_config.Host, cancellationToken);
         if (ip.Length == 0)
@@ -267,6 +270,7 @@ public class Connection : IConnection
         RequestClient<TResponse> requestClient,
         CancellationToken cancellationToken)
     {
+        using var _ = BeginDefaultLoggingScope();
         var completionPromise = new TaskCompletionSource<object>();
         var pendingRequest = new PendingRequest(
             requestClient,
@@ -287,10 +291,9 @@ public class Connection : IConnection
             return;
         }
         
-        _logger.LogInformation(
-            "Closing socket connection to broker at {@host}:{@port}.",
-            _config.Host,
-            _config.Port);
+        using var _ = BeginDefaultLoggingScope();
+        
+        _logger.LogInformation("Closing socket connection.");
         
         _requestQueue.Complete();
         await _requestQueue.Completion;

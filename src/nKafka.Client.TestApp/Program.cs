@@ -24,8 +24,13 @@ var consumerConfig = new ConsumerConfig(
     $"testapp-{DateTime.UtcNow.Ticks}",
     "PLAINTEXT");
 using var loggerFactory = LoggerFactory.Create(loggingBuilder => loggingBuilder
-    .SetMinimumLevel(LogLevel.Information)
-    .AddConsole());
+    .SetMinimumLevel(LogLevel.Trace)
+    .AddSimpleConsole(options =>
+    {
+        options.IncludeScopes = true;
+        options.SingleLine = true;
+        options.TimestampFormat = "HH:mm:ss ";
+    }));
 {
     await using var consumer = new Consumer<DummyStringMessage>(
         consumerConfig,
@@ -34,7 +39,7 @@ using var loggerFactory = LoggerFactory.Create(loggingBuilder => loggingBuilder
     await consumer.JoinGroupAsync(CancellationToken.None);
     await consumer.ConsumeAsync(CancellationToken.None);
 
-    await Task.Delay(TimeSpan.FromSeconds(60));
+    //await Task.Delay(TimeSpan.FromSeconds(60));
 }
 stopwatch.Stop();
 
