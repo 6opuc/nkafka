@@ -464,6 +464,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         using var _ = BeginDefaultLoggingScope();
         
+        #warning consume queue: ConsumeAsync should be compatible with Confluent interface
+        #warning consume queue: Deserialization of fetch response should publish to consume queue
+        #warning consume queue: initial state of consume queue should be populated with fetch requests to partitions
+        #warning consume queue: reaching partition EOF should publish to consume queue next fetch from the same partition 
+        
         return ValueTask.FromResult(
             new ConsumeResult<TMessage>(
                 ReadOnlyCollection<TMessage>.Empty,
