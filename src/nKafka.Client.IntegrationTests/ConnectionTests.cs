@@ -145,9 +145,29 @@ public class ConnectionTests
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
+        response.Brokers.Should().NotBeNullOrEmpty();
+        response.Brokers.Should().AllSatisfy(x =>
+        {
+            x.Value.Host.Should().NotBeNullOrEmpty();
+            x.Value.Port.Should().NotBeNull();
+            x.Value.NodeId.Should().NotBeNull();
+            x.Value.NodeId.Should().Be(x.Key);
+        });
         response.Topics.Should().AllSatisfy(x =>
-            x.Value.ErrorCode.Should().Be(0));
-#warning check response
+        {
+            x.Value.ErrorCode.Should().Be(0);
+            x.Value.Name.Should().NotBeNullOrEmpty();
+            x.Value.Partitions.Should().NotBeNullOrEmpty();
+
+            x.Value.Partitions.Should().AllSatisfy(p =>
+            {
+                p.ErrorCode.Should().Be(0);
+                p.PartitionIndex.Should().NotBeNull();
+                p.LeaderId.Should().NotBeNull();
+
+                response.Brokers.Should().ContainKey(p.LeaderId!.Value);
+            });
+        });
     }
     
     [Test]
