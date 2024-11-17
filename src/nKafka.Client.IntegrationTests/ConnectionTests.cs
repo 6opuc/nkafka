@@ -229,7 +229,13 @@ public class ConnectionTests
         }
         
         response.ErrorCode.Should().Be(0);
-#warning check response
+        response.GenerationId.Should().NotBeNull();
+        response.Leader.Should().NotBeNull();
+        response.MemberId.Should().NotBeNull();
+        response.Members.Should().NotBeNullOrEmpty();
+        response.Members.Should().Contain(x => x.MemberId == response.MemberId);
+        
+#warning check members metadata
     }
     
     [Test]
