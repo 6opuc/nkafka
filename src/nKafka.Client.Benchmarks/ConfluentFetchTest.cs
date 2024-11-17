@@ -20,6 +20,11 @@ public class ConfluentFetchTest
         while (counter < scenario.MessageCount)
         {
             var consumeResult = consumer.Consume(CancellationToken.None);
+            if (consumeResult.Message == null ||
+                consumeResult.Message.Value == null)
+            {
+                continue;
+            }
 
             counter += 1;
         }
