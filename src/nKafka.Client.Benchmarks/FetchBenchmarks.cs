@@ -21,7 +21,13 @@ public class FetchBenchmarks
 
     [Benchmark]
     public Task Confluent() => ConfluentFetchTest.Test(Scenario!);
+    
+    [Benchmark]
+    public Task ConfluentString() => ConfluentConsumeStringTest.Test(Scenario!);
 
     [Benchmark]
     public Task nKafka() => NKafkaFetchTest.Test(Scenario!);
+    
+    [Benchmark]
+    public Task nKafkaString() => NKafkaConsumeStringTest.Test(Scenario!);
 }
