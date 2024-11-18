@@ -1,13 +1,10 @@
 namespace nKafka.Client;
 
-public class ConsumeResult<TMessage>
+public struct ConsumeResult<TMessage>
 {
-    public IReadOnlyList<TMessage> Messages { get; }
-    public TopicPartitionOffset LastOffset { get; }
-
-    public ConsumeResult(IReadOnlyList<TMessage> messages, TopicPartitionOffset lastOffset)
-    {
-        Messages = messages;
-        LastOffset = lastOffset;
-    }
+    public string Topic { get; set; }
+    public int Partition { get; set; }
+    public long Offset { get; set; }
+    public DateTime Timestamp { get; set; }
+    public TMessage? Message { get; set; }
 }

@@ -5,6 +5,7 @@ using nKafka.Contracts;
 using nKafka.Contracts.MessageDefinitions;
 using nKafka.Contracts.MessageDefinitions.ApiVersionsResponseNested;
 using nKafka.Contracts.MessageDefinitions.ConsumerProtocolAssignmentNested;
+using nKafka.Contracts.MessageDefinitions.FetchRequestNested;
 using nKafka.Contracts.MessageDefinitions.JoinGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.LeaveGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
@@ -29,6 +30,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private string[] _topics;
     private JoinGroupResponse? _joinGroupResponse;
     private MetadataResponse? _metadataResponse;
+    
+    private IList<(int NodeId, string Topic, Guid? TopicId, int Partition, long Offset)> _fetchQueue = [];
+    private int _fetchIndex = 0;
+    private FetchResponse? _fetchResponse = null;
+    private IEnumerator<MessageDeserializationContext>? _messageDeserializeEnumerator = null;
     
     public Consumer(
         ConsumerConfig config,
@@ -401,6 +407,31 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             throw new Exception($"Failed to synchronize consumer group. Error code {response.ErrorCode}");
         }
+
+        var actualAssignments = response.Assignment!.ConsumerProtocolAssignmentFromMetadata();
+
+        _fetchQueue = new List<(int NodeId, string Topic, Guid? TopicId, int Partition, long lastOffset)>();
+        foreach (var topicAssignment in actualAssignments.AssignedPartitions!)
+        {
+            if (_metadataResponse?.Topics?.TryGetValue(topicAssignment.Key, out var topicMetadata) != true)
+            {
+                continue;
+            }
+
+            foreach (var partition in topicAssignment.Value.Partitions!)
+            {
+                var partitionMetadata = topicMetadata?.Partitions?.FirstOrDefault(x => x.PartitionIndex == partition);
+                if (partitionMetadata == null)
+                {
+                    continue;
+                }
+                
+                _fetchQueue.Add((partitionMetadata.LeaderId!.Value, topicAssignment.Key, topicMetadata?.TopicId, partition, 0));
+            }
+        }
+
+        _fetchIndex = 0;
+        _messageDeserializeEnumerator = null;
     }
     
     private void StartSendingHeartbeats()
@@ -460,21 +491,143 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             }, cancellationToken);
     }
 
-    public ValueTask<ConsumeResult<TMessage>> ConsumeAsync(CancellationToken cancellationToken)
+    public async ValueTask<ConsumeResult<TMessage>?> ConsumeAsync(CancellationToken cancellationToken)
     {
-        using var _ = BeginDefaultLoggingScope();
+#warning consume queue: Deserialization of fetch response should publish to consume queue
+
+        var consumerResult = ConsumeFromBuffer();
+        if (consumerResult != null)
+        {
+            return consumerResult;
+        }
+
+        if (_fetchQueue.Count == 0)
+        {
+            return null;
+        }
+        var fetchSource = _fetchQueue[_fetchIndex%_fetchQueue.Count];
         
-        #warning consume queue: ConsumeAsync should be compatible with Confluent interface
-        #warning consume queue: Deserialization of fetch response should publish to consume queue
-        #warning consume queue: initial state of consume queue should be populated with fetch requests to partitions
-        #warning consume queue: reaching partition EOF should publish to consume queue next fetch from the same partition 
+        var apiVersion = GetApiVersion(
+            FetchRequestClient.Api,
+            FetchRequestClient.ValidVersions);
+        var requestClient = new FetchRequestClient(apiVersion, new FetchRequest
+        {
+            ClusterId = null, // ???
+            ReplicaId = -1, // ???
+            ReplicaState = null, // ???
+            MaxWaitMs = 0, // ???
+            MinBytes = 0, // ???
+            MaxBytes = 0x7fffffff,
+            IsolationLevel = 0, // !!!
+            SessionId = 0, // ???
+            SessionEpoch = -1, // ???
+            Topics =
+            [
+                new FetchTopic
+                {
+                    Topic = fetchSource.Topic,
+                    TopicId = fetchSource.TopicId,
+                    Partitions =
+                    [
+                        new FetchPartition
+                        {
+                            Partition = fetchSource.Partition,
+                            CurrentLeaderEpoch = -1, // ???
+                            FetchOffset = fetchSource.Offset, // ???
+                            LastFetchedEpoch = -1, // ???
+                            LogStartOffset = -1, // ???
+                            PartitionMaxBytes = 512 * 1024, // !!!
+                            ReplicaDirectoryId = Guid.Empty, // ???
+                        }
+                    ]
+                },
+            ],
+            ForgottenTopicsData = [], // ???
+            RackId = string.Empty, // ???
+        });
+        var connection = _connections[fetchSource.NodeId];
+        _fetchResponse = await connection.SendAsync(requestClient, CancellationToken.None);
+
+        var lastOffset = _fetchResponse
+            .Responses?.LastOrDefault()?
+            .Partitions?.LastOrDefault()?
+            .Records?.LastOffset;
+        if (lastOffset.HasValue)
+        {
+            _fetchQueue[_fetchIndex % _fetchQueue.Count] = fetchSource with
+            {
+                Offset = lastOffset.Value + 1,
+            };
+        }
+
+        _fetchIndex += 1;
+
+        _messageDeserializeEnumerator = GetMessageEnumerator(fetchSource.Topic);
         
-        return ValueTask.FromResult(
-            new ConsumeResult<TMessage>(
-                ReadOnlyCollection<TMessage>.Empty,
-                new TopicPartitionOffset()));
+        return ConsumeFromBuffer();
     }
-    
+
+    private IEnumerator<MessageDeserializationContext> GetMessageEnumerator(string topic)
+    {
+        if (_fetchResponse == null ||
+            _fetchResponse.ErrorCode != 0)
+        {
+            yield break;
+        }
+
+        foreach (var response in _fetchResponse.Responses!)
+        {
+            foreach (var partition in response.Partitions!)
+            {
+                foreach (var recordBatch in partition.Records!.RecordBatches!)
+                {
+                    foreach (var record in recordBatch.Records!)
+                    {
+                        yield return new MessageDeserializationContext
+                        {
+                            Topic = topic,
+                            Partition = partition.PartitionIndex!.Value,
+                            Offset = recordBatch.BaseOffset + record.OffsetDelta,
+                            Timestamp = DateTimeOffset
+                                .FromUnixTimeMilliseconds(recordBatch.FirstTimestamp + record.TimestampDelta)
+                                .DateTime,
+                            Key = record.Key,
+                            Value = record.Value,
+                            Headers = record.Headers,
+                        };
+                    }
+                }
+            }
+        }
+    }
+
+    private ConsumeResult<TMessage>? ConsumeFromBuffer()
+    {
+        if (_messageDeserializeEnumerator == null)
+        {
+            return null;
+        }
+        
+        if (_messageDeserializeEnumerator.MoveNext())
+        {
+            var deserializationContext = _messageDeserializeEnumerator.Current;
+            var message = _deserializer.Deserialize(deserializationContext);
+            return new ConsumeResult<TMessage>
+            {
+                Topic = deserializationContext.Topic,
+                Partition = deserializationContext.Partition,
+                Offset = deserializationContext.Offset,
+                Timestamp = deserializationContext.Timestamp,
+                Message = message,
+            };
+        }
+        
+        _messageDeserializeEnumerator.Dispose();
+        _messageDeserializeEnumerator = null;
+
+        return null;
+    }
+
     public async ValueTask DisposeAsync()
     {
         using var _ = BeginDefaultLoggingScope();

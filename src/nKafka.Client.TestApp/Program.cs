@@ -24,7 +24,7 @@ var consumerConfig = new ConsumerConfig(
     $"testapp-{DateTime.UtcNow.Ticks}",
     "PLAINTEXT");
 using var loggerFactory = LoggerFactory.Create(loggingBuilder => loggingBuilder
-    .SetMinimumLevel(LogLevel.Trace)
+    .SetMinimumLevel(LogLevel.Error)
     .AddSimpleConsole(options =>
     {
         options.IncludeScopes = true;
@@ -37,7 +37,21 @@ using var loggerFactory = LoggerFactory.Create(loggingBuilder => loggingBuilder
         new DummyStringMessageDeserializer(),
         loggerFactory);
     await consumer.JoinGroupAsync(CancellationToken.None);
-    await consumer.ConsumeAsync(CancellationToken.None);
+    
+    var counter = 0;
+    while (counter < scenario.MessageCount)
+    {
+        var consumeResult = await consumer.ConsumeAsync(CancellationToken.None);
+        if (consumeResult == null ||
+            consumeResult.Value.Message == null)
+        {
+            continue;
+        }
+
+        counter += 1;
+    }
+    Console.WriteLine(counter);
+    
 
     //await Task.Delay(TimeSpan.FromSeconds(60));
 }
