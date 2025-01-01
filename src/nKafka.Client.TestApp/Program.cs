@@ -12,8 +12,8 @@ var stopwatch = Stopwatch.StartNew();
 
 //await NKafkaFetchTest.Test(scenario);
 //await ConfluentFetchTest.Test(scenario);
-//await ConfluentConsumeStringTest.Test(scenario);
-await NKafkaConsumeStringTest.Test(scenario);
+await ConfluentConsumeStringTest.Test(scenario);
+//await NKafkaConsumeStringTest.Test(scenario);
 stopwatch.Stop();
 
 Console.WriteLine($"Elapsed time: {stopwatch.ElapsedMilliseconds}ms.");

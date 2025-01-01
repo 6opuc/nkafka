@@ -14,4 +14,11 @@ public static class ConsumerProtocolSubscriptionExtensions
         ConsumerProtocolSubscriptionSerializer.Serialize(output, value, version);
         return output.ToArray();
     }
+
+    public static ConsumerProtocolSubscription ConsumerProtocolSubscriptionFromMetadata(this byte[] value)
+    {
+        using var input = new MemoryStream(value, 0, value.Length, false, true);
+        var version = PrimitiveSerializer.DeserializeShort(input);
+        return ConsumerProtocolSubscriptionSerializer.Deserialize(input, version);
+    }
 }

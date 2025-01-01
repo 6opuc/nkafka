@@ -187,6 +187,14 @@ public class ConnectionTests
     {
         var consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId);
+        var protocolSubscription = new ConsumerProtocolSubscription
+        {
+            Topics = ["test_p12_m1M_s4B"],
+            UserData = null, // ???
+            OwnedPartitions = null, // ???
+            GenerationId = -1, // ???
+            RackId = null // ???
+        };
         var request = new JoinGroupRequest
         {
             GroupId = consumerGroupId,
@@ -201,16 +209,8 @@ public class ConnectionTests
                     "nkafka-consumer", new JoinGroupRequestProtocol
                     {
                         Name = "nkafka-consumer",
-                        Metadata = new ConsumerProtocolSubscription
-                            {
-                                Topics = ["test_p12_m1M_s4B"],
-                                UserData = null, // ???
-                                OwnedPartitions = null, // ???
-                                GenerationId = -1, // ???
-                                RackId = null // ???
-                            }
+                        Metadata = protocolSubscription
                             .AsMetadata(3),
-#warning metadata version vs request version
                     }
                 }
             },
@@ -235,9 +235,18 @@ public class ConnectionTests
         response.Leader.Should().NotBeNull();
         response.MemberId.Should().NotBeNull();
         response.Members.Should().NotBeNullOrEmpty();
-        response.Members.Should().Contain(x => x.MemberId == response.MemberId);
-        
-#warning check members metadata
+        var subscriptionMember = response.Members!.FirstOrDefault(x => x.MemberId == response.MemberId);
+        subscriptionMember.Should().NotBeNull();
+        foreach (var member in response.Members!)
+        {
+            member.Metadata.Should().NotBeNull();
+            var subscription = member.Metadata!.ConsumerProtocolSubscriptionFromMetadata();
+            subscription.Should().NotBeNull();
+            subscription.GenerationId.Should().NotBeNull();
+            subscription.Topics.Should().NotBeNullOrEmpty();
+        }
+        var subscriptionMemberMetadata = subscriptionMember!.Metadata!.ConsumerProtocolSubscriptionFromMetadata();
+        subscriptionMemberMetadata.Should().BeEquivalentTo(subscriptionMemberMetadata);
     }
     
     [Test]
