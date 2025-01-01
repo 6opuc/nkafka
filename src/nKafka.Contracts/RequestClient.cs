@@ -37,15 +37,14 @@ public abstract class RequestClient<TResponsePayload> : IRequestClient
 
     protected abstract short ApiVersion { get; }
     
-    public void SerializeRequest(MemoryStream output)
+    public void SerializeRequest(MemoryStream output, string clientId)
     {
         var header = new RequestHeader
         {
             RequestApiKey = (short)ApiKey,
             RequestApiVersion = ApiVersion,
             CorrelationId = CorrelationId,
-            #warning client id (application name should be provided)
-            ClientId = "nKafka.Client",
+            ClientId = clientId,
         };
         PrimitiveSerializer.SerializeInt(output, 0); // placeholder for header + payload
         var start = output.Position;

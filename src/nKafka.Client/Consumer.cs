@@ -98,6 +98,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 _config.Protocol,
                 broker.Host!,
                 broker.Port!.Value,
+                _config.ClientId,
                 _config.ResponseBufferSize,
                 _config.RequestBufferSize);
             var connection = new Connection(connectionConfig, _loggerFactory);
@@ -191,6 +192,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 _config.Protocol,
                 response.Host!,
                 response.Port!.Value,
+                _config.ClientId,
                 _config.ResponseBufferSize,
                 _config.RequestBufferSize);
         }
@@ -212,6 +214,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 _config.Protocol,
                 coordinator.Host!,
                 coordinator.Port!.Value,
+                _config.ClientId,
                 _config.ResponseBufferSize,
                 _config.RequestBufferSize);
         }

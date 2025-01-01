@@ -4,6 +4,7 @@ public class ConsumerConfig
 {
     public string BootstrapServers { get; }
     public string Topics { get; }
+    public string ClientId { get; }
     public string GroupId { get; }
     public string InstanceId { get; }
     public string Protocol { get; }
@@ -18,6 +19,7 @@ public class ConsumerConfig
     public ConsumerConfig(
         string bootstrapServers,
         string topics,
+        string clientId,
         string groupId,
         string instanceId,
         string protocol,
@@ -29,6 +31,7 @@ public class ConsumerConfig
     {
         BootstrapServers = bootstrapServers;
         Topics = topics;
+        ClientId = clientId;
         GroupId = groupId;
         InstanceId = instanceId;
         Protocol = protocol;

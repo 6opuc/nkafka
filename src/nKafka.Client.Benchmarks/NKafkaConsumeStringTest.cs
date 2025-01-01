@@ -12,7 +12,8 @@ public static class NKafkaConsumeStringTest
             scenario.TopicName,
             "test-consumer-group",
             $"testapp-{DateTime.UtcNow.Ticks}",
-            "PLAINTEXT");
+            "PLAINTEXT",
+            "nKafka.Client.Benchmarks");
         
         await using var consumer = new Consumer<DummyStringMessage>(
             consumerConfig,

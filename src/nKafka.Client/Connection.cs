@@ -250,7 +250,7 @@ public class Connection : IConnection
 
                             _logger.LogDebug("Serializing.");
                             using var output = new MemoryStream(payload, 0, payload.Length, true, true);
-                            request.RequestClient.SerializeRequest(output);
+                            request.RequestClient.SerializeRequest(output, _config.ClientId);
 
                             _logger.LogDebug("Sending {@size} bytes.", output.Position);
 #warning cancellation, timeouts, other exceptions

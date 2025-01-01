@@ -18,7 +18,7 @@ public static class NKafkaFetchTest
         foreach (var group in partitions)
         {
             var broker = metadata.Brokers![group.Key];
-            var config = new ConnectionConfig("PLAINTEXT", broker.Host!, broker.Port!.Value);
+            var config = new ConnectionConfig("PLAINTEXT", broker.Host!, broker.Port!.Value, "nKafka.Client.Benchmarks");
             await using var connection = new Connection(config, NullLoggerFactory.Instance);
             await connection.OpenAsync(CancellationToken.None);
 
@@ -88,7 +88,7 @@ public static class NKafkaFetchTest
 
     private static async Task<MetadataResponse> RequestMetadata(FetchScenario scenario)
     {
-        var config = new ConnectionConfig("PLAINTEXT", "kafka-1", 9192);
+        var config = new ConnectionConfig("PLAINTEXT", "kafka-1", 9192, "nKafka.Client.Benchmarks");
         var connection = new Connection(config, NullLoggerFactory.Instance);
 
         await connection.OpenAsync(CancellationToken.None);

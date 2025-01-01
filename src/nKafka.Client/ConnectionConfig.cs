@@ -7,6 +7,7 @@ public class ConnectionConfig
     public string Protocol { get; }
     public string Host { get; }
     public int Port { get; }
+    public string ClientId { get; }
     public int ResponseBufferSize { get; }
     public int RequestBufferSize { get; }
 
@@ -14,6 +15,7 @@ public class ConnectionConfig
         string protocol,
         string host,
         int port,
+        string clientId,
         int responseBufferSize = 512 * 1024,
         int requestBufferSize = 512 * 1024)
     {
