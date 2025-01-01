@@ -98,12 +98,65 @@ public class PrimitiveSerializerTests
         yield return new SerializeTestCase<long>(-64L, [0x7f]);
         yield return new SerializeTestCase<long>(127, [0xfe, 0x01]);
         yield return new SerializeTestCase<long>(300, [216, 4]);
-        #warning fix test case
-        //yield return new SerializeTestCase<long>(long.MaxValue,
-        //    [0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01]);
+        yield return new SerializeTestCase<long>(123456789, [0xAA, 0xB4, 0xDE, 0x75]);
+        yield return new SerializeTestCase<long>(int.MaxValue-1,
+            [0xFC, 0xFF, 0xFF, 0xFF, 0x0F]);
+        yield return new SerializeTestCase<long>(int.MaxValue,
+            [0xFE, 0xFF, 0xFF, 0xFF, 0x0F]);
+        yield return new SerializeTestCase<long>((long)int.MaxValue+1,
+            [0x80, 0x80, 0x80, 0x80, 0x10]);
+        yield return new SerializeTestCase<long>(long.MaxValue-1,
+            [0xfc, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01]);
+        yield return new SerializeTestCase<long>(long.MaxValue,
+            [0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01]);
     }
 
     #endregion VarLong
+    
+    #region UVarLong
+
+    [Test]
+    [TestCaseSource(nameof(GetUVarLongCases))]
+    public void SerializeUVarLong_ByTestCase_ProducesExpectedOutput(SerializeTestCase<ulong> testCase)
+    {
+        using var stream = new MemoryStream(0);
+        PrimitiveSerializer.SerializeUVarLong(stream, testCase.Value);
+
+        var actual = stream.ToArray();
+
+        actual.Should().BeEquivalentTo(testCase.Bytes);
+    }
+
+    [Test]
+    [TestCaseSource(nameof(GetUVarLongCases))]
+    public void DeserializeUVarLong_ByTestCase_ProducesExpectedOutput(SerializeTestCase<ulong> testCase)
+    {
+        using var stream = new MemoryStream(testCase.Bytes, 0, testCase.Bytes.Length, false, true);
+        var actual = PrimitiveSerializer.DeserializeUVarLong(stream);
+
+        actual.Should().Be(testCase.Value);
+    }
+
+    public static IEnumerable<SerializeTestCase<ulong>> GetUVarLongCases()
+    {
+        yield return new SerializeTestCase<ulong>(0L, [0x00]);
+        yield return new SerializeTestCase<ulong>(1L, [0x01]);
+        yield return new SerializeTestCase<ulong>(127, [0x7f]);
+        yield return new SerializeTestCase<ulong>(300, [0xAC, 0x02]);
+        yield return new SerializeTestCase<ulong>(123456789, [0x95, 0x9A, 0xEF, 0x3A]);
+        yield return new SerializeTestCase<ulong>(uint.MaxValue-1,
+            [0xFE, 0xFF, 0xFF, 0xFF, 0x0F]);
+        yield return new SerializeTestCase<ulong>(uint.MaxValue,
+            [0xFF, 0xFF, 0xFF, 0xFF, 0x0F]);
+        yield return new SerializeTestCase<ulong>((ulong)uint.MaxValue+1,
+            [0x80, 0x80, 0x80, 0x80, 0x10]);
+        yield return new SerializeTestCase<ulong>(ulong.MaxValue-1,
+            [0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01]);
+        yield return new SerializeTestCase<ulong>(ulong.MaxValue,
+            [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01]);
+    }
+
+    #endregion UVarLong
 
     #region Int
 

@@ -263,7 +263,7 @@ public static class PrimitiveSerializer
             var lowerBits = DeserializeByte(input);
 
             more = (lowerBits & 128) != 0;
-            value |= (uint)((lowerBits & 0x7f) << shift);
+            value |= (ulong)(lowerBits & 0x7f) << shift;
             shift += 7;
         }
 
