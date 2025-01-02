@@ -141,6 +141,11 @@ public static class FieldDefinitionExtensions
             {
                 return "ConsumerProtocolAssignment";
             }
+
+            if (field.Name == "Metadata" && (field.About == "The protocol metadata." || field.About == "The group member metadata."))
+            {
+                return "ConsumerProtocolSubscription";
+            }
         }
         return type switch
         {
@@ -369,6 +374,11 @@ public static class FieldDefinitionExtensions
         if (propertyType == "ConsumerProtocolAssignment")
         {
             return $"ConsumerProtocolAssignmentSerializationHelper.Serialize({output}, {propertyPath}, {flexible.ToString().ToLower()});";
+        }
+
+        if (propertyType == "ConsumerProtocolSubscription")
+        {
+            return $"ConsumerProtocolSubscriptionSerializationHelper.Serialize({output}, {propertyPath}, {flexible.ToString().ToLower()});";
         }
 
         return $$"""
@@ -676,6 +686,11 @@ public static class FieldDefinitionExtensions
         if (propertyType == "ConsumerProtocolAssignment")
         {
             return $"{propertyPath} = ConsumerProtocolAssignmentSerializationHelper.Deserialize({input}, {flexible.ToString().ToLower()});";
+        }
+
+        if (propertyType == "ConsumerProtocolSubscription")
+        {
+            return $"{propertyPath} = ConsumerProtocolSubscriptionSerializationHelper.Deserialize({input}, {flexible.ToString().ToLower()});";
         }
 
         return $"{propertyPath} = {propertyType}SerializerV{version}.Deserialize({input});";

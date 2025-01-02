@@ -324,8 +324,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                                 OwnedPartitions = null, // ???
                                 GenerationId = -1, // ???
                                 RackId = null // ???
-                            }
-                            .AsMetadata(3),
+                            },
                     }
                 }
             },

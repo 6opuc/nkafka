@@ -209,8 +209,7 @@ public class ConnectionTests
                     "nkafka-consumer", new JoinGroupRequestProtocol
                     {
                         Name = "nkafka-consumer",
-                        Metadata = protocolSubscription
-                            .AsMetadata(3),
+                        Metadata = protocolSubscription,
                     }
                 }
             },
@@ -240,12 +239,12 @@ public class ConnectionTests
         foreach (var member in response.Members!)
         {
             member.Metadata.Should().NotBeNull();
-            var subscription = member.Metadata!.ConsumerProtocolSubscriptionFromMetadata();
+            var subscription = member.Metadata;
             subscription.Should().NotBeNull();
-            subscription.GenerationId.Should().NotBeNull();
+            subscription!.GenerationId.Should().NotBeNull();
             subscription.Topics.Should().NotBeNullOrEmpty();
         }
-        var subscriptionMemberMetadata = subscriptionMember!.Metadata!.ConsumerProtocolSubscriptionFromMetadata();
+        var subscriptionMemberMetadata = subscriptionMember!.Metadata;
         subscriptionMemberMetadata.Should().BeEquivalentTo(subscriptionMemberMetadata);
     }
     
@@ -378,8 +377,7 @@ public class ConnectionTests
                                 OwnedPartitions = null, // ???
                                 GenerationId = -1, // ???
                                 RackId = null // ???
-                            }
-                            .AsMetadata(3),
+                            },
                     }
                 }
             },
