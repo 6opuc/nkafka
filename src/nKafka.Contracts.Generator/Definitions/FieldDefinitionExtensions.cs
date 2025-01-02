@@ -90,9 +90,7 @@ public static class FieldDefinitionExtensions
 
     public static string? GetFieldItemPropertyType(this FieldDefinition field)
     {
-        var type = field.GetFieldItemType();
-        type = GetPropertyType(type!);
-        return type;
+        return GetPropertyType(field);
     }
 
     public static string? GetFieldItemType(this FieldDefinition field)
@@ -120,7 +118,7 @@ public static class FieldDefinitionExtensions
             return null;
         }
 
-        return GetPropertyType(mapKeyField.Type!);
+        return GetPropertyType(mapKeyField);
     }
 
     private static string? GetMapKeyPropertyName(this FieldDefinition field)
@@ -134,9 +132,10 @@ public static class FieldDefinitionExtensions
         return mapKeyField.Name;
     }
 
-    private static string GetPropertyType(string fieldType)
+    private static string GetPropertyType(FieldDefinition field)
     {
-        return fieldType switch
+        var type = field.GetFieldItemType();
+        return type switch
         {
             "int64" => "long",
             "int32" => "int",
@@ -147,7 +146,7 @@ public static class FieldDefinitionExtensions
             "uuid" => "Guid",
             "bytes" => "byte[]",
             "records" => "RecordsContainer",
-            _ => fieldType
+            _ => type!
         };
     }
 

@@ -1,18 +1,20 @@
-﻿// See https://aka.ms/new-console-template for more information
-
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using nKafka.Client.Benchmarks;
 
 
 var benchmarks = new FetchBenchmarks();
 var scenario = benchmarks.Scenarios
-    .First(x => x.MessageSize == 40 * 1024);
+    .First(x => x.MessageSize == 10 * 1024);
 
 var stopwatch = Stopwatch.StartNew();
 
-//await NKafkaFetchTest.Test(scenario);
+for (int i = 0; i < 10; i++)
+{
+    await NKafkaFetchTest.Test(scenario);
+}
+
 //await ConfluentFetchTest.Test(scenario);
-await ConfluentConsumeStringTest.Test(scenario);
+//await ConfluentConsumeStringTest.Test(scenario);
 //await NKafkaConsumeStringTest.Test(scenario);
 stopwatch.Stop();
 
