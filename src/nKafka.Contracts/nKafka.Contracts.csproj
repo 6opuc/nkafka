@@ -21,7 +21,7 @@
             <LinkBase>apache_kafka_message_definitions</LinkBase>
         </AdditionalFiles>
     </ItemGroup>
-
+    
     <ItemGroup>
         <Compile Remove="$(CompilerGeneratedFilesOutputPath)/**/*.cs"/>
         <None Include="$(CompilerGeneratedFilesOutputPath)/**/*.cs"/>

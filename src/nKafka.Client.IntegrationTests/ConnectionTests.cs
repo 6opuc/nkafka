@@ -319,7 +319,7 @@ public class ConnectionTests
                 new SyncGroupRequestAssignment
                 {
                     MemberId = joinGroupResponse.MemberId,
-                    Assignment = requestedAssignment.AsMetadata(3),
+                    Assignment = requestedAssignment,
                 }
             ],
         });
@@ -327,7 +327,7 @@ public class ConnectionTests
 
         response.Should().NotBeNull();
         response.ErrorCode.Should().Be(0);
-        var actualAssignment = response.Assignment!.ConsumerProtocolAssignmentFromMetadata();
+        var actualAssignment = response.Assignment!;
         actualAssignment.Should().BeEquivalentTo(requestedAssignment);
     }
     

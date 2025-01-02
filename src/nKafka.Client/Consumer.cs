@@ -379,7 +379,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             new SyncGroupRequestAssignment
             {
                 MemberId = _joinGroupResponse!.MemberId,
-                Assignment = requestedAssignment.AsMetadata(3),
+                Assignment = requestedAssignment,
             }
         ];
     }
@@ -411,7 +411,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             throw new Exception($"Failed to synchronize consumer group. Error code {response.ErrorCode}");
         }
 
-        var actualAssignments = response.Assignment!.ConsumerProtocolAssignmentFromMetadata();
+        var actualAssignments = response.Assignment!;
 
         _fetchQueue = new List<(int NodeId, string Topic, Guid? TopicId, int Partition, long lastOffset)>();
         foreach (var topicAssignment in actualAssignments.AssignedPartitions!)

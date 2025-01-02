@@ -135,6 +135,13 @@ public static class FieldDefinitionExtensions
     private static string GetPropertyType(FieldDefinition field)
     {
         var type = field.GetFieldItemType();
+        if (type == "bytes")
+        {
+            if (field.Name == "Assignment")
+            {
+                return "ConsumerProtocolAssignment";
+            }
+        }
         return type switch
         {
             "int64" => "long",
@@ -357,6 +364,11 @@ public static class FieldDefinitionExtensions
         {
             var recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
             return $"RecordsContainerSerializer{recordsVersion}.Serialize({output}, {propertyPath});";
+        }
+
+        if (propertyType == "ConsumerProtocolAssignment")
+        {
+            return $"ConsumerProtocolAssignmentSerializationHelper.Serialize({output}, {propertyPath}, {flexible.ToString().ToLower()});";
         }
 
         return $$"""
@@ -659,6 +671,11 @@ public static class FieldDefinitionExtensions
         {
             var recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
             return $"{propertyPath} = RecordsContainerSerializer{recordsVersion}.Deserialize({input});";
+        }
+
+        if (propertyType == "ConsumerProtocolAssignment")
+        {
+            return $"{propertyPath} = ConsumerProtocolAssignmentSerializationHelper.Deserialize({input}, {flexible.ToString().ToLower()});";
         }
 
         return $"{propertyPath} = {propertyType}SerializerV{version}.Deserialize({input});";
