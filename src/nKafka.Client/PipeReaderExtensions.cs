@@ -9,18 +9,32 @@ public static class PipeReaderExtensions
         this PipeReader reader,
         CancellationToken cancellationToken = default)
     {
-        #warning stackalloc if possible
-        var buffer = new byte[4];
-        var read = await reader.ReadAsync(buffer, 4, cancellationToken);
-        if (read != buffer.Length)
+        do
         {
-            throw new EndOfStreamException();
-        }
-        if (BitConverter.IsLittleEndian)
-        {
-            Array.Reverse(buffer);
-        }
-        return BitConverter.ToInt32(buffer);
+            cancellationToken.ThrowIfCancellationRequested();
+            
+            var readResult = await reader.ReadAtLeastAsync(4, cancellationToken);
+            if (readResult.Buffer.Length == 0)
+            {
+                continue;
+            }
+
+            return ConvertToInt();
+
+            // Span<T> in async method hack
+            int ConvertToInt()
+            {
+                Span<byte> buffer = stackalloc byte[4];
+                readResult.Buffer.Slice(0, 4).CopyTo(buffer);
+                reader.AdvanceTo(readResult.Buffer.GetPosition(buffer.Length));
+                if (BitConverter.IsLittleEndian)
+                {
+                    buffer.Reverse();
+                }
+
+                return BitConverter.ToInt32(buffer);
+            }
+        } while (true);
     }
     
     public static async ValueTask<int> ReadAsync(
