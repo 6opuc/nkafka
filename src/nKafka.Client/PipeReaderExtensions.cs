@@ -13,7 +13,8 @@ public static class PipeReaderExtensions
         {
             cancellationToken.ThrowIfCancellationRequested();
             
-            var readResult = await reader.ReadAtLeastAsync(4, cancellationToken);
+            var readResult = await reader.ReadAtLeastAsync(4, cancellationToken)
+                .ConfigureAwait(false);
             if (readResult.Buffer.Length == 0)
             {
                 continue;
@@ -48,25 +49,22 @@ public static class PipeReaderExtensions
             return 0;
         }
 
-        var readCount = 0;
-
-        ReadResult result;
         do
         {
-            result = await reader.ReadAsync(cancellationToken)
+            cancellationToken.ThrowIfCancellationRequested();
+            
+            var readResult = await reader.ReadAtLeastAsync(length, cancellationToken)
                 .ConfigureAwait(false);
-            var buffer = result.Buffer.Slice(
-                0, Math.Min(length - readCount, result.Buffer.Length));
-            buffer.CopyTo(output.AsSpan()[readCount..]);
-            readCount += (int)buffer.Length;
-            reader.AdvanceTo(buffer.GetPosition(buffer.Length));
-
-            if (readCount == length)
+            if (readResult.Buffer.Length == 0)
             {
-                return readCount;
+                continue;
             }
-        } while (!result.IsCanceled && !result.IsCompleted);
+            
+            var buffer = readResult.Buffer.Slice(0, length);
+            buffer.CopyTo(output.AsSpan());
+            reader.AdvanceTo(buffer.GetPosition(length));
 
-        return readCount;
+            return length;
+        } while (true);
     }
 }
