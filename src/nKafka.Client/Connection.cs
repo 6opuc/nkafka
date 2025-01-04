@@ -9,8 +9,6 @@ using nKafka.Contracts;
 
 namespace nKafka.Client;
 
-#warning try use configureAwait(false) everywhere
-
 public class Connection : IConnection
 {
     private readonly ILogger _logger;

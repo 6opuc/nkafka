@@ -40,9 +40,7 @@ public class SocketWriterStream : Stream
     {
         try
         {
-            await _socket
-                .SendAsync(buffer, SocketFlags.None, cancellationToken)
-                .ConfigureAwait(false);
+            await _socket.SendAsync(buffer, SocketFlags.None, cancellationToken);
         }
         catch (SocketException) when (!_socket.Connected)
         {

@@ -13,13 +13,12 @@ public static class PipeReaderExtensions
         {
             cancellationToken.ThrowIfCancellationRequested();
             
-            var readResult = await reader.ReadAtLeastAsync(4, cancellationToken)
-                .ConfigureAwait(false);
+            var readResult = await reader.ReadAtLeastAsync(4, cancellationToken);
             if (readResult.Buffer.Length == 0)
             {
                 continue;
             }
-
+            
             return ConvertToInt();
 
             // Span<T> in async method hack
@@ -53,8 +52,7 @@ public static class PipeReaderExtensions
         {
             cancellationToken.ThrowIfCancellationRequested();
             
-            var readResult = await reader.ReadAtLeastAsync(length, cancellationToken)
-                .ConfigureAwait(false);
+            var readResult = await reader.ReadAtLeastAsync(length, cancellationToken);
             if (readResult.Buffer.Length == 0)
             {
                 continue;
