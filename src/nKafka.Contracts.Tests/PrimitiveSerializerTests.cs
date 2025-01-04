@@ -195,6 +195,86 @@ public class PrimitiveSerializerTests
 
     #endregion Int
     
+    #region Long
+
+    [Test]
+    [TestCaseSource(nameof(GetLongCases))]
+    public void SerializeLong_ByTestCase_ProducesExpectedOutput(SerializeTestCase<long> testCase)
+    {
+        using var stream = new MemoryStream(0);
+        PrimitiveSerializer.SerializeLong(stream, testCase.Value);
+
+        var actual = stream.ToArray();
+
+        actual.Should().BeEquivalentTo(testCase.Bytes);
+    }
+
+    [Test]
+    [TestCaseSource(nameof(GetLongCases))]
+    public void DeserializeLong_ByTestCase_ProducesExpectedOutput(SerializeTestCase<long> testCase)
+    {
+        using var stream = new MemoryStream(testCase.Bytes, 0, testCase.Bytes.Length, false, true);
+        var actual = PrimitiveSerializer.DeserializeLong(stream);
+
+        actual.Should().Be(testCase.Value);
+    }
+
+    public static IEnumerable<SerializeTestCase<long>> GetLongCases()
+    {
+        yield return new SerializeTestCase<long>(0, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        yield return new SerializeTestCase<long>(1, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]);
+        yield return new SerializeTestCase<long>(-1, [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+        yield return new SerializeTestCase<long>(-64, [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xC0]);
+        yield return new SerializeTestCase<long>(127, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7F]);
+        yield return new SerializeTestCase<long>(300, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x2C]);
+        yield return new SerializeTestCase<long>(int.MaxValue, [0x00, 0x00, 0x00, 0x00, 0x7F, 0xFF, 0xFF, 0xFF]);
+        yield return new SerializeTestCase<long>(long.MaxValue, [0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+    }
+
+    #endregion Long
+    
+    #region Double
+
+    [Test]
+    [TestCaseSource(nameof(GetDoubleCases))]
+    public void SerializeDouble_ByTestCase_ProducesExpectedOutput(SerializeTestCase<double> testCase)
+    {
+        using var stream = new MemoryStream(0);
+        PrimitiveSerializer.SerializeDouble(stream, testCase.Value);
+
+        var actual = stream.ToArray();
+
+        actual.Should().BeEquivalentTo(testCase.Bytes);
+    }
+
+    [Test]
+    [TestCaseSource(nameof(GetDoubleCases))]
+    public void DeserializeDouble_ByTestCase_ProducesExpectedOutput(SerializeTestCase<double> testCase)
+    {
+        using var stream = new MemoryStream(testCase.Bytes, 0, testCase.Bytes.Length, false, true);
+        var actual = PrimitiveSerializer.DeserializeDouble(stream);
+
+        actual.Should().Be(testCase.Value);
+    }
+
+    public static IEnumerable<SerializeTestCase<double>> GetDoubleCases()
+    {
+        
+        yield return new SerializeTestCase<double>(0, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        yield return new SerializeTestCase<double>(1, [0x3F, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        yield return new SerializeTestCase<double>(-1, [0xBF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        yield return new SerializeTestCase<double>(-64, [0xC0, 0x50, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        yield return new SerializeTestCase<double>(127, [0x40, 0x5F, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        yield return new SerializeTestCase<double>(300, [0x40, 0x72, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        yield return new SerializeTestCase<double>(int.MaxValue, [0x41, 0xDF, 0xFF, 0xFF, 0xFF, 0xC0, 0x00, 0x00]);
+        yield return new SerializeTestCase<double>(long.MaxValue, [0x43, 0xE0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        yield return new SerializeTestCase<double>(double.MaxValue, [0x7F, 0xEF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+        
+        yield break;
+    }
+
+    #endregion Double
+    
     #region Guid
 
     [Test]

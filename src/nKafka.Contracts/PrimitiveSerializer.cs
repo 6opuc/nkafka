@@ -4,6 +4,8 @@ namespace nKafka.Contracts;
 
 public static class PrimitiveSerializer
 {
+    #warning BitConverter.IsLittleEndian!!!
+    
     private static readonly byte[] MinusOneShort = [0xff, 0xff];
     private static readonly byte[] MinusOneVarInt = { 0x01 };
     private const byte ZeroByte = 0x00;
@@ -202,6 +204,60 @@ public static class PrimitiveSerializer
         }
 
         return value;
+    }
+
+    public static void SerializeDouble(MemoryStream output, double? value)
+    {
+        var copy = value!.Value;
+        unsafe
+        {
+            var p = (byte*)&copy;
+            
+            if (BitConverter.IsLittleEndian)
+            {
+                for (var i = 7; i >= 0; i--)
+                {
+                    output.WriteByte(p[i]);
+                }
+            }
+            else
+            {
+                for (var i = 0; i < 8; i++)
+                {
+                    output.WriteByte(p[i]);
+                }
+            }
+        }
+    }
+
+    public static double DeserializeDouble(MemoryStream input)
+    {
+        if (input.Position + 8 > input.Length)
+        {
+            throw new Exception($"DeserializeDouble needs 8 bytes but got only {input.Length - input.Position}");
+        }
+        
+        var buffer = input.GetBuffer().AsSpan((int)input.Position, 8);
+           
+        var result = 0.0d; 
+        if (BitConverter.IsLittleEndian)
+        {
+            unsafe
+            {
+                var p = (byte*)&result;
+                for (var i = 0; i < 8; i++)
+                {
+                    p[7-i] = buffer[i];
+                }
+            }
+        }
+        else
+        {
+            result = BitConverter.ToDouble(buffer);
+        }
+        
+        input.Position += 8;
+        return result;
     }
 
     public static void SerializeBool(MemoryStream output, bool? value)

@@ -345,6 +345,11 @@ public static class FieldDefinitionExtensions
             return $"PrimitiveSerializer.SerializeLong({output}, {propertyPath});";
         }
 
+        if (propertyType == "double")
+        {
+            return $"PrimitiveSerializer.SerializeDouble({output}, {propertyPath});";
+        }
+
         if (propertyType == "byte[]")
         {
             var lengthSerialization = flexible
@@ -654,6 +659,11 @@ public static class FieldDefinitionExtensions
         if (propertyType == "long")
         {
             return $"{propertyPath} = PrimitiveSerializer.DeserializeLong({input});";
+        }
+        
+        if (propertyType == "double")
+        {
+            return $"{propertyPath} = PrimitiveSerializer.DeserializeDouble({input});";
         }
 
         if (propertyType == "byte[]")

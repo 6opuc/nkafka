@@ -1,8 +1,8 @@
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Text;
 using nKafka.Contracts.Generator.Definitions;
 
 namespace nKafka.Contracts.Generator;
@@ -20,13 +20,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(messageDefinitions, GenerateCodeForRequestClients);
     }
 
-    #warning implement support for excluded messages
-    private static readonly string[] ExcludeMessages = [
-        "ListTransactionsResponse",
-        "DescribeTransactionsResponse",
-        "AlterClientQuotasRequest",
-        "DescribeClientQuotasResponse"
-    ];
+    private static readonly string[] ExcludeMessages = [];
     private static IncrementalValueProvider<ImmutableArray<MessageDefinition>> ParseMessageDefinitions(
         IncrementalGeneratorInitializationContext context)
     {
@@ -36,12 +30,41 @@ public class ContractsSourceGenerator : IIncrementalGenerator
             .Where(x => !ExcludeMessages.Any(e => x.Path.Contains(e)))
             .Select((x, token) => x.GetText(token))
             .Where(x => x != null)
-            .Select((x, _) => JsonSerializer.Deserialize<MessageDefinition>(
-                x!.ToString(), MessageDefinitionJsonSerializerOptions.Default))
+            .Select((x, _) => DeserializeMessageDefinition(x))
             .Where(x => x != null)
             .Select((x, _) => x!)
             .Collect();
         return messageDefinitions;
+    }
+
+    private static MessageDefinition? DeserializeMessageDefinition(SourceText? sourceText)
+    {
+        var messageDefinition = JsonSerializer.Deserialize<MessageDefinition>(
+            sourceText!.ToString(), MessageDefinitionJsonSerializerOptions.Default);
+        if (messageDefinition == null)
+        {
+            return null;
+        }
+
+        RenamePropertiesInNestedTypes(messageDefinition.Fields, messageDefinition.Name);
+        return messageDefinition;
+    }
+
+    private static void RenamePropertiesInNestedTypes(IEnumerable<FieldDefinition> fields, string? declaringTypeName)
+    {
+        foreach (var field in fields)
+        {
+            if (field.Name == declaringTypeName)
+            {
+                field.Name = field.Name switch
+                {
+                    "TransactionState" => "State",
+                    _ => $"__{field.Name}"
+                };
+            }
+
+            RenamePropertiesInNestedTypes(field.Fields, field.GetFieldItemType());
+        }
     }
 
     private void GenerateCodeForMessageDefinitions(
