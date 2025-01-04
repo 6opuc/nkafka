@@ -4,8 +4,6 @@ namespace nKafka.Contracts;
 
 public static class PrimitiveSerializer
 {
-    #warning BitConverter.IsLittleEndian!!!
-    
     private static readonly byte[] MinusOneShort = [0xff, 0xff];
     private static readonly byte[] MinusOneVarInt = { 0x01 };
     private const byte ZeroByte = 0x00;
