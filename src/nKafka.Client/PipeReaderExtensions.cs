@@ -13,12 +13,13 @@ public static class PipeReaderExtensions
         {
             cancellationToken.ThrowIfCancellationRequested();
             
+            #warning System.InvalidOperationException : Reading is already in progress.
             var readResult = await reader.ReadAtLeastAsync(4, cancellationToken);
             if (readResult.Buffer.Length == 0)
             {
                 continue;
             }
-            
+
             return ConvertToInt();
 
             // Span<T> in async method hack
@@ -27,12 +28,11 @@ public static class PipeReaderExtensions
                 Span<byte> buffer = stackalloc byte[4];
                 readResult.Buffer.Slice(0, 4).CopyTo(buffer);
                 reader.AdvanceTo(readResult.Buffer.GetPosition(buffer.Length));
-                if (BitConverter.IsLittleEndian)
-                {
-                    buffer.Reverse();
-                }
-
-                return BitConverter.ToInt32(buffer);
+                return
+                    (buffer[0] << 24) |
+                    (buffer[1] << 16) |
+                    (buffer[2] << 8) |
+                    buffer[3];
             }
         } while (true);
     }
