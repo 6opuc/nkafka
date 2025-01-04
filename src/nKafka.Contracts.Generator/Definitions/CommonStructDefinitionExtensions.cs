@@ -39,4 +39,18 @@ public static class CommonStructDefinitionExtensions
 
         return commonStruct.Fields.ToNestedSerializerDeclarations(apiKey, version, flexible, nestedTypeName!);
     }
+    public static string ToNestedValidatorDeclaration(
+        this CommonStructDefinition commonStruct,
+        short? apiKey,
+        short version)
+    {
+        if (!commonStruct.Versions.Includes(version))
+        {
+            return String.Empty;
+        }
+
+        var nestedTypeName = commonStruct.Name;
+
+        return commonStruct.Fields.ToNestedValidatorDeclarations(apiKey, version, nestedTypeName!);
+    }
 }

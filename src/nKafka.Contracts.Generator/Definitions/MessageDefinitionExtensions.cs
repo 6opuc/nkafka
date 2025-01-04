@@ -86,7 +86,7 @@ public static class MessageDefinitionExtensions
 
         return source.ToString();
     }
-
+    
     public static string ToNestedSerializerDeclarations(this MessageDefinition messageDefinition)
     {
         var source = new StringBuilder();
@@ -111,6 +111,92 @@ public static class MessageDefinitionExtensions
                     if (!string.IsNullOrEmpty(nestedSerializer))
                     {
                         source.AppendLine(nestedSerializer);
+                    }
+                }
+            }
+        }
+
+        return source.ToString();
+    }
+    
+    public static string ToValidatorDeclarations(this MessageDefinition messageDefinition)
+    {
+        var source = new StringBuilder(
+            $$"""
+              public static class {{messageDefinition.Name}}Validator
+              {
+                 public static void Validate(short version, {{messageDefinition.Name}} message)
+                 {
+                    switch (version)
+                    {
+              """);
+        if (messageDefinition.ValidVersions.HasValue)
+        {
+            foreach (var version in messageDefinition.ValidVersions.Value)
+            {
+                source.AppendLine($$"""
+                                    case {{version}}:
+                                        {{messageDefinition.Name}}ValidatorV{{version}}.Validate(message);
+                                        break;
+                                    """);
+            }
+        }
+
+        source.AppendLine("""
+                            default:
+                                       throw new InvalidOperationException($"Version {version} is not supported.");
+                               }
+                            }
+                          }
+                          """);
+
+
+        if (messageDefinition.ValidVersions.HasValue)
+        {
+            foreach (var version in messageDefinition.ValidVersions.Value)
+            {
+                source.AppendLine(
+                    $$"""
+                      public static class {{messageDefinition.Name}}ValidatorV{{version}}
+                      {
+                         public static void Validate({{messageDefinition.Name}} message)
+                         {
+                            if (message == null)
+                            {
+                                throw new InvalidOperationException($"Message is null.");
+                            }
+                            {{messageDefinition.Fields.ToValidationStatements(messageDefinition.ApiKey, version)}}
+                         }
+                      }
+                      """);
+            }
+        }
+
+        return source.ToString();
+    }
+    
+    public static string ToNestedValidatorDeclarations(this MessageDefinition messageDefinition)
+    {
+        var source = new StringBuilder();
+        if (messageDefinition.ValidVersions.HasValue)
+        {
+            foreach (var version in messageDefinition.ValidVersions.Value)
+            {
+                foreach (var fieldDefinition in messageDefinition.Fields)
+                {
+                    var nestedValidator = fieldDefinition.ToNestedValidatorDeclaration(messageDefinition.ApiKey, version);
+                    if (!string.IsNullOrEmpty(nestedValidator))
+                    {
+                        source.AppendLine(nestedValidator);
+                    }
+                }
+
+                foreach (var commonStruct in messageDefinition.CommonStructs)
+                {
+                    var nestedValidator = commonStruct.ToNestedValidatorDeclaration(messageDefinition.ApiKey, version);
+                    if (!string.IsNullOrEmpty(nestedValidator))
+                    {
+                        source.AppendLine(nestedValidator);
                     }
                 }
             }

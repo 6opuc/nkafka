@@ -118,6 +118,29 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                             {{messageDefinition.ToNestedSerializerDeclarations()}}
                       }
                       """));
+            
+            context.AddSource(
+                $"MessageValidators/{messageDefinition.Name}Validator.g.cs",
+                Format(
+                    $$"""
+                      #nullable enable
+
+                      using nKafka.Contracts.Records;
+                      using nKafka.Contracts.MessageDefinitions;
+                      using nKafka.Contracts.MessageDefinitions.{{messageDefinition.Name}}Nested;
+
+                      namespace nKafka.Contracts.MessageValidators
+                      {
+                            using nKafka.Contracts.MessageValidators.{{messageDefinition.Name}}Nested;
+                        
+                            {{messageDefinition.ToValidatorDeclarations()}}
+                      }
+
+                      namespace nKafka.Contracts.MessageValidators.{{messageDefinition.Name}}Nested
+                      {
+                            {{messageDefinition.ToNestedValidatorDeclarations()}}
+                      }
+                      """));
         }
     }
 
@@ -160,6 +183,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                       {
                           using nKafka.Contracts.MessageDefinitions;
                           using nKafka.Contracts.MessageSerializers;
+                          using nKafka.Contracts.MessageValidators;
                           
                           public class {{pair.Request.Name}}Client : RequestClient<{{pair.Response!.Name}}>
                           {
@@ -173,6 +197,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                               
                               public {{pair.Request.Name}}Client(short apiVersion, {{pair.Request.Name}} request)
                               {
+                                  {{pair.Request.Name}}Validator.Validate(apiVersion, request);
                                   ApiVersion = apiVersion;
                                   _request = request;
                               }

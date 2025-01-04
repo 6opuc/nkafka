@@ -453,7 +453,6 @@ public static class FieldDefinitionExtensions
         return field.Fields.ToNestedSerializerDeclarations(apiKey, version, flexible, nestedTypeName!);
     }
     
-    
     public static string ToDeserializationStatements(
         this IList<FieldDefinition> fields,
         short? apiKey,
@@ -706,4 +705,239 @@ public static class FieldDefinitionExtensions
         return $"{propertyPath} = {propertyType}SerializerV{version}.Deserialize({input});";
     }
 
+    public static string ToValidationStatements(
+        this IList<FieldDefinition> fields,
+        short? apiKey,
+        short version)
+    {
+        var source = new StringBuilder();
+        foreach (var field in fields)
+        {
+            var fieldStatements = field.ToValidationStatements(apiKey, version);
+            if (!string.IsNullOrEmpty(fieldStatements))
+            {
+                source.AppendLine(fieldStatements);
+            }
+        }
+        
+        return source.ToString();
+    }
+    
+    public static string ToValidationStatements(
+        this FieldDefinition field,
+        short? apiKey,
+        short version)
+    {
+        if (!field.Versions.Includes(version))
+        {
+            return string.Empty;
+        }
+
+        var source = new StringBuilder();
+        var ignorable = field.Ignorable ||
+                        (
+                            field.NullableVersions != null &&
+                            field.NullableVersions.Includes(version)
+                        );
+        source.AppendLine($"""
+                           // field.Name: {field.Name}
+                           // ignorable: {ignorable}
+                           // field.Ignorable: {field.Ignorable}
+                           // field.NullableVersions != null: {field.NullableVersions != null}
+                           // field.NullableVersions.Includes(version): {field.NullableVersions?.Includes(version)}
+                           // version: {version}
+                           // field.NullableVersions: {field.NullableVersions}
+                           """);
+
+        var propertyType = field.GetFieldItemPropertyType();
+        if (!field.IsCollection())
+        {
+            var statements = GetValidationStatements(
+                $"message.{field.Name}",
+                apiKey,
+                version,
+                propertyType,
+                ignorable);
+            if (!string.IsNullOrEmpty(statements))
+            {
+                source.AppendLine(statements);
+            }
+        }
+        else
+        {
+            if (!ignorable)
+            {
+                source.AppendLine($$"""
+                                    if (message.{{field.Name}} == null || message.{{field.Name}}.Count == 0)
+                                    {
+                                        throw new InvalidOperationException($"message.{{field.Name}} has not been defined.");
+                                    }
+                                    """);
+            }
+            else
+            {
+                source.AppendLine($$"""
+                                    if (message.{{field.Name}} != null)
+                                    {
+                                    """);
+            }
+
+            if (!IsPropertyTypePrimitive(propertyType) || IsPropertyTypeNullable(propertyType))
+            {
+                if (!field.IsMap())
+                {
+                    source.AppendLine($"foreach (var item in message.{field.Name})");
+                }
+                else
+                {
+                    source.AppendLine($"foreach (var item in message.{field.Name}.Values)");
+                }
+
+                source.AppendLine("{");
+                source.AppendLine(GetValidationStatements("item", apiKey, version, propertyType, false));
+                source.AppendLine("}");
+            }
+
+            if (ignorable)
+            {
+                source.AppendLine("}");
+            }
+        }
+
+        return source.ToString();
+    }
+    
+    private static string GetValidationStatements(
+        string propertyPath,
+        short? apiKey,
+        short version,
+        string? propertyType,
+        bool ignorable)
+    {
+        var source = new StringBuilder();
+        if (!ignorable)
+        {
+            source.AppendLine($$"""
+                                if ({{propertyPath}} == null)
+                                {
+                                    throw new InvalidOperationException($"{{propertyPath}} has not been defined.");
+                                }
+                                """);
+        }
+
+        if (IsPropertyTypePrimitive(propertyType))
+        {
+            return source.ToString();
+        }
+        
+        if (ignorable)
+        {
+            source.AppendLine($$"""
+                                if ({{propertyPath}} != null)
+                                {
+                                """);
+        }
+        switch (propertyType)
+        {
+            case "RecordsContainer":
+            {
+                var recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
+                source.AppendLine($"RecordsValidator{recordsVersion}.Validate({propertyPath});");
+                break;
+            }
+            case "ConsumerProtocolAssignment":
+                source.AppendLine($"ConsumerProtocolAssignmentValidator.Validate(3, {propertyPath});");
+                break;
+            case "ConsumerProtocolSubscription":
+                source.AppendLine($"ConsumerProtocolSubscriptionValidator.Validate(3, {propertyPath});");
+                break;
+            default:
+                source.AppendLine($"{propertyType}ValidatorV{version}.Validate({propertyPath});");
+                break;
+        }
+
+        if (ignorable)
+        {
+            source.AppendLine("}");
+        }
+
+        return source.ToString();
+    }
+
+    private static bool IsPropertyTypePrimitive(string? propertyType)
+    {
+        return propertyType == "string" ||
+               propertyType == "short" ||
+               propertyType == "ushort" ||
+               propertyType == "byte" ||
+               propertyType == "bool" ||
+               propertyType == "int" ||
+               propertyType == "long" ||
+               propertyType == "double" ||
+               propertyType == "Guid" ||
+               propertyType == "byte[]";
+    }
+    
+    private static bool IsPropertyTypeNullable(string? propertyType)
+    {
+        if (!IsPropertyTypePrimitive(propertyType))
+        {
+            return true;
+        }
+        return propertyType == "string" ||
+               propertyType == "byte[]";
+    }
+
+    public static string ToNestedValidatorDeclaration(
+        this FieldDefinition field,
+        short? apiKey,
+        short version)
+    {
+        if (!field.Versions.Includes(version))
+        {
+            return String.Empty;
+        }
+
+        var nestedTypeName = field.GetFieldItemType();
+        return field.Fields.ToNestedValidatorDeclarations(apiKey, version, nestedTypeName!);
+    }
+    
+    public static string ToNestedValidatorDeclarations(
+        this IList<FieldDefinition> fields,
+        short? apiKey,
+        short version,
+        string nestedTypeName)
+    {
+        if (!fields.Any())
+        {
+            return string.Empty;
+        }
+
+        var source = new StringBuilder();
+        source.AppendLine(
+            $$"""
+              public static class {{nestedTypeName}}ValidatorV{{version}}
+              {
+                 public static void Validate({{nestedTypeName}} message)
+                 {
+                    if (message == null)
+                    {
+                        throw new InvalidOperationException($"Message is null.");
+                    }
+                    {{fields.ToValidationStatements(apiKey, version)}}
+                 }
+              }
+              """);
+
+        foreach (var child in fields)
+        {
+            var childSerializer = child.ToNestedValidatorDeclaration(apiKey, version);
+            if (!string.IsNullOrWhiteSpace(childSerializer))
+            {
+                source.AppendLine(childSerializer);
+            }
+        }
+
+        return source.ToString();
+    }
 }
