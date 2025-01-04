@@ -149,7 +149,6 @@ public class ContractsSourceGenerator : IIncrementalGenerator
 
         foreach (var pair in pairs)
         {
-            #warning Validation for requests: nullable, ignorable
             context.AddSource(
                 $"RequestClients/{pair.Request.Name}Client.g.cs",
                 Format(
