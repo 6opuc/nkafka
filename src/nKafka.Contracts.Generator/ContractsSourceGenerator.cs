@@ -10,8 +10,6 @@ namespace nKafka.Contracts.Generator;
 [Generator]
 public class ContractsSourceGenerator : IIncrementalGenerator
 {
-    #warning zeroCopy attribute in fields
-    
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var messageDefinitions = ParseMessageDefinitions(context);
