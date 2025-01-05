@@ -21,7 +21,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
     
-    private CancellationTokenSource? _stop;
+    private CancellationTokenSource? _stopSendingHeartBeats;
     private Task? _heartbeatsBackgroundTask;
     private readonly Dictionary<int, IConnection> _connections = new ();
     private IDictionary<short, ApiVersion>? _apiVersionsSupported = new Dictionary<short, ApiVersion>();
@@ -53,9 +53,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     
     public async ValueTask JoinGroupAsync(CancellationToken cancellationToken)
     {
-        #warning move to heartbeats?
-        _stop = new CancellationTokenSource();
-        
         using var _ = BeginDefaultLoggingScope();
         await OpenConnectionsAsync(cancellationToken);
         var connection = GetCoordinatorConnection();
@@ -467,12 +464,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         //return;
         #warning if no poll request for more than MaxPollIntervalMs, then leave the group
         
-        if (_stop == null)
-        {
-            return;
-        }
+        _stopSendingHeartBeats = new CancellationTokenSource();
 
-        var cancellationToken = _stop.Token;
+        var cancellationToken = _stopSendingHeartBeats.Token;
         _heartbeatsBackgroundTask = Task.Run(
             async () =>
             {
@@ -661,9 +655,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         using var _ = BeginDefaultLoggingScope();
         
-        if (_stop != null)
+        if (_stopSendingHeartBeats != null)
         {
-            await _stop.CancelAsync();
+            await _stopSendingHeartBeats.CancelAsync();
             if (_heartbeatsBackgroundTask != null)
             {
                 await _heartbeatsBackgroundTask;
