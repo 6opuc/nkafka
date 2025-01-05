@@ -374,17 +374,17 @@ public static class FieldDefinitionExtensions
         if (propertyType == "RecordsContainer")
         {
             var recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
-            return $"RecordsContainerSerializer{recordsVersion}.Serialize({output}, {propertyPath});";
+            return $"RecordsContainerSerializer{recordsVersion}.Serialize({output}, {propertyPath}, context);";
         }
 
         if (propertyType == "ConsumerProtocolAssignment")
         {
-            return $"ConsumerProtocolAssignmentSerializationHelper.Serialize({output}, {propertyPath}, {flexible.ToString().ToLower()});";
+            return $"ConsumerProtocolAssignmentSerializationHelper.Serialize({output}, {propertyPath}, {flexible.ToString().ToLower()}, context);";
         }
 
         if (propertyType == "ConsumerProtocolSubscription")
         {
-            return $"ConsumerProtocolSubscriptionSerializationHelper.Serialize({output}, {propertyPath}, {flexible.ToString().ToLower()});";
+            return $"ConsumerProtocolSubscriptionSerializationHelper.Serialize({output}, {propertyPath}, {flexible.ToString().ToLower()}, context);";
         }
 
         return $$"""
@@ -392,7 +392,7 @@ public static class FieldDefinitionExtensions
                  {
                     throw new InvalidOperationException("Property {{propertyPath}} has not been initialized.");
                  }
-                 {{propertyType}}SerializerV{{version}}.Serialize({{output}}, {{propertyPath}});
+                 {{propertyType}}SerializerV{{version}}.Serialize({{output}}, {{propertyPath}}, context);
                  """;
     }
 
@@ -413,12 +413,12 @@ public static class FieldDefinitionExtensions
             $$"""
               public static class {{nestedTypeName}}SerializerV{{version}}
               {
-                 public static void Serialize(MemoryStream output, {{nestedTypeName}} message)
+                 public static void Serialize(MemoryStream output, {{nestedTypeName}} message, ISerializationContext context)
                  {
                     {{fields.ToSerializationStatements(apiKey, version, flexible)}}
                  }
                  
-                 public static {{nestedTypeName}} Deserialize(MemoryStream input)
+                 public static {{nestedTypeName}} Deserialize(MemoryStream input, ISerializationContext context)
                  {
                     var message = new {{nestedTypeName}}();
                     {{fields.ToDeserializationStatements(apiKey, version, flexible)}}
@@ -691,20 +691,20 @@ public static class FieldDefinitionExtensions
         if (propertyType == "RecordsContainer")
         {
             var recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
-            return $"{propertyPath} = RecordsContainerSerializer{recordsVersion}.Deserialize({input});";
+            return $"{propertyPath} = RecordsContainerSerializer{recordsVersion}.Deserialize({input}, context);";
         }
 
         if (propertyType == "ConsumerProtocolAssignment")
         {
-            return $"{propertyPath} = ConsumerProtocolAssignmentSerializationHelper.Deserialize({input}, {flexible.ToString().ToLower()});";
+            return $"{propertyPath} = ConsumerProtocolAssignmentSerializationHelper.Deserialize({input}, {flexible.ToString().ToLower()}, context);";
         }
 
         if (propertyType == "ConsumerProtocolSubscription")
         {
-            return $"{propertyPath} = ConsumerProtocolSubscriptionSerializationHelper.Deserialize({input}, {flexible.ToString().ToLower()});";
+            return $"{propertyPath} = ConsumerProtocolSubscriptionSerializationHelper.Deserialize({input}, {flexible.ToString().ToLower()}, context);";
         }
 
-        return $"{propertyPath} = {propertyType}SerializerV{version}.Deserialize({input});";
+        return $"{propertyPath} = {propertyType}SerializerV{version}.Deserialize({input}, context);";
     }
 
 }

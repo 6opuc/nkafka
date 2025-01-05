@@ -176,14 +176,14 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                                   _request = request;
                               }
                               
-                              protected override void SerializeRequestPayload(MemoryStream output)
+                              protected override void SerializeRequestPayload(MemoryStream output, ISerializationContext context)
                               {
-                                  {{pair.Request.Name}}Serializer.Serialize(output, _request, ApiVersion);
+                                  {{pair.Request.Name}}Serializer.Serialize(output, _request, ApiVersion, context);
                               }
                               
-                              protected override {{pair.Response!.Name}} DeserializeResponsePayload(MemoryStream input)
+                              protected override {{pair.Response!.Name}} DeserializeResponsePayload(MemoryStream input, ISerializationContext context)
                               {
-                                  return {{pair.Response!.Name}}Serializer.Deserialize(input, ApiVersion);
+                                  return {{pair.Response!.Name}}Serializer.Deserialize(input, ApiVersion, context);
                               }
                           }
                       }

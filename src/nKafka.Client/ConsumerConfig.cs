@@ -15,6 +15,8 @@ public class ConsumerConfig
     
     public int MaxPollIntervalMs { get; }
     
+    public bool CheckCrcs { get; init; } = false;
+    
 
     public ConsumerConfig(
         string bootstrapServers,

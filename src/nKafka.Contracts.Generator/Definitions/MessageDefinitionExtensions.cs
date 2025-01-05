@@ -10,7 +10,7 @@ public static class MessageDefinitionExtensions
             $$"""
               public static class {{messageDefinition.Name}}Serializer
               {
-                 public static void Serialize(MemoryStream output, {{messageDefinition.Name}} message, short version)
+                 public static void Serialize(MemoryStream output, {{messageDefinition.Name}} message, short version, ISerializationContext context)
                  {
                     switch (version)
                     {
@@ -21,7 +21,7 @@ public static class MessageDefinitionExtensions
             {
                 source.AppendLine($$"""
                                     case {{version}}:
-                                        {{messageDefinition.Name}}SerializerV{{version}}.Serialize(output, message);
+                                        {{messageDefinition.Name}}SerializerV{{version}}.Serialize(output, message, context);
                                         break;
                                     """);
             }
@@ -33,7 +33,7 @@ public static class MessageDefinitionExtensions
                                }
                             }
 
-                            public static {{messageDefinition.Name}} Deserialize(MemoryStream input, short version)
+                            public static {{messageDefinition.Name}} Deserialize(MemoryStream input, short version, ISerializationContext context)
                             {
                                switch (version)
                                {
@@ -44,7 +44,7 @@ public static class MessageDefinitionExtensions
             {
                 source.AppendLine($$"""
                                     case {{version}}:
-                                        return {{messageDefinition.Name}}SerializerV{{version}}.Deserialize(input);
+                                        return {{messageDefinition.Name}}SerializerV{{version}}.Deserialize(input, context);
                                     """);
             }
         }
@@ -68,12 +68,12 @@ public static class MessageDefinitionExtensions
                     $$"""
                       public static class {{messageDefinition.Name}}SerializerV{{version}}
                       {
-                         public static void Serialize(MemoryStream output, {{messageDefinition.Name}} message)
+                         public static void Serialize(MemoryStream output, {{messageDefinition.Name}} message, ISerializationContext context)
                          {
                             {{messageDefinition.Fields.ToSerializationStatements(messageDefinition.ApiKey, version, flexible)}}
                          }
                          
-                         public static {{messageDefinition.Name}} Deserialize(MemoryStream input)
+                         public static {{messageDefinition.Name}} Deserialize(MemoryStream input, ISerializationContext context)
                          {
                             var message = new {{messageDefinition.Name}}();
                             {{messageDefinition.Fields.ToDeserializationStatements(messageDefinition.ApiKey, version, flexible)}}

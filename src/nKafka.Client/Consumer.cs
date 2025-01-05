@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Collections.ObjectModel;
 using Microsoft.Extensions.Logging;
 using nKafka.Contracts;
 using nKafka.Contracts.MessageDefinitions;
@@ -108,7 +107,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 broker.Port!.Value,
                 _config.ClientId,
                 _config.ResponseBufferSize,
-                _config.RequestBufferSize);
+                _config.RequestBufferSize)
+            {
+                CheckCrcs = _config.CheckCrcs,
+            };
             var connection = new Connection(connectionConfig, _loggerFactory);
             await connection.OpenAsync(cancellationToken);
             _connections[broker.NodeId!.Value] = connection;
@@ -203,7 +205,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 response.Message.Port!.Value,
                 _config.ClientId,
                 _config.ResponseBufferSize,
-                _config.RequestBufferSize);
+                _config.RequestBufferSize)
+            {
+                CheckCrcs = _config.CheckCrcs,
+            };
         }
         else
         {
@@ -225,7 +230,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 coordinator.Port!.Value,
                 _config.ClientId,
                 _config.ResponseBufferSize,
-                _config.RequestBufferSize);
+                _config.RequestBufferSize)
+            {
+                CheckCrcs = _config.CheckCrcs,
+            };
         }
 
         var coordinatorConnection = new Connection(coordinatorConnectionConfig, _loggerFactory);

@@ -2,12 +2,12 @@ namespace nKafka.Contracts.Records;
 
 public static class RecordsContainerSerializerV3
 {
-    public static void Serialize(MemoryStream output, RecordsContainer? message)
+    public static void Serialize(MemoryStream output, RecordsContainer? message, ISerializationContext context)
     {
         throw new NotImplementedException();
     }
 
-    public static RecordsContainer? Deserialize(MemoryStream input)
+    public static RecordsContainer? Deserialize(MemoryStream input, ISerializationContext context)
     {
         var size = PrimitiveSerializer.DeserializeLength(input);
         if (size < 0)
@@ -29,7 +29,7 @@ public static class RecordsContainerSerializerV3
         var endOfLastRecordBatch = start;
         while (true)
         {
-            var recordBatch = RecordBatchSerializerV2.Deserialize(input);
+            var recordBatch = RecordBatchSerializerV2.Deserialize(input, context);
             if (recordBatch == null)
             {
                 // incomplete batch

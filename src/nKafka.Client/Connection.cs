@@ -30,6 +30,8 @@ public class Connection : IConnection
     private ConcurrentQueue<PendingRequest> _pendingRequests = new();
     
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+    
+    private readonly SerializationContext _serializationContext;
 
     public Connection(ConnectionConfig config, ILoggerFactory loggerFactory)
     {
@@ -37,6 +39,14 @@ public class Connection : IConnection
         ArgumentNullException.ThrowIfNull(loggerFactory);
         _config = config;
         _logger = loggerFactory.CreateLogger<Connection>();
+        _serializationContext = new SerializationContext
+        {
+            Config = new SerializationConfig
+            {
+                ClientId = _config.ClientId,
+                CheckCrcs = _config.CheckCrcs,
+            }
+        };
     }
     
     public async ValueTask OpenAsync(CancellationToken cancellationToken)
@@ -121,7 +131,7 @@ public class Connection : IConnection
                                 try
                                 {
                                     using var input = new MemoryStream(payload, 0, payloadSize, false, true);
-                                    var response = pendingRequest.RequestClient.DeserializeResponse(input);
+                                    var response = pendingRequest.RequestClient.DeserializeResponse(input, _serializationContext);
                                     if (input.Length != input.Position)
                                     {
                                         _logger.LogError(
@@ -252,7 +262,7 @@ public class Connection : IConnection
 
                             _logger.LogDebug("Serializing.");
                             using var output = new MemoryStream(payload, 0, payload.Length, true, true);
-                            request.RequestClient.SerializeRequest(output, _config.ClientId);
+                            request.RequestClient.SerializeRequest(output, _serializationContext);
 
                             _logger.LogDebug("Sending {@size} bytes.", output.Position);
                             await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position, request.CancellationToken);
@@ -339,5 +349,10 @@ public class Connection : IConnection
         _socket.Shutdown(SocketShutdown.Both);
         _socket.Dispose();
         _socket = null;
+    }
+
+    private class SerializationContext : ISerializationContext
+    {
+        public required SerializationConfig Config { get; init; }
     }
 }

@@ -2,7 +2,7 @@ namespace nKafka.Contracts.Records;
 
 public static class RecordBatchSerializerV2
 {
-    public static RecordBatch? Deserialize(MemoryStream input)
+    public static RecordBatch? Deserialize(MemoryStream input, ISerializationContext context)
     {
         var start = input.Position;
         if (start + 8 + 4 > input.Length)
@@ -55,8 +55,11 @@ public static class RecordBatchSerializerV2
                 }
             }
         }
-        #warning turn on/off with a config parameter for consumer
-        //ChecksumValidator.ValidateCrc32c(recordBatch.Crc, input, crcStart);
+
+        if (context.Config.CheckCrcs)
+        {
+            ChecksumValidator.ValidateCrc32c(recordBatch.Crc, input, crcStart);
+        }
 
         var actualBatchLength = input.Position - recordBatchStart;
         if (actualBatchLength != recordBatch.BatchLength)

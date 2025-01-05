@@ -2,7 +2,7 @@ namespace nKafka.Contracts.Records;
 
 public static class MessageSerializerV0
 {
-    public static Message? Deserialize(MemoryStream input)
+    public static Message? Deserialize(MemoryStream input, ISerializationContext context)
     {
         var start = input.Position;
         if (start + 8 + 4 > input.Length)
@@ -56,8 +56,12 @@ public static class MessageSerializerV0
         {
             input.Read(message.Value!, 0, valueLength);
         }
-        ChecksumValidator.ValidateCrc32(message.Crc, input, crcStart);
-        
+
+        if (context.Config.CheckCrcs)
+        {
+            ChecksumValidator.ValidateCrc32(message.Crc, input, crcStart);
+        }
+
         var actualMessageSize = input.Position - messageStart;
         if (actualMessageSize != message.MessageSize)
         {

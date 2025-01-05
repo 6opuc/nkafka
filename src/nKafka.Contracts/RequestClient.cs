@@ -13,7 +13,7 @@ public abstract class RequestClient<TResponsePayload> : IRequestClient
     {
         get
         {
-            if (ApiKey == ApiKey.ControlledShutdown &&ApiVersion == 0)
+            if (ApiKey == ApiKey.ControlledShutdown && ApiVersion == 0)
             {
                 return 0;
             }
@@ -30,26 +30,26 @@ public abstract class RequestClient<TResponsePayload> : IRequestClient
             {
                 return 0;
             }
-            
+
             return (short)(FlexibleVersions.Includes(ApiVersion) ? 1 : 0);
         }
     }
 
     protected abstract short ApiVersion { get; }
-    
-    public void SerializeRequest(MemoryStream output, string clientId)
+
+    public void SerializeRequest(MemoryStream output, ISerializationContext context)
     {
         var header = new RequestHeader
         {
             RequestApiKey = (short)ApiKey,
             RequestApiVersion = ApiVersion,
             CorrelationId = CorrelationId,
-            ClientId = clientId,
+            ClientId = context.Config.ClientId,
         };
         PrimitiveSerializer.SerializeInt(output, 0); // placeholder for header + payload
         var start = output.Position;
-        RequestHeaderSerializer.Serialize(output, header, RequestHeaderVersion);
-        SerializeRequestPayload(output);
+        RequestHeaderSerializer.Serialize(output, header, RequestHeaderVersion, context);
+        SerializeRequestPayload(output, context);
         var end = output.Position;
         var size = (int)(end - start);
         output.Position = start - 4;
@@ -57,29 +57,29 @@ public abstract class RequestClient<TResponsePayload> : IRequestClient
         output.Position = end;
     }
 
-    protected abstract void SerializeRequestPayload(MemoryStream output);
+    protected abstract void SerializeRequestPayload(MemoryStream output, ISerializationContext context);
 
-    public TResponsePayload DeserializeResponse(MemoryStream input)
+    public TResponsePayload DeserializeResponse(MemoryStream input, ISerializationContext context)
     {
-        var header = ResponseHeaderSerializer.Deserialize(input, ResponseHeaderVersion);
+        var header = ResponseHeaderSerializer.Deserialize(input, ResponseHeaderVersion, context);
         if (header.CorrelationId == null)
         {
             throw new InvalidOperationException("Received response with empty correlation id.");
         }
-                        
+
         if (header.CorrelationId != CorrelationId)
         {
             throw new InvalidOperationException(
                 $"Received response with incorrect correlation id. Expected {CorrelationId}, but got {header.CorrelationId}.");
         }
 
-        return DeserializeResponsePayload(input);
+        return DeserializeResponsePayload(input, context);
     }
 
-    protected abstract TResponsePayload DeserializeResponsePayload(MemoryStream input);
+    protected abstract TResponsePayload DeserializeResponsePayload(MemoryStream input, ISerializationContext context);
 
-    object IRequestClient.DeserializeResponse(MemoryStream input)
+    object IRequestClient.DeserializeResponse(MemoryStream input, ISerializationContext context)
     {
-        return DeserializeResponse(input)!;
+        return DeserializeResponse(input, context)!;
     }
 }

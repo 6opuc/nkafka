@@ -10,6 +10,8 @@ public class ConnectionConfig
     public string ClientId { get; }
     public int ResponseBufferSize { get; }
     public int RequestBufferSize { get; }
+    
+    public bool CheckCrcs { get; init; } = false;
 
     public ConnectionConfig(
         string protocol,

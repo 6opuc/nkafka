@@ -7,13 +7,13 @@ public static class ConsumerProtocolSubscriptionSerializationHelper
 {
     private static readonly short _version = 3;
         
-    public static void Serialize(MemoryStream output, ConsumerProtocolSubscription? message, bool flexible)
+    public static void Serialize(MemoryStream output, ConsumerProtocolSubscription? message, bool flexible, ISerializationContext context)
     {
         using var buffer = new MemoryStream();
         if (message != null)
         {
             PrimitiveSerializer.SerializeShort(buffer, _version);
-            ConsumerProtocolSubscriptionSerializer.Serialize(buffer, message, _version);
+            ConsumerProtocolSubscriptionSerializer.Serialize(buffer, message, _version, context);
         }
 
         if (flexible)
@@ -28,7 +28,7 @@ public static class ConsumerProtocolSubscriptionSerializationHelper
         buffer.CopyTo(output);
     }
 
-    public static ConsumerProtocolSubscription? Deserialize(MemoryStream input, bool flexible)
+    public static ConsumerProtocolSubscription? Deserialize(MemoryStream input, bool flexible, ISerializationContext context)
     {
         var length = flexible
             ? PrimitiveSerializer.DeserializeLength(input)
@@ -38,6 +38,6 @@ public static class ConsumerProtocolSubscriptionSerializationHelper
             return null;
         }
         var version = PrimitiveSerializer.DeserializeShort(input);
-        return ConsumerProtocolSubscriptionSerializer.Deserialize(input, version);
+        return ConsumerProtocolSubscriptionSerializer.Deserialize(input, version, context);
     }
 }
