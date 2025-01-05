@@ -251,8 +251,7 @@ public class Connection : IConnection
                             request.RequestClient.SerializeRequest(output, _config.ClientId);
 
                             _logger.LogDebug("Sending {@size} bytes.", output.Position);
-#warning cancellation, timeouts, other exceptions
-                            await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position);
+                            await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position, request.CancellationToken);
                             _logger.LogDebug("Sent.");
                         }
                     }
