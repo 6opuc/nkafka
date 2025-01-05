@@ -10,7 +10,7 @@ var stopwatch = Stopwatch.StartNew();
 
 for (int i = 0; i < 10; i++)
 {
-    await NKafkaFetchTest.Test(scenario);
+    await NKafkaConsumeStringTest.Test(scenario);
 }
 
 //await ConfluentFetchTest.Test(scenario);

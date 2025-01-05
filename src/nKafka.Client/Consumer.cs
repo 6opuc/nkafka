@@ -83,9 +83,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private async ValueTask OpenConnectionsAsync(
         CancellationToken cancellationToken)
     {
-        await using var bootstrapConnection = await OpenBootstrapConnectionAsync(cancellationToken);
-        await OpenCoordinatorConnectionAsync(bootstrapConnection, cancellationToken);
-        using var metadataResponse = await RequestMetadata(bootstrapConnection, cancellationToken);
+        await using (var bootstrapConnection = await OpenBootstrapConnectionAsync(cancellationToken))
+        {
+            await OpenCoordinatorConnectionAsync(bootstrapConnection, cancellationToken);
+        }
+        using var metadataResponse = await RequestMetadata(GetCoordinatorConnection(), cancellationToken);
         _topicsMetadata = metadataResponse.Message.Topics;
         foreach (var broker in metadataResponse.Message.Brokers!.Values)
         {
