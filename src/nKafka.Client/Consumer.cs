@@ -461,9 +461,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     
     private void StartSendingHeartbeats()
     {
-        //return;
-        #warning if no poll request for more than MaxPollIntervalMs, then leave the group
-        
         _stopSendingHeartBeats = new CancellationTokenSource();
 
         var cancellationToken = _stopSendingHeartBeats.Token;
