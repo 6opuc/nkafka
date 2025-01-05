@@ -12,6 +12,7 @@ public class ConnectionConfig
     public int RequestBufferSize { get; }
     
     public bool CheckCrcs { get; init; } = false;
+    public bool RequestApiVersionsOnOpen { get; init; } = true;
 
     public ConnectionConfig(
         string protocol,

@@ -6,6 +6,8 @@ using System.Net.Sockets;
 using System.Threading.Tasks.Dataflow;
 using Microsoft.Extensions.Logging;
 using nKafka.Contracts;
+using nKafka.Contracts.MessageDefinitions;
+using nKafka.Contracts.MessageDefinitions.ApiVersionsResponseNested;
 
 namespace nKafka.Client;
 
@@ -32,7 +34,7 @@ public class Connection : IConnection
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
     
     private readonly SerializationContext _serializationContext;
-    
+
     private Dictionary<ApiKey, short> _apiVersions = new ();
 
     public Connection(ConnectionConfig config, ILoggerFactory loggerFactory)
@@ -60,6 +62,7 @@ public class Connection : IConnection
         StartProcessing();
         StartReceiving();
         StartSending();
+        await RequestApiVersionsAsync(cancellationToken);
     }
 
     private IDisposable? BeginDefaultLoggingScope()
@@ -282,6 +285,53 @@ public class Connection : IConnection
                     }
                 }
             });
+    }
+
+    private async Task RequestApiVersionsAsync(CancellationToken cancellationToken)
+    {
+        var clientApiVersions = ApiVersions.ValidVersions;
+        _apiVersions = new(clientApiVersions.Select(x =>
+            new KeyValuePair<ApiKey, short>(x.Key, x.Value.From ?? 0)));
+
+        if (!_config.RequestApiVersionsOnOpen)
+        {
+            return;
+        }
+        
+        _logger.LogInformation("Requesting API versions.");
+        
+        var request = new ApiVersionsRequest
+        {
+            ClientSoftwareName = "nKafka.Client",
+            ClientSoftwareVersion = ClientVersionGetter.Version,
+        };
+        using var response = await SendAsync(request, cancellationToken);
+        if (response.Message.ErrorCode != 0)
+        {
+            throw new Exception($"Failed to choose API versions. Error code: {response.Message.ErrorCode}");
+        }
+        
+        var brokerApiVersions = response.Message.ApiKeys;
+        if (brokerApiVersions == null || !brokerApiVersions.Any())
+        {
+            throw new Exception($"Failed to choose API versions. Empty ApiKeys collection in response.");
+        }
+        
+        foreach (var clientApiVersionRange in clientApiVersions)
+        {
+            if (!brokerApiVersions.TryGetValue((short)clientApiVersionRange.Key, out var apiVersion))
+            {
+                continue;
+            }
+            
+            var brokerApiVersionRange = new VersionRange(
+                apiVersion.MinVersion!.Value, apiVersion.MaxVersion!.Value);
+            var intersection = clientApiVersionRange.Value.Intersect(brokerApiVersionRange);
+            if (!intersection.IsNone)
+            {
+                _apiVersions[clientApiVersionRange.Key] = intersection.To!.Value;
+            }
+        }
     }
 
     public async ValueTask<IDisposableMessage<TResponse>> SendAsync<TResponse>(

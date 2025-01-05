@@ -23,8 +23,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private CancellationTokenSource? _stopSendingHeartBeats;
     private Task? _heartbeatsBackgroundTask;
     private readonly Dictionary<int, IConnection> _connections = new ();
-    private IDictionary<short, ApiVersion>? _apiVersionsSupported = new Dictionary<short, ApiVersion>();
-    private ConcurrentDictionary<ApiKey, short> _apiVersionsChosen = new ();
     private int _coordinatorNodeId;
     private readonly string[] _topics;
     private GroupMembership? _groupMembership;
@@ -86,7 +84,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         CancellationToken cancellationToken)
     {
         await using var bootstrapConnection = await OpenBootstrapConnectionAsync(cancellationToken);
-        await RequestApiVersionsAsync(bootstrapConnection, cancellationToken);
         await OpenCoordinatorConnectionAsync(bootstrapConnection, cancellationToken);
         using var metadataResponse = await RequestMetadata(bootstrapConnection, cancellationToken);
         _topicsMetadata = metadataResponse.Message.Topics;
@@ -128,7 +125,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 connectionString,
                 _config.ClientId,
                 _config.RequestBufferSize,
-                _config.RequestBufferSize);
+                _config.RequestBufferSize)
+            {
+                RequestApiVersionsOnOpen = false,
+            };
             try
             {
                 var connection = new Connection(connectionConfig, _loggerFactory);
@@ -142,27 +142,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
 
         throw new Exception("No connection could be established.");
-    }
-
-    private async ValueTask RequestApiVersionsAsync(
-        IConnection connection,
-        CancellationToken cancellationToken)
-    {
-        _logger.LogInformation("Requesting API versions.");
-        
-        var request = new ApiVersionsRequest
-        {
-            ClientSoftwareName = "nKafka.Client",
-            ClientSoftwareVersion = ClientVersionGetter.Version,
-        };
-        using var response = await connection.SendAsync(request, cancellationToken);
-        if (response.Message.ErrorCode != 0)
-        {
-            throw new Exception($"Failed to choose API versions for '{_config.BootstrapServers}'. Error code: {response.Message.ErrorCode}");
-        }
-
-        _apiVersionsSupported = response.Message.ApiKeys;
-        _apiVersionsChosen = new ConcurrentDictionary<ApiKey, short>();
     }
     
     private async ValueTask<IConnection> OpenCoordinatorConnectionAsync(
@@ -232,37 +211,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         _connections[_coordinatorNodeId] = coordinatorConnection;
 
         return coordinatorConnection;
-    }
-    
-    private short GetApiVersion(ApiKey api)
-    {
-        #warning refactor and generalize, don't use concurrent dictionary at all, initialize once for connection
-        if (_apiVersionsChosen.TryGetValue(api, out var apiVersion))
-        {
-            return apiVersion;
-        }
-
-        if (!ApiVersions.ValidVersions.TryGetValue(api, out var validVersionRange))
-        {
-            _apiVersionsChosen[api] = 0;
-            return 0;
-        }
-
-        apiVersion = 0;
-        if (_apiVersionsSupported != null &&
-            _apiVersionsSupported.TryGetValue((short)api, out var supportedVersions))
-        {
-            var supportedVersionRange = new VersionRange(
-                supportedVersions.MinVersion!.Value, supportedVersions.MaxVersion!.Value);
-            var intersection = validVersionRange.Intersect(supportedVersionRange);
-            if (!intersection.IsNone)
-            {
-                apiVersion = intersection.To!.Value;
-            }
-        }
-
-        _apiVersionsChosen[api] = apiVersion;
-        return apiVersion;
     }
     
     private async ValueTask<IDisposableMessage<MetadataResponse>> RequestMetadata(IConnection connection, CancellationToken cancellationToken)
