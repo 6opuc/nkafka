@@ -220,11 +220,11 @@ public static class FieldDefinitionExtensions
                                     var tagSectionLength = {{string.Join(" + ", taggedFields.Select(x => $"(message.{x.Name} == null ? 0 : 1)"))}};
                                     """);
                 source.AppendLine("PrimitiveSerializer.SerializeUVarInt(output, (uint)tagSectionLength); // tag section length");
-                #warning consider buffer pool or message size calculation
+                
                 source.AppendLine("""
                                   if (tagSectionLength > 0)
                                   {
-                                        using var buffer = new MemoryStream();
+                                        using var buffer = context.CreateBuffer();
                                   """);
                 foreach (var taggedField in taggedFields)
                 {

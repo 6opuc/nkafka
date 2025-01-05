@@ -39,7 +39,8 @@ public class Connection : IConnection
         ArgumentNullException.ThrowIfNull(loggerFactory);
         _config = config;
         _logger = loggerFactory.CreateLogger<Connection>();
-        _serializationContext = new SerializationContext
+        var bufferSize = Math.Max(_config.RequestBufferSize, _config.ResponseBufferSize);
+        _serializationContext = new SerializationContext(_arrayPool, bufferSize)
         {
             Config = new SerializationConfig
             {
@@ -351,8 +352,14 @@ public class Connection : IConnection
         _socket = null;
     }
 
-    private class SerializationContext : ISerializationContext
+    private class SerializationContext(ArrayPool<byte> arrayPool, int bufferSize) : ISerializationContext
     {
         public required SerializationConfig Config { get; init; }
+        
+        public MemoryStream CreateBuffer()
+        {
+            var buffer = arrayPool.Rent(bufferSize);
+            return new PooledMemoryStream(arrayPool, buffer);
+        }
     }
 }
