@@ -147,7 +147,6 @@ public static class FieldDefinitionExtensions
                 return "ConsumerProtocolSubscription";
             }
         }
-        #warning do not deserialize byte arrays, use Memory<byte> instead (see Record)
         return type switch
         {
             "int64" => "long",
@@ -157,7 +156,7 @@ public static class FieldDefinitionExtensions
             "uint16" => "ushort",
             "float64" => "double",
             "uuid" => "Guid",
-            "bytes" => "byte[]",
+            "bytes" => "Memory<byte>",
             "records" => "RecordsContainer",
             _ => type!
         };
@@ -351,7 +350,7 @@ public static class FieldDefinitionExtensions
             return $"PrimitiveSerializer.SerializeDouble({output}, {propertyPath});";
         }
 
-        if (propertyType == "byte[]")
+        if (propertyType == "Memory<byte>")
         {
             var lengthSerialization = flexible
                 ? $"PrimitiveSerializer.SerializeLength({output}, {propertyPath}?.Length ?? 0);"
@@ -360,7 +359,7 @@ public static class FieldDefinitionExtensions
                      {{lengthSerialization}}
                      if ({{propertyPath}} != null)
                      {
-                         {{output}}.Write({{propertyPath}}, 0, {{propertyPath}}.Length);
+                         {{output}}.Write({{propertyPath}}.Value.Span);
                      }
                      """;
         }
@@ -667,7 +666,7 @@ public static class FieldDefinitionExtensions
             return $"{propertyPath} = PrimitiveSerializer.DeserializeDouble({input});";
         }
 
-        if (propertyType == "byte[]")
+        if (propertyType == "Memory<byte>")
         {
             var lengthVariableName = $"{propertyPath.Replace(".", "")}Length";
             var lengthDeserialization = flexible
@@ -675,10 +674,13 @@ public static class FieldDefinitionExtensions
                 : $"var {lengthVariableName} = PrimitiveSerializer.DeserializeInt({input});";
             return $$"""
                      {{lengthDeserialization}}
-                     if ({{lengthVariableName}} >= 0)
+                     if ({{lengthVariableName}} == 0)
                      {
-                         {{propertyPath}} = new byte[{{lengthVariableName}}];
-                         {{input}}.Read({{propertyPath}}, 0, {{lengthVariableName}});
+                        {{propertyPath}} = Memory<byte>.Empty;
+                     }
+                     else if ({{lengthVariableName}} > 0)
+                     {
+                         {{propertyPath}} = {{input}}.GetBuffer().AsMemory((int)input.Position, {{lengthVariableName}});
                      }
                      """;
         }
