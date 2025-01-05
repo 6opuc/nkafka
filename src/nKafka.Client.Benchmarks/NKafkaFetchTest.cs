@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using nKafka.Contracts.MessageDefinitions;
 using nKafka.Contracts.MessageDefinitions.FetchRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
-using nKafka.Contracts.RequestClients;
 
 namespace nKafka.Client.Benchmarks;
 
@@ -27,8 +26,9 @@ public static class NKafkaFetchTest
                 long offset = 0;
                 while (true)
                 {
-                    var requestClient = new FetchRequestClient(13, new FetchRequest
+                    var request = new FetchRequest
                     {
+                        FixedVersion = 13,
                         ClusterId = null, // ???
                         ReplicaId = -1, // ???
                         ReplicaState = null, // ???
@@ -61,8 +61,8 @@ public static class NKafkaFetchTest
                         ],
                         ForgottenTopicsData = [], // ???
                         RackId = string.Empty, // ???
-                    });
-                    using var response = await connection.SendAsync(requestClient, CancellationToken.None);
+                    };
+                    using var response = await connection.SendAsync(request, CancellationToken.None);
 
                     var lastOffset = response.Message
                         .Responses?.LastOrDefault()?
@@ -93,8 +93,9 @@ public static class NKafkaFetchTest
 
         await connection.OpenAsync(CancellationToken.None);
 
-        var requestClient = new MetadataRequestClient(12, new MetadataRequest
+        var requestClient = new MetadataRequest
         {
+            FixedVersion = 12,
             Topics =
             [
                 new MetadataRequestTopic
@@ -106,7 +107,7 @@ public static class NKafkaFetchTest
             AllowAutoTopicCreation = false,
             IncludeClusterAuthorizedOperations = true,
             IncludeTopicAuthorizedOperations = true,
-        });
+        };
 
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
         return response;

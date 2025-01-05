@@ -32,6 +32,8 @@ public class Connection : IConnection
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
     
     private readonly SerializationContext _serializationContext;
+    
+    private Dictionary<ApiKey, short> _apiVersions = new ();
 
     public Connection(ConnectionConfig config, ILoggerFactory loggerFactory)
     {
@@ -125,14 +127,14 @@ public class Connection : IConnection
                                 continue;
                             }
 
-                            using (BeginRequestLoggingScope(pendingRequest.RequestClient.CorrelationId))
+                            using (BeginRequestLoggingScope(pendingRequest.CorrelationId))
                             {
                                 _logger.LogDebug("Deserializing response.");
 
                                 try
                                 {
                                     using var input = new MemoryStream(payload, 0, payloadSize, false, true);
-                                    var response = pendingRequest.RequestClient.DeserializeResponse(input, _serializationContext);
+                                    var response = pendingRequest.DeserializeResponse(input, _serializationContext);
                                     if (input.Length != input.Position)
                                     {
                                         _logger.LogError(
@@ -256,14 +258,14 @@ public class Connection : IConnection
                     var payload = _arrayPool.Rent(_config.RequestBufferSize);
                     try
                     {
-                        using (BeginRequestLoggingScope(request.RequestClient.CorrelationId))
+                        using (BeginRequestLoggingScope(request.CorrelationId))
                         {
                             _logger.LogDebug("Processing.");
                             _pendingRequests.Enqueue(request);
 
                             _logger.LogDebug("Serializing.");
                             using var output = new MemoryStream(payload, 0, payload.Length, true, true);
-                            request.RequestClient.SerializeRequest(output, _serializationContext);
+                            request.SerializeRequest(output, _serializationContext);
 
                             _logger.LogDebug("Sending {@size} bytes.", output.Position);
                             await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position, request.CancellationToken);
@@ -283,31 +285,35 @@ public class Connection : IConnection
     }
 
     public async ValueTask<IDisposableMessage<TResponse>> SendAsync<TResponse>(
-        RequestClient<TResponse> requestClient,
+        IRequest<TResponse> request,
         CancellationToken cancellationToken)
     {
         using (BeginDefaultLoggingScope())
         {
             var completionPromise = new TaskCompletionSource<MessageWithPooledPayload>();
+            
             var pendingRequest = new PendingRequest(
-                requestClient,
+                request,
                 completionPromise,
-                cancellationToken);
-            using (BeginRequestLoggingScope(pendingRequest.RequestClient.CorrelationId))
+                cancellationToken,
+                IdGenerator.Next(),
+                _apiVersions.GetValueOrDefault(request.ApiKey, (short)0));
+            using (BeginRequestLoggingScope(pendingRequest.CorrelationId))
             {
-                _logger.LogDebug("Enqueueing {request}.", pendingRequest.RequestClient.GetType().Name);
+                _logger.LogDebug("Enqueueing {request}.", pendingRequest.Payload.GetType().Name);
                 await _requestQueue.SendAsync(pendingRequest, cancellationToken);
                 _logger.LogDebug("Enqueued.");
             }
 
             var response = await completionPromise.Task;
-            return new DisposableMessage<TResponse>(response);
+            return new DisposableMessage<TResponse>(response, pendingRequest.ApiVersion);
         }
     }
 
-    private class DisposableMessage<T>(MessageWithPooledPayload message) : IDisposableMessage<T>
+    private class DisposableMessage<T>(MessageWithPooledPayload message, short version) : IDisposableMessage<T>
     {
         public T Message => (T)message.Message;
+        public short Version => version;
         
         public void Dispose()
         {

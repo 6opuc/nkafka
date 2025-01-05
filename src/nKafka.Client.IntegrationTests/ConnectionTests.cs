@@ -8,7 +8,6 @@ using nKafka.Contracts.MessageDefinitions.JoinGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.LeaveGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
 using nKafka.Contracts.MessageDefinitions.SyncGroupRequestNested;
-using nKafka.Contracts.RequestClients;
 
 namespace nKafka.Client.IntegrationTests;
 
@@ -43,13 +42,14 @@ public class ConnectionTests
     public async Task SendAsync_ApiVersionsRequest_ShouldReturnExpectedResult(short apiVersion)
     {
         await using var connection = await OpenConnection();
-        var requestClient = new ApiVersionsRequestClient(apiVersion, new ApiVersionsRequest
+        var request = new ApiVersionsRequest
         {
+            FixedVersion = apiVersion,
             ClientSoftwareName = "nKafka.Client",
             ClientSoftwareVersion = "0.0.1",
-        });
+        };
 
-        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        using var response = await connection.SendAsync(request, CancellationToken.None);
 
         response.Should().NotBeNull();
         response.Message.ErrorCode.Should().Be(0);
@@ -83,14 +83,15 @@ public class ConnectionTests
     {
         await using var connection = await OpenConnection();
         var consumerGroupId = Guid.NewGuid().ToString();
-        var requestClient = new FindCoordinatorRequestClient(apiVersion, new FindCoordinatorRequest
+        var request = new FindCoordinatorRequest
         {
+            FixedVersion = apiVersion,
             Key = consumerGroupId,
             KeyType = 0, // 0 = group, 1 = transaction
             CoordinatorKeys = [consumerGroupId], // for versions 4+
-        });
+        };
 
-        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        using var response = await connection.SendAsync(request, CancellationToken.None);
 
         response.Should().NotBeNull();
         if (apiVersion < 4)
@@ -132,8 +133,9 @@ public class ConnectionTests
     public async Task SendAsync_MetadataRequest_ShouldReturnExpectedResult(short apiVersion)
     {
         await using var connection = await OpenConnection();
-        var requestClient = new MetadataRequestClient(apiVersion, new MetadataRequest
+        var request = new MetadataRequest
         {
+            FixedVersion = apiVersion,
             Topics =
             [
                 new MetadataRequestTopic
@@ -145,9 +147,9 @@ public class ConnectionTests
             AllowAutoTopicCreation = false,
             IncludeClusterAuthorizedOperations = true,
             IncludeTopicAuthorizedOperations = true,
-        });
+        };
 
-        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        var response = await connection.SendAsync(request, CancellationToken.None);
 
         response.Should().NotBeNull();
         response.Message.Brokers.Should().NotBeNullOrEmpty();
@@ -225,6 +227,7 @@ public class ConnectionTests
         };
         var request = new JoinGroupRequest
         {
+            FixedVersion = apiVersion,
             GroupId = consumerGroupId,
             SessionTimeoutMs = (int)TimeSpan.FromSeconds(45).TotalMilliseconds,
             RebalanceTimeoutMs = -1,
@@ -243,8 +246,7 @@ public class ConnectionTests
             },
             Reason = null
         };
-        var requestClient = new JoinGroupRequestClient(apiVersion, request);
-        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        var response = await connection.SendAsync(request, CancellationToken.None);
         response.Should().NotBeNull();
 
         if (apiVersion == 4 && response.Message.ErrorCode == (short)ErrorCode.MemberIdRequired)
@@ -253,7 +255,7 @@ public class ConnectionTests
             request.MemberId = response.Message.MemberId;
             response.Dispose();
 
-            response = await connection.SendAsync(requestClient, CancellationToken.None);
+            response = await connection.SendAsync(request, CancellationToken.None);
             response.Should().NotBeNull();
         }
 
@@ -272,8 +274,9 @@ public class ConnectionTests
         var consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId);
         using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
-        var requestClient = new LeaveGroupRequestClient(apiVersion, new LeaveGroupRequest
+        var request = new LeaveGroupRequest
         {
+            FixedVersion = apiVersion,
             GroupId = consumerGroupId,
             MemberId = joinGroupResponse.Message.MemberId,
             Members =
@@ -285,8 +288,8 @@ public class ConnectionTests
                     Reason = "bla-bla-bla",
                 }
             ],
-        });
-        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        };
+        using var response = await connection.SendAsync(request, CancellationToken.None);
 
         response.Should().NotBeNull();
         response.Message.ErrorCode.Should().Be(0);
@@ -319,8 +322,9 @@ public class ConnectionTests
             },
             UserData = null, // ???
         };
-        var requestClient = new SyncGroupRequestClient(apiVersion, new SyncGroupRequest
+        var request = new SyncGroupRequest
         {
+            FixedVersion = apiVersion,
             GroupId = consumerGroupId,
             GenerationId = joinGroupResponse.Message.GenerationId,
             MemberId = joinGroupResponse.Message.MemberId,
@@ -335,8 +339,8 @@ public class ConnectionTests
                     Assignment = requestedAssignment,
                 }
             ],
-        });
-        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        };
+        using var response = await connection.SendAsync(request, CancellationToken.None);
 
         response.Should().NotBeNull();
         response.Message.ErrorCode.Should().Be(0);
@@ -355,13 +359,14 @@ public class ConnectionTests
         var consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId);
         using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
-        var requestClient = new HeartbeatRequestClient(apiVersion, new HeartbeatRequest
+        var requestClient = new HeartbeatRequest
         {
+            FixedVersion = apiVersion,
             GroupId = consumerGroupId,
             GenerationId = joinGroupResponse.Message.GenerationId,
             MemberId = joinGroupResponse.Message.MemberId,
             GroupInstanceId = null, // ???
-        });
+        };
         using var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
@@ -399,8 +404,9 @@ public class ConnectionTests
 
             foreach (var partition in group)
             {
-                var requestClient = new FetchRequestClient(apiVersion, new FetchRequest
+                var request = new FetchRequest
                 {
+                    FixedVersion = apiVersion,
                     ClusterId = null, // ???
                     ReplicaId = -1,
                     ReplicaState = null, // ???
@@ -433,8 +439,8 @@ public class ConnectionTests
                     ],
                     ForgottenTopicsData = [], // ???
                     RackId = string.Empty, // ???
-                });
-                using var response = await connection.SendAsync(requestClient, CancellationToken.None);
+                };
+                using var response = await connection.SendAsync(request, CancellationToken.None);
 
                 response.Should().NotBeNull();
                 if (apiVersion >= 7)
@@ -484,8 +490,9 @@ public class ConnectionTests
                 long offset = 0;
                 while (true)
                 {
-                    var requestClient = new FetchRequestClient(apiVersion, new FetchRequest
+                    var request = new FetchRequest
                     {
+                        FixedVersion = apiVersion,
                         ClusterId = null, // ???
                         ReplicaId = -1,
                         ReplicaState = null, // ???
@@ -518,8 +525,8 @@ public class ConnectionTests
                         ],
                         ForgottenTopicsData = [], // ???
                         RackId = string.Empty, // ???
-                    });
-                    using var response = await connection.SendAsync(requestClient, CancellationToken.None);
+                    };
+                    using var response = await connection.SendAsync(request, CancellationToken.None);
 
                     var lastOffset = response.Message
                         .Responses?.LastOrDefault()?
@@ -549,13 +556,14 @@ public class ConnectionTests
         await using var connection = new Connection(config, TestLoggerFactory.Instance);
         await connection.OpenAsync(CancellationToken.None);
 
-        var requestClient = new FindCoordinatorRequestClient(4, new FindCoordinatorRequest
+        var request = new FindCoordinatorRequest
         {
+            FixedVersion = 4,
             KeyType = 0, // 0 = group, 1 = transaction
             CoordinatorKeys = [groupId], // for versions 4+
-        });
+        };
 
-        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        using var response = await connection.SendAsync(request, CancellationToken.None);
         if (response == null)
         {
             throw new Exception("Empty response from find coordinator request.");
@@ -579,8 +587,9 @@ public class ConnectionTests
     private async Task<IDisposableMessage<MetadataResponse>> RequestMetadata()
     {
         await using var connection = await OpenConnection();
-        var requestClient = new MetadataRequestClient(12, new MetadataRequest
+        var request = new MetadataRequest
         {
+            FixedVersion = 12,
             Topics =
             [
                 new MetadataRequestTopic
@@ -592,9 +601,9 @@ public class ConnectionTests
             AllowAutoTopicCreation = false,
             IncludeClusterAuthorizedOperations = true,
             IncludeTopicAuthorizedOperations = true,
-        });
+        };
 
-        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        var response = await connection.SendAsync(request, CancellationToken.None);
         return response;
     }
 }

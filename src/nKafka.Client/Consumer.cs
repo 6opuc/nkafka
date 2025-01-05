@@ -10,7 +10,6 @@ using nKafka.Contracts.MessageDefinitions.LeaveGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataResponseNested;
 using nKafka.Contracts.MessageDefinitions.SyncGroupRequestNested;
-using nKafka.Contracts.RequestClients;
 
 namespace nKafka.Client;
 
@@ -151,13 +150,12 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         _logger.LogInformation("Requesting API versions.");
         
-        var requestClient = new ApiVersionsRequestClient(0, new ApiVersionsRequest
+        var request = new ApiVersionsRequest
         {
             ClientSoftwareName = "nKafka.Client",
             ClientSoftwareVersion = ClientVersionGetter.Version,
-        });
-        
-        using var response = await connection.SendAsync(requestClient, cancellationToken);
+        };
+        using var response = await connection.SendAsync(request, cancellationToken);
         if (response.Message.ErrorCode != 0)
         {
             throw new Exception($"Failed to choose API versions for '{_config.BootstrapServers}'. Error code: {response.Message.ErrorCode}");
@@ -173,20 +171,17 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         _logger.LogInformation("Opening coordinator connection.");
         
-        var apiVersion = GetApiVersion(FindCoordinatorRequestClient.Api);
-        var requestClient = new FindCoordinatorRequestClient(
-            apiVersion,
-            new FindCoordinatorRequest
-            {
-                Key = _config.GroupId,
-                KeyType = 0,
-                CoordinatorKeys = [_config.GroupId],
-            });
+        var request = new FindCoordinatorRequest
+        {
+            Key = _config.GroupId,
+            KeyType = 0,
+            CoordinatorKeys = [_config.GroupId],
+        };
         
-        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        using var response = await connection.SendAsync(request, CancellationToken.None);
 
         ConnectionConfig coordinatorConnectionConfig;
-        if (apiVersion < 4)
+        if (response.Version < 4)
         {
             if (response.Message.ErrorCode != 0)
             {
@@ -274,8 +269,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         _logger.LogInformation("Requesting metadata.");
         
-        var apiVersion = GetApiVersion(MetadataRequestClient.Api);
-        var requestClient = new MetadataRequestClient(apiVersion, new MetadataRequest
+        var request = new MetadataRequest
         {
             Topics = _topics.Select(x => new MetadataRequestTopic
             {
@@ -285,9 +279,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             AllowAutoTopicCreation = false,
             IncludeClusterAuthorizedOperations = false,
             IncludeTopicAuthorizedOperations = false,
-        });
+        };
         
-        var response = await connection.SendAsync(requestClient, cancellationToken);
+        var response = await connection.SendAsync(request, cancellationToken);
 
         foreach (var topicName in _topics)
         {
@@ -346,18 +340,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             },
             Reason = null
         };
+        var response = await connection.SendAsync(request, cancellationToken);
         
-        var apiVersion = GetApiVersion(JoinGroupRequestClient.Api);
-        var requestClient = new JoinGroupRequestClient(apiVersion, request);
-        var response = await connection.SendAsync(requestClient, cancellationToken);
-        
-        if (apiVersion == 4 && response.Message.ErrorCode == (short)ErrorCode.MemberIdRequired)
+        if (response.Version == 4 && response.Message.ErrorCode == (short)ErrorCode.MemberIdRequired)
         {
             // retry with given member id
             request.MemberId = response.Message.MemberId;
             response.Dispose();
             
-            response = await connection.SendAsync(requestClient, cancellationToken);
+            response = await connection.SendAsync(request, cancellationToken);
         }
 
         if (response.Message.ErrorCode != 0)
@@ -413,8 +404,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         _logger.LogInformation("Synchronizing consumer group.");
         
-        var apiVersion = GetApiVersion(SyncGroupRequestClient.Api);
-        var requestClient = new SyncGroupRequestClient(apiVersion, new SyncGroupRequest
+        var request = new SyncGroupRequest
         {
             GroupId = _config.GroupId,
             GenerationId = _groupMembership!.GenerationId,
@@ -423,8 +413,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             ProtocolType = "consumer",
             ProtocolName = "nkafka-consumer",
             Assignments = assignments,
-        });
-        using var response = await connection.SendAsync(requestClient, cancellationToken);
+        };
+        using var response = await connection.SendAsync(request, cancellationToken);
 
         if (response.Message.ErrorCode != 0)
         {
@@ -471,15 +461,14 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     {
                         var connection = GetCoordinatorConnection();
                         
-                        var apiVersion = GetApiVersion(HeartbeatRequestClient.Api);
-                        var requestClient = new HeartbeatRequestClient(apiVersion, new HeartbeatRequest
+                        var request = new HeartbeatRequest
                         {
                             GroupId = _config.GroupId,
                             GenerationId = _groupMembership!.GenerationId,
                             MemberId = _groupMembership.MemberId,
                             GroupInstanceId = null, // ???
-                        });
-                        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
+                        };
+                        using var response = await connection.SendAsync(request, CancellationToken.None);
                         
                         if (response.Message.ErrorCode == 0)
                         {
@@ -522,8 +511,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
         var fetchSource = _fetchQueue[_fetchIndex%_fetchQueue.Count];
         
-        var apiVersion = GetApiVersion(FetchRequestClient.Api);
-        var requestClient = new FetchRequestClient(apiVersion, new FetchRequest
+        var request = new FetchRequest
         {
             ClusterId = null, // ???
             ReplicaId = -1, // ???
@@ -557,9 +545,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             ],
             ForgottenTopicsData = [], // ???
             RackId = string.Empty, // ???
-        });
+        };
         var connection = _connections[fetchSource.NodeId];
-        _fetchResponse = await connection.SendAsync(requestClient, CancellationToken.None);
+        _fetchResponse = await connection.SendAsync(request, CancellationToken.None);
 
         var lastOffset = _fetchResponse.Message
             .Responses?.LastOrDefault()?
@@ -671,8 +659,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
         _logger.LogInformation("Leaving consumer group.");
         
-        var apiVersion = GetApiVersion(LeaveGroupRequestClient.Api);
-        var requestClient = new LeaveGroupRequestClient(apiVersion, new LeaveGroupRequest
+        var request = new LeaveGroupRequest
         {
             GroupId = _config.GroupId,
             MemberId = _groupMembership.MemberId,
@@ -684,8 +671,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     Reason = null,
                 }
             ],
-        });
-        using var response = await connection.SendAsync(requestClient, cancellationToken);
+        };
+        using var response = await connection.SendAsync(request, cancellationToken);
 
         if (response.Message.ErrorCode != 0)
         {

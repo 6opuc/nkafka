@@ -14,7 +14,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
     {
         var messageDefinitions = ParseMessageDefinitions(context);
         context.RegisterSourceOutput(messageDefinitions, GenerateCodeForMessageDefinitions);
-        context.RegisterSourceOutput(messageDefinitions, GenerateCodeForRequestClients);
+        context.RegisterSourceOutput(messageDefinitions, GenerateCodeForRequestInterfaces);
     }
 
     private static readonly string[] ExcludeMessages = [];
@@ -82,7 +82,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                       {
                           using nKafka.Contracts.MessageDefinitions.{{messageDefinition.Name}}Nested;
                           
-                          public class {{messageDefinition.Name}}
+                          public partial class {{messageDefinition.Name}}
                           {
                              {{messageDefinition.Fields.ToPropertyDeclarations()}}
                           }
@@ -121,7 +121,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
         }
     }
 
-    private void GenerateCodeForRequestClients(
+    private void GenerateCodeForRequestInterfaces(
         SourceProductionContext context,
         ImmutableArray<MessageDefinition> messageDefinitions)
     {
@@ -150,41 +150,29 @@ public class ContractsSourceGenerator : IIncrementalGenerator
         foreach (var pair in pairs)
         {
             context.AddSource(
-                $"RequestClients/{pair.Request.Name}Client.g.cs",
+                $"MessageDefinitions/{pair.Request.Name}.RequestInterfaces.g.cs",
                 Format(
                     $$"""
                       #nullable enable
+                      
+                      using nKafka.Contracts.MessageSerializers;
 
-                      namespace nKafka.Contracts.RequestClients
+                      namespace nKafka.Contracts.MessageDefinitions;
+                      
+                      public partial class {{pair.Request.Name}} : IRequest<{{pair.Response!.Name}}>
                       {
-                          using nKafka.Contracts.MessageDefinitions;
-                          using nKafka.Contracts.MessageSerializers;
+                          public ApiKey ApiKey => ApiKey.{{Enum.GetName(typeof(ApiKey), pair.Request.ApiKey!)}};
+                          public short? FixedVersion { get; set; }
+                          public VersionRange FlexibleVersions { get; } = {{pair.Request.FlexibleVersions.ToLiteral()}};
                           
-                          public class {{pair.Request.Name}}Client : RequestClient<{{pair.Response!.Name}}>
+                          public void SerializeRequest(MemoryStream output, short version, ISerializationContext context)
                           {
-                              public static VersionRange ValidVersions { get; } = {{pair.Request.ValidVersions.ToLiteral()}};
-                              public static ApiKey Api => ApiKey.{{Enum.GetName(typeof(ApiKey), pair.Request.ApiKey!)}};
-                              
-                              protected override ApiKey ApiKey => ApiKey.{{Enum.GetName(typeof(ApiKey), pair.Request.ApiKey!)}};
-                              protected override VersionRange FlexibleVersions { get; } = {{pair.Request.FlexibleVersions.ToLiteral()}};
-                              protected override short ApiVersion { get; }
-                              private readonly {{pair.Request.Name}} _request;
-                              
-                              public {{pair.Request.Name}}Client(short apiVersion, {{pair.Request.Name}} request)
-                              {
-                                  ApiVersion = apiVersion;
-                                  _request = request;
-                              }
-                              
-                              protected override void SerializeRequestPayload(MemoryStream output, ISerializationContext context)
-                              {
-                                  {{pair.Request.Name}}Serializer.Serialize(output, _request, ApiVersion, context);
-                              }
-                              
-                              protected override {{pair.Response!.Name}} DeserializeResponsePayload(MemoryStream input, ISerializationContext context)
-                              {
-                                  return {{pair.Response!.Name}}Serializer.Deserialize(input, ApiVersion, context);
-                              }
+                              {{pair.Request.Name}}Serializer.Serialize(output, this, version, context);
+                          }
+                          
+                          public object DeserializeResponse(MemoryStream input, short version, ISerializationContext context)
+                          {
+                              return {{pair.Response!.Name}}Serializer.Deserialize(input, version, context);
                           }
                       }
                       """));
