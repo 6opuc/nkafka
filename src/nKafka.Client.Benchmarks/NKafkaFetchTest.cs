@@ -10,14 +10,14 @@ public static class NKafkaFetchTest
 {
     public static async Task Test(FetchScenario scenario)
     {
-        var metadata = await RequestMetadata(scenario);
-        var topicMetadata = metadata.Topics![scenario.TopicName];
+        using var metadata = await RequestMetadata(scenario);
+        var topicMetadata = metadata.Message.Topics![scenario.TopicName];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
         var recordCount = 0;
         foreach (var group in partitions)
         {
-            var broker = metadata.Brokers![group.Key];
+            var broker = metadata.Message.Brokers![group.Key];
             var config = new ConnectionConfig("PLAINTEXT", broker.Host!, broker.Port!.Value, "nKafka.Client.Benchmarks");
             await using var connection = new Connection(config, NullLoggerFactory.Instance);
             await connection.OpenAsync(CancellationToken.None);
@@ -62,15 +62,15 @@ public static class NKafkaFetchTest
                         ForgottenTopicsData = [], // ???
                         RackId = string.Empty, // ???
                     });
-                    var response = await connection.SendAsync(requestClient, CancellationToken.None);
+                    using var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
-                    var lastOffset = response
+                    var lastOffset = response.Message
                         .Responses?.LastOrDefault()?
                         .Partitions?.LastOrDefault()?
                         .Records?.LastOffset ?? -1;
                     offset = lastOffset + 1;
 
-                    var responseRecordCount = response.Responses!
+                    var responseRecordCount = response.Message.Responses!
                         .SelectMany(x => x.Partitions!)
                         .Sum(x => x.Records!.RecordCount);
                     if (responseRecordCount == 0)
@@ -86,7 +86,7 @@ public static class NKafkaFetchTest
         Console.WriteLine(recordCount);
     }
 
-    private static async Task<MetadataResponse> RequestMetadata(FetchScenario scenario)
+    private static async Task<IDisposableMessage<MetadataResponse>> RequestMetadata(FetchScenario scenario)
     {
         var config = new ConnectionConfig("PLAINTEXT", "kafka-1", 9192, "nKafka.Client.Benchmarks");
         var connection = new Connection(config, NullLoggerFactory.Instance);

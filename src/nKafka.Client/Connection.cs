@@ -109,6 +109,7 @@ public class Connection : IConnection
 
                             if (!_pendingRequests.TryDequeue(out var pendingRequest))
                             {
+                                _arrayPool.Return(payload);
                                 _logger.LogError("Received unexpected response: no pending requests.");
                                 continue;
                             }
@@ -130,18 +131,21 @@ public class Connection : IConnection
                                     }
                                     _logger.LogDebug("Deserialized.");
 
-                                    pendingRequest.Response.SetResult(response);
+                                    var disposableResponse =
+                                        new MessageWithPooledPayload(response, _arrayPool, payload);
+                                    pendingRequest.Response.SetResult(disposableResponse);
                                 }
                                 catch (Exception exception)
                                 {
+                                    _arrayPool.Return(payload);
                                     pendingRequest.Response.SetException(exception);
                                 }
                             }
                         }
-                        finally
+                        catch
                         {
-                            #warning consider use of IDisposable in all responses: keep a reference to payload and do not copy byte arrays during deserialization.
                             _arrayPool.Return(payload);
+                            throw;
                         }
 
                     }
@@ -267,13 +271,13 @@ public class Connection : IConnection
             });
     }
 
-    public async ValueTask<TResponse> SendAsync<TResponse>(
+    public async ValueTask<IDisposableMessage<TResponse>> SendAsync<TResponse>(
         RequestClient<TResponse> requestClient,
         CancellationToken cancellationToken)
     {
         using (BeginDefaultLoggingScope())
         {
-            var completionPromise = new TaskCompletionSource<object>();
+            var completionPromise = new TaskCompletionSource<MessageWithPooledPayload>();
             var pendingRequest = new PendingRequest(
                 requestClient,
                 completionPromise,
@@ -286,10 +290,19 @@ public class Connection : IConnection
             }
 
             var response = await completionPromise.Task;
-            return (TResponse)response;
+            return new DisposableMessage<TResponse>(response);
         }
     }
-    
+
+    private class DisposableMessage<T>(MessageWithPooledPayload message) : IDisposableMessage<T>
+    {
+        public T Message => (T)message.Message;
+        
+        public void Dispose()
+        {
+            message.Dispose();
+        }
+    }
     
     private IDisposable? BeginRequestLoggingScope(int correlationId)
     {

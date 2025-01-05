@@ -29,7 +29,7 @@ public class ConnectionTests
     {
         var config = new ConnectionConfig("PLAINTEXT", "kafka-1", 9192, "nKafka.Client.IntegrationTests");
         var connection = new Connection(config, TestLoggerFactory.Instance);
-        
+
         await connection.OpenAsync(CancellationToken.None);
 
         return connection;
@@ -48,21 +48,23 @@ public class ConnectionTests
             ClientSoftwareName = "nKafka.Client",
             ClientSoftwareVersion = "0.0.1",
         });
-        
-        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+
+        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
-        response.ErrorCode.Should().Be(0);
+        response.Message.ErrorCode.Should().Be(0);
         foreach (var apiKey in Enum.GetValues<ApiKey>())
         {
-            if (apiKey is ApiKey.LeaderAndIsr or ApiKey.StopReplica or ApiKey.UpdateMetadata or ApiKey.ControlledShutdown)
+            if (apiKey is ApiKey.LeaderAndIsr or ApiKey.StopReplica or ApiKey.UpdateMetadata
+                or ApiKey.ControlledShutdown)
             {
                 continue;
             }
-            response.ApiKeys!.Should().ContainKey((short)apiKey, $"api key {apiKey} not found");
+
+            response.Message.ApiKeys!.Should().ContainKey((short)apiKey, $"api key {apiKey} not found");
         }
 
-        response.ApiKeys.Should().AllSatisfy(x =>
+        response.Message.ApiKeys.Should().AllSatisfy(x =>
         {
             x.Value.ApiKey.Should().NotBeNull();
             x.Value.ApiKey.Should().Be(x.Key);
@@ -70,7 +72,7 @@ public class ConnectionTests
             x.Value.MaxVersion.Should().NotBeNull();
         });
     }
-    
+
     [Test]
     [TestCase(0)]
     [TestCase(1)]
@@ -87,22 +89,22 @@ public class ConnectionTests
             KeyType = 0, // 0 = group, 1 = transaction
             CoordinatorKeys = [consumerGroupId], // for versions 4+
         });
-        
-        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+
+        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
         if (apiVersion < 4)
         {
-            response.ErrorCode.Should().Be(0);
-            response.Coordinators.Should().BeNull();
-            response.Host.Should().NotBeNullOrEmpty();
-            response.Port.Should().NotBeNull();
-            response.NodeId.Should().NotBeNull();
+            response.Message.ErrorCode.Should().Be(0);
+            response.Message.Coordinators.Should().BeNull();
+            response.Message.Host.Should().NotBeNullOrEmpty();
+            response.Message.Port.Should().NotBeNull();
+            response.Message.NodeId.Should().NotBeNull();
         }
         else
         {
-            response.ErrorCode.Should().BeNull();
-            response.Coordinators.Should().AllSatisfy(x =>
+            response.Message.ErrorCode.Should().BeNull();
+            response.Message.Coordinators.Should().AllSatisfy(x =>
             {
                 x.ErrorCode.Should().Be(0);
                 x.Key.Should().BeEquivalentTo(consumerGroupId);
@@ -112,7 +114,7 @@ public class ConnectionTests
             });
         }
     }
-    
+
     [Test]
     [TestCase(0)]
     [TestCase(1)]
@@ -132,7 +134,8 @@ public class ConnectionTests
         await using var connection = await OpenConnection();
         var requestClient = new MetadataRequestClient(apiVersion, new MetadataRequest
         {
-            Topics = [
+            Topics =
+            [
                 new MetadataRequestTopic
                 {
                     Name = "test_p12_m1M_s4B",
@@ -143,19 +146,19 @@ public class ConnectionTests
             IncludeClusterAuthorizedOperations = true,
             IncludeTopicAuthorizedOperations = true,
         });
-        
+
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
-        response.Brokers.Should().NotBeNullOrEmpty();
-        response.Brokers.Should().AllSatisfy(x =>
+        response.Message.Brokers.Should().NotBeNullOrEmpty();
+        response.Message.Brokers.Should().AllSatisfy(x =>
         {
             x.Value.Host.Should().NotBeNullOrEmpty();
             x.Value.Port.Should().NotBeNull();
             x.Value.NodeId.Should().NotBeNull();
             x.Value.NodeId.Should().Be(x.Key);
         });
-        response.Topics.Should().AllSatisfy(x =>
+        response.Message.Topics.Should().AllSatisfy(x =>
         {
             x.Value.ErrorCode.Should().Be(0);
             x.Value.Name.Should().NotBeNullOrEmpty();
@@ -167,11 +170,11 @@ public class ConnectionTests
                 p.PartitionIndex.Should().NotBeNull();
                 p.LeaderId.Should().NotBeNull();
 
-                response.Brokers.Should().ContainKey(p.LeaderId!.Value);
+                response.Message.Brokers.Should().ContainKey(p.LeaderId!.Value);
             });
         });
     }
-    
+
     [Test]
     [TestCase(0)]
     [TestCase(1)]
@@ -187,6 +190,31 @@ public class ConnectionTests
     {
         var consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId);
+        using var response = await JoinGroupAsync(connection, apiVersion, consumerGroupId);
+
+        response.Message.ErrorCode.Should().Be(0);
+        response.Message.GenerationId.Should().NotBeNull();
+        response.Message.Leader.Should().NotBeNull();
+        response.Message.MemberId.Should().NotBeNull();
+        response.Message.Members.Should().NotBeNullOrEmpty();
+        var subscriptionMember = response.Message.Members!.FirstOrDefault(x => x.MemberId == response.Message.MemberId);
+        subscriptionMember.Should().NotBeNull();
+        foreach (var member in response.Message.Members!)
+        {
+            member.Metadata.Should().NotBeNull();
+            var subscription = member.Metadata;
+            subscription.Should().NotBeNull();
+            subscription!.GenerationId.Should().NotBeNull();
+            subscription.Topics.Should().NotBeNullOrEmpty();
+        }
+
+        var subscriptionMemberMetadata = subscriptionMember!.Metadata;
+        subscriptionMemberMetadata.Should().BeEquivalentTo(subscriptionMemberMetadata);
+    }
+
+    private static async Task<IDisposableMessage<JoinGroupResponse>> JoinGroupAsync(
+        Connection connection, short apiVersion, string consumerGroupId)
+    {
         var protocolSubscription = new ConsumerProtocolSubscription
         {
             Topics = ["test_p12_m1M_s4B"],
@@ -217,37 +245,21 @@ public class ConnectionTests
         };
         var requestClient = new JoinGroupRequestClient(apiVersion, request);
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
-
         response.Should().NotBeNull();
-        
-        if (apiVersion == 4 && response.ErrorCode == (short)ErrorCode.MemberIdRequired)
+
+        if (apiVersion == 4 && response.Message.ErrorCode == (short)ErrorCode.MemberIdRequired)
         {
-            response.MemberId.Should().NotBeNullOrEmpty();
             // retry with given member id
-            request.MemberId = response.MemberId;
+            request.MemberId = response.Message.MemberId;
+            response.Dispose();
+
             response = await connection.SendAsync(requestClient, CancellationToken.None);
             response.Should().NotBeNull();
         }
-        
-        response.ErrorCode.Should().Be(0);
-        response.GenerationId.Should().NotBeNull();
-        response.Leader.Should().NotBeNull();
-        response.MemberId.Should().NotBeNull();
-        response.Members.Should().NotBeNullOrEmpty();
-        var subscriptionMember = response.Members!.FirstOrDefault(x => x.MemberId == response.MemberId);
-        subscriptionMember.Should().NotBeNull();
-        foreach (var member in response.Members!)
-        {
-            member.Metadata.Should().NotBeNull();
-            var subscription = member.Metadata;
-            subscription.Should().NotBeNull();
-            subscription!.GenerationId.Should().NotBeNull();
-            subscription.Topics.Should().NotBeNullOrEmpty();
-        }
-        var subscriptionMemberMetadata = subscriptionMember!.Metadata;
-        subscriptionMemberMetadata.Should().BeEquivalentTo(subscriptionMemberMetadata);
+
+        return response;
     }
-    
+
     [Test]
     [TestCase(0)]
     [TestCase(1)]
@@ -259,27 +271,28 @@ public class ConnectionTests
     {
         var consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId);
-        var joinGroupResponse = await JoinGroup(connection, consumerGroupId);
+        using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var requestClient = new LeaveGroupRequestClient(apiVersion, new LeaveGroupRequest
         {
             GroupId = consumerGroupId,
-            MemberId = joinGroupResponse.MemberId,
-            Members = [
+            MemberId = joinGroupResponse.Message.MemberId,
+            Members =
+            [
                 new MemberIdentity
                 {
-                    MemberId = joinGroupResponse.MemberId,
+                    MemberId = joinGroupResponse.Message.MemberId,
                     GroupInstanceId = null,
                     Reason = "bla-bla-bla",
                 }
             ],
         });
-        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
-        response.ErrorCode.Should().Be(0);
+        response.Message.ErrorCode.Should().Be(0);
     }
-    
-    
+
+
     [Test]
     [TestCase(0)]
     [TestCase(1)]
@@ -291,7 +304,7 @@ public class ConnectionTests
     {
         var consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId);
-        var joinGroupResponse = await JoinGroup(connection, consumerGroupId);
+        using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var requestedAssignment = new ConsumerProtocolAssignment
         {
             AssignedPartitions = new Dictionary<string, TopicPartition>
@@ -309,27 +322,28 @@ public class ConnectionTests
         var requestClient = new SyncGroupRequestClient(apiVersion, new SyncGroupRequest
         {
             GroupId = consumerGroupId,
-            GenerationId = joinGroupResponse.GenerationId,
-            MemberId = joinGroupResponse.MemberId,
+            GenerationId = joinGroupResponse.Message.GenerationId,
+            MemberId = joinGroupResponse.Message.MemberId,
             GroupInstanceId = null, // ???
             ProtocolType = "consumer",
             ProtocolName = "nkafka-consumer",
-            Assignments = [
+            Assignments =
+            [
                 new SyncGroupRequestAssignment
                 {
-                    MemberId = joinGroupResponse.MemberId,
+                    MemberId = joinGroupResponse.Message.MemberId,
                     Assignment = requestedAssignment,
                 }
             ],
         });
-        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
-        response.ErrorCode.Should().Be(0);
-        var actualAssignment = response.Assignment!;
+        response.Message.ErrorCode.Should().Be(0);
+        var actualAssignment = response.Message.Assignment!;
         actualAssignment.Should().BeEquivalentTo(requestedAssignment);
     }
-    
+
     [Test]
     [TestCase(0)]
     [TestCase(1)]
@@ -340,65 +354,18 @@ public class ConnectionTests
     {
         var consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId);
-        var joinGroupResponse = await JoinGroup(connection, consumerGroupId);
+        using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var requestClient = new HeartbeatRequestClient(apiVersion, new HeartbeatRequest
         {
             GroupId = consumerGroupId,
-            GenerationId = joinGroupResponse.GenerationId,
-            MemberId = joinGroupResponse.MemberId,
+            GenerationId = joinGroupResponse.Message.GenerationId,
+            MemberId = joinGroupResponse.Message.MemberId,
             GroupInstanceId = null, // ???
         });
-        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         response.Should().NotBeNull();
-        response.ErrorCode.Should().Be(0);
-    }
-
-    private async Task<JoinGroupResponse> JoinGroup(Connection connection, string groupId)
-    {
-        var request = new JoinGroupRequest
-        {
-            GroupId = groupId,
-            SessionTimeoutMs = (int)TimeSpan.FromSeconds(45).TotalMilliseconds,
-            RebalanceTimeoutMs = -1,
-            MemberId = string.Empty, // ???
-            GroupInstanceId = Guid.NewGuid().ToString(),
-            ProtocolType = "consumer",
-            Protocols = new Dictionary<string, JoinGroupRequestProtocol>
-            {
-                {
-                    "nkafka-consumer", new JoinGroupRequestProtocol
-                    {
-                        Name = "nkafka-consumer",
-                        Metadata = new ConsumerProtocolSubscription
-                            {
-                                Topics = ["test_p12_m1M_s4B"],
-                                UserData = null, // ???
-                                OwnedPartitions = null, // ???
-                                GenerationId = -1, // ???
-                                RackId = null // ???
-                            },
-                    }
-                }
-            },
-            Reason = null
-        };
-        var requestClient = new JoinGroupRequestClient(0, request);
-        var response = await connection.SendAsync(requestClient, CancellationToken.None);
-        if (response == null)
-        {
-            throw new Exception("Empty response on join request.");
-        }
-        if (response.ErrorCode != 0)
-        {
-            throw new Exception($"Non-zero error code in response on join request: {response.ErrorCode}.");
-        }
-        if (response.MemberId == null)
-        {
-            throw new Exception("Empty member id in response on join request.");
-        }
-
-        return response;
+        response.Message.ErrorCode.Should().Be(0);
     }
     
     [Test]
@@ -418,14 +385,15 @@ public class ConnectionTests
     [TestCase(13)]
     public async Task SendAsync_FetchRequest_ShouldReturnExpectedResult(short apiVersion)
     {
-        var metadata = await RequestMetadata();
-        var topicMetadata = metadata.Topics!["test_p12_m1M_s4B"];
+        using var metadata = await RequestMetadata();
+        var topicMetadata = metadata.Message.Topics!["test_p12_m1M_s4B"];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
         foreach (var group in partitions)
         {
-            var broker = metadata.Brokers![group.Key];
-            var config = new ConnectionConfig("PLAINTEXT", broker.Host!, broker.Port!.Value, "nKafka.Client.IntegrationTests");
+            var broker = metadata.Message.Brokers![group.Key];
+            var config = new ConnectionConfig("PLAINTEXT", broker.Host!, broker.Port!.Value,
+                "nKafka.Client.IntegrationTests");
             await using var connection = new Connection(config, TestLoggerFactory.Instance);
             await connection.OpenAsync(CancellationToken.None);
 
@@ -442,12 +410,14 @@ public class ConnectionTests
                     IsolationLevel = 0, // !!!
                     SessionId = 0, // ???
                     SessionEpoch = -1, // ???
-                    Topics = [
+                    Topics =
+                    [
                         new FetchTopic
                         {
                             Topic = topicMetadata.Name,
                             TopicId = topicMetadata.TopicId,
-                            Partitions = [
+                            Partitions =
+                            [
                                 new FetchPartition
                                 {
                                     Partition = partition.PartitionIndex!.Value,
@@ -464,22 +434,21 @@ public class ConnectionTests
                     ForgottenTopicsData = [], // ???
                     RackId = string.Empty, // ???
                 });
-                var response = await connection.SendAsync(requestClient, CancellationToken.None);
+                using var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
                 response.Should().NotBeNull();
                 if (apiVersion >= 7)
                 {
-                    response.ErrorCode.Should().Be(0);
+                    response.Message.ErrorCode.Should().Be(0);
                 }
-                
-                response.Responses.Should().AllSatisfy(r =>
-                    r.Partitions.Should().AllSatisfy(p => 
+
+                response.Message.Responses.Should().AllSatisfy(r =>
+                    r.Partitions.Should().AllSatisfy(p =>
                         p.ErrorCode.Should().Be(0)));
             }
         }
-        
     }
-    
+
     [Test]
     [TestCase(0)]
     [TestCase(1)]
@@ -497,15 +466,16 @@ public class ConnectionTests
     [TestCase(13)]
     public async Task SendAsync_FetchRequest_ShouldFetchAllRecords(short apiVersion)
     {
-        var metadata = await RequestMetadata();
-        var topicMetadata = metadata.Topics!["test_p12_m1M_s4B"];
+        using var metadata = await RequestMetadata();
+        var topicMetadata = metadata.Message.Topics!["test_p12_m1M_s4B"];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
         var recordCount = 0;
         foreach (var group in partitions)
         {
-            var broker = metadata.Brokers![group.Key];
-            var config = new ConnectionConfig("PLAINTEXT", broker.Host!, broker.Port!.Value, "nKafka.Client.IntegrationTests");
+            var broker = metadata.Message.Brokers![group.Key];
+            var config = new ConnectionConfig("PLAINTEXT", broker.Host!, broker.Port!.Value,
+                "nKafka.Client.IntegrationTests");
             await using var connection = new Connection(config, NullLoggerFactory.Instance);
             await connection.OpenAsync(CancellationToken.None);
 
@@ -549,21 +519,22 @@ public class ConnectionTests
                         ForgottenTopicsData = [], // ???
                         RackId = string.Empty, // ???
                     });
-                    var response = await connection.SendAsync(requestClient, CancellationToken.None);
+                    using var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
-                    var lastOffset = response
+                    var lastOffset = response.Message
                         .Responses?.LastOrDefault()?
                         .Partitions?.LastOrDefault()?
                         .Records?.LastOffset ?? -1;
                     offset = lastOffset + 1;
-                    
-                    var responseRecordCount = response.Responses!
+
+                    var responseRecordCount = response.Message.Responses!
                         .SelectMany(x => x.Partitions!)
                         .Sum(x => x.Records!.RecordCount);
                     if (responseRecordCount == 0)
                     {
                         break;
                     }
+
                     recordCount += responseRecordCount;
                 }
             }
@@ -571,7 +542,7 @@ public class ConnectionTests
 
         recordCount.Should().Be(1000000);
     }
-    
+
     private async Task<Connection> OpenCoordinatorConnection(string groupId)
     {
         var config = new ConnectionConfig("PLAINTEXT", "kafka-1", 9192, "nKafka.Client.IntegrationTests");
@@ -583,32 +554,35 @@ public class ConnectionTests
             KeyType = 0, // 0 = group, 1 = transaction
             CoordinatorKeys = [groupId], // for versions 4+
         });
-        
-        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+
+        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
         if (response == null)
         {
             throw new Exception("Empty response from find coordinator request.");
         }
 
-        var coordinator = response.Coordinators!.Single();
+        var coordinator = response.Message.Coordinators!.Single();
         if (coordinator.ErrorCode != 0)
         {
-            throw new Exception($"Non-zero error code in response from find coordinator request: {coordinator.ErrorCode}.");
+            throw new Exception(
+                $"Non-zero error code in response from find coordinator request: {coordinator.ErrorCode}.");
         }
 
-        var coordinatorConfig = new ConnectionConfig("PLAINTEXT", coordinator.Host!, coordinator.Port!.Value, "nKafka.Client.IntegrationTests");
+        var coordinatorConfig = new ConnectionConfig("PLAINTEXT", coordinator.Host!, coordinator.Port!.Value,
+            "nKafka.Client.IntegrationTests");
         var coordinatorConnection = new Connection(coordinatorConfig, TestLoggerFactory.Instance);
         await coordinatorConnection.OpenAsync(CancellationToken.None);
 
         return coordinatorConnection;
     }
 
-    private async Task<MetadataResponse> RequestMetadata()
+    private async Task<IDisposableMessage<MetadataResponse>> RequestMetadata()
     {
         await using var connection = await OpenConnection();
         var requestClient = new MetadataRequestClient(12, new MetadataRequest
         {
-            Topics = [
+            Topics =
+            [
                 new MetadataRequestTopic
                 {
                     Name = "test_p12_m1M_s4B",
@@ -619,7 +593,7 @@ public class ConnectionTests
             IncludeClusterAuthorizedOperations = true,
             IncludeTopicAuthorizedOperations = true,
         });
-        
+
         var response = await connection.SendAsync(requestClient, CancellationToken.None);
         return response;
     }

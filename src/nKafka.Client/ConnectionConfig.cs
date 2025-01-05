@@ -22,6 +22,7 @@ public class ConnectionConfig
         Protocol = protocol;
         Host = host;
         Port = port;
+        ClientId = clientId;
         ResponseBufferSize = responseBufferSize;
         RequestBufferSize = requestBufferSize;
     }
@@ -30,6 +31,7 @@ public class ConnectionConfig
         @"^(?<proto>\S+)\:\/\/(?<host>\S+)\:(?<port>\S+)$", RegexOptions.Compiled);
     public ConnectionConfig(
         string connectionString,
+        string clientId,
         int responseBufferSize = 512 * 1024,
         int requestBufferSize = 512 * 1024)
     {
@@ -45,6 +47,7 @@ public class ConnectionConfig
             throw new ArgumentException($"Invalid port '{match.Groups["port"].Value}'");
         }
         Port = port;
+        ClientId = clientId;
         ResponseBufferSize = responseBufferSize;
         RequestBufferSize = requestBufferSize;
     }

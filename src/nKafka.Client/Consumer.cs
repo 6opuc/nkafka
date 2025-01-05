@@ -28,12 +28,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private ConcurrentDictionary<ApiKey, short> _apiVersionsChosen = new ();
     private int _coordinatorNodeId;
     private string[] _topics;
-    private JoinGroupResponse? _joinGroupResponse;
-    private MetadataResponse? _metadataResponse;
+    #warning do not hold ref to disposable messages
+    private IDisposableMessage<JoinGroupResponse>? _joinGroupResponse;
+    private IDisposableMessage<MetadataResponse>? _metadataResponse;
     
     private IList<(int NodeId, string Topic, Guid? TopicId, int Partition, long Offset)> _fetchQueue = [];
     private int _fetchIndex = 0;
-    private FetchResponse? _fetchResponse = null;
+    private IDisposableMessage<FetchResponse>? _fetchResponse = null;
     private IEnumerator<MessageDeserializationContext>? _messageDeserializeEnumerator = null;
     
     public Consumer(
@@ -60,7 +61,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         await OpenConnectionsAsync(cancellationToken);
         var connection = GetCoordinatorConnection();
         _joinGroupResponse = await JoinGroupRequestAsync(connection, cancellationToken);
-        if (_joinGroupResponse.MemberId == _joinGroupResponse.Leader)
+        if (_joinGroupResponse.Message.MemberId == _joinGroupResponse.Message.Leader)
         {
             _logger.LogInformation("Promoted as a leader.");
             IList<SyncGroupRequestAssignment> assignments = ReassignGroup();
@@ -87,7 +88,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         await RequestApiVersionsAsync(bootstrapConnection, cancellationToken);
         await OpenCoordinatorConnectionAsync(bootstrapConnection, cancellationToken);
         _metadataResponse = await RequestMetadata(bootstrapConnection, cancellationToken);
-        foreach (var broker in _metadataResponse.Brokers!.Values)
+        foreach (var broker in _metadataResponse.Message.Brokers!.Values)
         {
             if (_connections.ContainsKey(broker.NodeId!.Value))
             {
@@ -120,6 +121,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             var connectionConfig = new ConnectionConfig(
                 connectionString,
+                _config.ClientId,
                 _config.RequestBufferSize,
                 _config.RequestBufferSize);
             try
@@ -149,13 +151,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             ClientSoftwareVersion = ClientVersionGetter.Version,
         });
         
-        var response = await connection.SendAsync(requestClient, cancellationToken);
-        if (response.ErrorCode != 0)
+        using var response = await connection.SendAsync(requestClient, cancellationToken);
+        if (response.Message.ErrorCode != 0)
         {
-            throw new Exception($"Failed to choose API versions for '{_config.BootstrapServers}'. Error code: {response.ErrorCode}");
+            throw new Exception($"Failed to choose API versions for '{_config.BootstrapServers}'. Error code: {response.Message.ErrorCode}");
         }
 
-        _apiVersionsSupported = response.ApiKeys;
+        _apiVersionsSupported = response.Message.ApiKeys;
         _apiVersionsChosen = new ConcurrentDictionary<ApiKey, short>();
     }
     
@@ -177,28 +179,28 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 CoordinatorKeys = [_config.GroupId],
             });
         
-        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
         ConnectionConfig coordinatorConnectionConfig;
         if (apiVersion < 4)
         {
-            if (response.ErrorCode != 0)
+            if (response.Message.ErrorCode != 0)
             {
-                throw new Exception($"Failed to find group coordinator. Error code {response.ErrorCode}");
+                throw new Exception($"Failed to find group coordinator. Error code {response.Message.ErrorCode}");
             }
 
-            _coordinatorNodeId = response.NodeId!.Value;
+            _coordinatorNodeId = response.Message.NodeId!.Value;
             coordinatorConnectionConfig = new ConnectionConfig(
                 _config.Protocol,
-                response.Host!,
-                response.Port!.Value,
+                response.Message.Host!,
+                response.Message.Port!.Value,
                 _config.ClientId,
                 _config.ResponseBufferSize,
                 _config.RequestBufferSize);
         }
         else
         {
-            var coordinator = response.Coordinators?.FirstOrDefault(x => x.Key == _config.GroupId);
+            var coordinator = response.Message.Coordinators?.FirstOrDefault(x => x.Key == _config.GroupId);
             if (coordinator == null)
             {
                 throw new Exception($"Failed to find group coordinator. Response did not match coordinator key '{_config.GroupId}'.");
@@ -252,7 +254,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         return apiVersion;
     }
     
-    private async ValueTask<MetadataResponse> RequestMetadata(IConnection connection, CancellationToken cancellationToken)
+    private async ValueTask<IDisposableMessage<MetadataResponse>> RequestMetadata(IConnection connection, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Requesting metadata.");
         
@@ -275,7 +277,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         foreach (var topicName in _topics)
         {
-            if (!response.Topics!.TryGetValue(topicName, out var topic))
+            if (!response.Message.Topics!.TryGetValue(topicName, out var topic))
             {
                 _logger.LogInformation($"No topic metadata found for topic {topicName}.");
                 continue;
@@ -298,7 +300,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         return response;
     }
     
-    private async Task<JoinGroupResponse> JoinGroupRequestAsync(
+    private async Task<IDisposableMessage<JoinGroupResponse>> JoinGroupRequestAsync(
         IConnection connection,
         CancellationToken cancellationToken)
     {
@@ -337,16 +339,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         var requestClient = new JoinGroupRequestClient(apiVersion, request);
         var response = await connection.SendAsync(requestClient, cancellationToken);
         
-        if (apiVersion == 4 && response.ErrorCode == (short)ErrorCode.MemberIdRequired)
+        if (apiVersion == 4 && response.Message.ErrorCode == (short)ErrorCode.MemberIdRequired)
         {
             // retry with given member id
-            request.MemberId = response.MemberId;
+            request.MemberId = response.Message.MemberId;
             response = await connection.SendAsync(requestClient, cancellationToken);
         }
 
-        if (response.ErrorCode != 0)
+        if (response.Message.ErrorCode != 0)
         {
-            throw new Exception($"Failed to join consumer group. Error code {response.ErrorCode}");
+            throw new Exception($"Failed to join consumer group. Error code {response.Message.ErrorCode}");
         }
         
         return response;
@@ -361,7 +363,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         };
         foreach (var topicName in _topics)
         {
-            if (!_metadataResponse!.Topics!.TryGetValue(topicName, out var topic))
+            if (!_metadataResponse!.Message.Topics!.TryGetValue(topicName, out var topic))
             {
                 continue;
             }
@@ -377,7 +379,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         [
             new SyncGroupRequestAssignment
             {
-                MemberId = _joinGroupResponse!.MemberId,
+                MemberId = _joinGroupResponse!.Message.MemberId,
                 Assignment = requestedAssignment,
             }
         ];
@@ -396,26 +398,26 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         var requestClient = new SyncGroupRequestClient(apiVersion, new SyncGroupRequest
         {
             GroupId = _config.GroupId,
-            GenerationId = _joinGroupResponse!.GenerationId,
-            MemberId = _joinGroupResponse.MemberId,
+            GenerationId = _joinGroupResponse!.Message.GenerationId,
+            MemberId = _joinGroupResponse.Message.MemberId,
             GroupInstanceId = null,
             ProtocolType = "consumer",
             ProtocolName = "nkafka-consumer",
             Assignments = assignments,
         });
-        var response = await connection.SendAsync(requestClient, cancellationToken);
+        using var response = await connection.SendAsync(requestClient, cancellationToken);
 
-        if (response.ErrorCode != 0)
+        if (response.Message.ErrorCode != 0)
         {
-            throw new Exception($"Failed to synchronize consumer group. Error code {response.ErrorCode}");
+            throw new Exception($"Failed to synchronize consumer group. Error code {response.Message.ErrorCode}");
         }
 
-        var actualAssignments = response.Assignment!;
+        var actualAssignments = response.Message.Assignment!;
 
         _fetchQueue = new List<(int NodeId, string Topic, Guid? TopicId, int Partition, long lastOffset)>();
         foreach (var topicAssignment in actualAssignments.AssignedPartitions!)
         {
-            if (_metadataResponse?.Topics?.TryGetValue(topicAssignment.Key, out var topicMetadata) != true)
+            if (_metadataResponse?.Message.Topics?.TryGetValue(topicAssignment.Key, out var topicMetadata) != true)
             {
                 continue;
             }
@@ -462,13 +464,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                         var requestClient = new HeartbeatRequestClient(apiVersion, new HeartbeatRequest
                         {
                             GroupId = _config.GroupId,
-                            GenerationId = _joinGroupResponse.GenerationId,
-                            MemberId = _joinGroupResponse.MemberId,
+                            GenerationId = _joinGroupResponse!.Message.GenerationId,
+                            MemberId = _joinGroupResponse.Message.MemberId,
                             GroupInstanceId = null, // ???
                         });
-                        var response = await connection.SendAsync(requestClient, CancellationToken.None);
+                        using var response = await connection.SendAsync(requestClient, CancellationToken.None);
                         
-                        if (response.ErrorCode == 0)
+                        if (response.Message.ErrorCode == 0)
                         {
                             _logger.LogDebug(
                                 "Heartbeat was sent. Waiting for {@interval}ms.",
@@ -478,7 +480,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                         {
                             _logger.LogError(
                                 "Error in heartbeat response: {@errorCode}. Waiting for {@interval}ms.",
-                                response.ErrorCode,
+                                response.Message.ErrorCode,
                                 _config.HeartbeatIntervalMs);
                         }
 
@@ -550,7 +552,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         var connection = _connections[fetchSource.NodeId];
         _fetchResponse = await connection.SendAsync(requestClient, CancellationToken.None);
 
-        var lastOffset = _fetchResponse
+        var lastOffset = _fetchResponse.Message
             .Responses?.LastOrDefault()?
             .Partitions?.LastOrDefault()?
             .Records?.LastOffset;
@@ -572,12 +574,12 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private IEnumerator<MessageDeserializationContext> GetMessageEnumerator(string topic)
     {
         if (_fetchResponse == null ||
-            _fetchResponse.ErrorCode != 0)
+            _fetchResponse.Message.ErrorCode != 0)
         {
             yield break;
         }
 
-        foreach (var response in _fetchResponse.Responses!)
+        foreach (var response in _fetchResponse.Message.Responses!)
         {
             foreach (var partition in response.Partitions!)
             {
@@ -626,6 +628,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         
         _messageDeserializeEnumerator.Dispose();
         _messageDeserializeEnumerator = null;
+        _fetchResponse?.Dispose();
 
         return null;
     }
@@ -647,6 +650,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         await LeaveGroupAsync(GetCoordinatorConnection(), CancellationToken.None);
 
         await CloseConnectionsAsync();
+        
+        _metadataResponse?.Dispose();
+        _joinGroupResponse?.Dispose();
+        _fetchResponse?.Dispose();
     }
 
     private async ValueTask LeaveGroupAsync(IConnection connection, CancellationToken cancellationToken)
@@ -663,21 +670,21 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         var requestClient = new LeaveGroupRequestClient(apiVersion, new LeaveGroupRequest
         {
             GroupId = _config.GroupId,
-            MemberId = _joinGroupResponse.MemberId,
+            MemberId = _joinGroupResponse.Message.MemberId,
             Members = [
                 new MemberIdentity
                 {
-                    MemberId = _joinGroupResponse.MemberId,
+                    MemberId = _joinGroupResponse.Message.MemberId,
                     GroupInstanceId = null,
                     Reason = null,
                 }
             ],
         });
-        var response = await connection.SendAsync(requestClient, cancellationToken);
+        using var response = await connection.SendAsync(requestClient, cancellationToken);
 
-        if (response.ErrorCode != 0)
+        if (response.Message.ErrorCode != 0)
         {
-            throw new Exception($"Failed to leave consumer group. Error code {response.ErrorCode}");
+            throw new Exception($"Failed to leave consumer group. Error code {response.Message.ErrorCode}");
         }
 
         _joinGroupResponse = null;
