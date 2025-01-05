@@ -13,7 +13,6 @@ public static class PipeReaderExtensions
         {
             cancellationToken.ThrowIfCancellationRequested();
             
-            #warning System.InvalidOperationException : Reading is already in progress. (from connection.Dispose)
             var readResult = await reader.ReadAtLeastAsync(4, cancellationToken);
             if (readResult.Buffer.Length == 0)
             {

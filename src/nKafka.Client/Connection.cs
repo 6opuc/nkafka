@@ -311,18 +311,17 @@ public class Connection : IConnection
         await _requestQueue.Completion;
         await _sendBackgroundTask;
 
+        if (_signalNoMoreDataToRead != null)
+        {
+            await _signalNoMoreDataToRead.CancelAsync();
+        }
         if (_signalNoMoreDataToWrite != null)
         {
             await _signalNoMoreDataToWrite.CancelAsync();
         }
 
-        if (_signalNoMoreDataToRead != null)
-        {
-            await _signalNoMoreDataToRead.CancelAsync();
-        }
-
-        await _receiveBackgroundTask;
         await _processResponseBackgroundTask;
+        await _receiveBackgroundTask;
 
         _socket.Shutdown(SocketShutdown.Both);
         _socket.Dispose();
