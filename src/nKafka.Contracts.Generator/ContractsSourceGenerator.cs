@@ -189,6 +189,28 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                       }
                       """));
         }
+        
+        context.AddSource(
+            "ApiVersions.g.cs",
+            Format(
+                $$"""
+                  #nullable enable
+                  using System.Collections.ObjectModel;
+                  
+                  namespace nKafka.Contracts
+                  {
+                      public static class ApiVersions
+                      {
+                          public static ReadOnlyDictionary<ApiKey, VersionRange> ValidVersions = new ReadOnlyDictionary<ApiKey, VersionRange>
+                          (
+                              new Dictionary<ApiKey, VersionRange>
+                              {
+                                  {{string.Join(",", pairs.Select(x => $"{{ ApiKey.{Enum.GetName(typeof(ApiKey), x.Request.ApiKey!)}, {x.Request.ValidVersions.ToLiteral()} }}"))}}
+                              }
+                          );
+                      }
+                  }
+                  """));
     }
 
     private string Format(string source)

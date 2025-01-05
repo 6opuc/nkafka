@@ -173,9 +173,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         _logger.LogInformation("Opening coordinator connection.");
         
-        var apiVersion = GetApiVersion(
-            FindCoordinatorRequestClient.Api,
-            FindCoordinatorRequestClient.ValidVersions);
+        var apiVersion = GetApiVersion(FindCoordinatorRequestClient.Api);
         var requestClient = new FindCoordinatorRequestClient(
             apiVersion,
             new FindCoordinatorRequest
@@ -241,12 +239,18 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         return coordinatorConnection;
     }
     
-    private short GetApiVersion(ApiKey api, VersionRange validVersionRange)
+    private short GetApiVersion(ApiKey api)
     {
         #warning refactor and generalize, don't use concurrent dictionary at all, initialize once for connection
         if (_apiVersionsChosen.TryGetValue(api, out var apiVersion))
         {
             return apiVersion;
+        }
+
+        if (!ApiVersions.ValidVersions.TryGetValue(api, out var validVersionRange))
+        {
+            _apiVersionsChosen[api] = 0;
+            return 0;
         }
 
         apiVersion = 0;
@@ -270,9 +274,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         _logger.LogInformation("Requesting metadata.");
         
-        var apiVersion = GetApiVersion(
-            MetadataRequestClient.Api,
-            MetadataRequestClient.ValidVersions);
+        var apiVersion = GetApiVersion(MetadataRequestClient.Api);
         var requestClient = new MetadataRequestClient(apiVersion, new MetadataRequest
         {
             Topics = _topics.Select(x => new MetadataRequestTopic
@@ -345,9 +347,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             Reason = null
         };
         
-        var apiVersion = GetApiVersion(
-            JoinGroupRequestClient.Api,
-            JoinGroupRequestClient.ValidVersions);
+        var apiVersion = GetApiVersion(JoinGroupRequestClient.Api);
         var requestClient = new JoinGroupRequestClient(apiVersion, request);
         var response = await connection.SendAsync(requestClient, cancellationToken);
         
@@ -413,9 +413,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         _logger.LogInformation("Synchronizing consumer group.");
         
-        var apiVersion = GetApiVersion(
-            SyncGroupRequestClient.Api,
-            SyncGroupRequestClient.ValidVersions);
+        var apiVersion = GetApiVersion(SyncGroupRequestClient.Api);
         var requestClient = new SyncGroupRequestClient(apiVersion, new SyncGroupRequest
         {
             GroupId = _config.GroupId,
@@ -473,9 +471,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     {
                         var connection = GetCoordinatorConnection();
                         
-                        var apiVersion = GetApiVersion(
-                            HeartbeatRequestClient.Api,
-                            HeartbeatRequestClient.ValidVersions);
+                        var apiVersion = GetApiVersion(HeartbeatRequestClient.Api);
                         var requestClient = new HeartbeatRequestClient(apiVersion, new HeartbeatRequest
                         {
                             GroupId = _config.GroupId,
@@ -526,9 +522,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
         var fetchSource = _fetchQueue[_fetchIndex%_fetchQueue.Count];
         
-        var apiVersion = GetApiVersion(
-            FetchRequestClient.Api,
-            FetchRequestClient.ValidVersions);
+        var apiVersion = GetApiVersion(FetchRequestClient.Api);
         var requestClient = new FetchRequestClient(apiVersion, new FetchRequest
         {
             ClusterId = null, // ???
@@ -677,9 +671,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
         _logger.LogInformation("Leaving consumer group.");
         
-        var apiVersion = GetApiVersion(
-            LeaveGroupRequestClient.Api,
-            LeaveGroupRequestClient.ValidVersions);
+        var apiVersion = GetApiVersion(LeaveGroupRequestClient.Api);
         var requestClient = new LeaveGroupRequestClient(apiVersion, new LeaveGroupRequest
         {
             GroupId = _config.GroupId,
