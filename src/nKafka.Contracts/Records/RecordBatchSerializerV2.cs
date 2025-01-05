@@ -55,6 +55,7 @@ public static class RecordBatchSerializerV2
                 }
             }
         }
+        #warning turn on/off with a config parameter for consumer
         ChecksumValidator.ValidateCrc32c(recordBatch.Crc, input, crcStart);
 
         var actualBatchLength = input.Position - recordBatchStart;

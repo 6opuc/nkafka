@@ -11,6 +11,7 @@ public class ConfluentConsumeStringTest
             BootstrapServers = "PLAINTEXT://kafka-1:9192, PLAINTEXT://kafka-2:9292, PLAINTEXT://kafka-3:9392",
             GroupId = Guid.NewGuid().ToString(),
             AutoOffsetReset = AutoOffsetReset.Earliest,
+            CheckCrcs = true,
         };
 
         using var consumer = new ConsumerBuilder<Null, string>(config).Build();
