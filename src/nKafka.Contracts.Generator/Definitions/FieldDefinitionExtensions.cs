@@ -147,6 +147,7 @@ public static class FieldDefinitionExtensions
                 return "ConsumerProtocolSubscription";
             }
         }
+        #warning do not deserialize byte arrays, use Memory<byte> instead (see Record)
         return type switch
         {
             "int64" => "long",

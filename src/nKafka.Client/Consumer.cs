@@ -9,6 +9,7 @@ using nKafka.Contracts.MessageDefinitions.FetchRequestNested;
 using nKafka.Contracts.MessageDefinitions.JoinGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.LeaveGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
+using nKafka.Contracts.MessageDefinitions.MetadataResponseNested;
 using nKafka.Contracts.MessageDefinitions.SyncGroupRequestNested;
 using nKafka.Contracts.RequestClients;
 
@@ -27,10 +28,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private IDictionary<short, ApiVersion>? _apiVersionsSupported = new Dictionary<short, ApiVersion>();
     private ConcurrentDictionary<ApiKey, short> _apiVersionsChosen = new ();
     private int _coordinatorNodeId;
-    private string[] _topics;
-    #warning do not hold ref to disposable messages
-    private IDisposableMessage<JoinGroupResponse>? _joinGroupResponse;
-    private IDisposableMessage<MetadataResponse>? _metadataResponse;
+    private readonly string[] _topics;
+    private GroupMembership? _groupMembership;
+    private IDictionary<string, MetadataResponseTopic>? _topicsMetadata;
     
     private IList<(int NodeId, string Topic, Guid? TopicId, int Partition, long Offset)> _fetchQueue = [];
     private int _fetchIndex = 0;
@@ -60,8 +60,14 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         using var _ = BeginDefaultLoggingScope();
         await OpenConnectionsAsync(cancellationToken);
         var connection = GetCoordinatorConnection();
-        _joinGroupResponse = await JoinGroupRequestAsync(connection, cancellationToken);
-        if (_joinGroupResponse.Message.MemberId == _joinGroupResponse.Message.Leader)
+        using var joinGroupResponse = await JoinGroupRequestAsync(connection, cancellationToken);
+        _groupMembership = new GroupMembership
+        {
+            MemberId = joinGroupResponse.Message.MemberId!,
+            LeaderId = joinGroupResponse.Message.Leader!,
+            GenerationId = joinGroupResponse.Message.GenerationId,
+        };
+        if (_groupMembership.MemberId == _groupMembership.LeaderId)
         {
             _logger.LogInformation("Promoted as a leader.");
             IList<SyncGroupRequestAssignment> assignments = ReassignGroup();
@@ -87,8 +93,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         await using var bootstrapConnection = await OpenBootstrapConnectionAsync(cancellationToken);
         await RequestApiVersionsAsync(bootstrapConnection, cancellationToken);
         await OpenCoordinatorConnectionAsync(bootstrapConnection, cancellationToken);
-        _metadataResponse = await RequestMetadata(bootstrapConnection, cancellationToken);
-        foreach (var broker in _metadataResponse.Message.Brokers!.Values)
+        using var metadataResponse = await RequestMetadata(bootstrapConnection, cancellationToken);
+        _topicsMetadata = metadataResponse.Message.Topics;
+        foreach (var broker in metadataResponse.Message.Brokers!.Values)
         {
             if (_connections.ContainsKey(broker.NodeId!.Value))
             {
@@ -343,6 +350,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             // retry with given member id
             request.MemberId = response.Message.MemberId;
+            response.Dispose();
+            
             response = await connection.SendAsync(requestClient, cancellationToken);
         }
 
@@ -354,6 +363,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         return response;
     }
 
+    private class GroupMembership
+    {
+        public required string MemberId { get; init; }
+        public required string LeaderId { get; init; }
+        public int? GenerationId { get; init; }
+    }
+
     private IList<SyncGroupRequestAssignment> ReassignGroup()
     {
         #warning implement reassignment logic for all members. take into account current assignments if possible
@@ -363,7 +379,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         };
         foreach (var topicName in _topics)
         {
-            if (!_metadataResponse!.Message.Topics!.TryGetValue(topicName, out var topic))
+            if (!_topicsMetadata!.TryGetValue(topicName, out var topic))
             {
                 continue;
             }
@@ -379,7 +395,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         [
             new SyncGroupRequestAssignment
             {
-                MemberId = _joinGroupResponse!.Message.MemberId,
+                MemberId = _groupMembership!.MemberId,
                 Assignment = requestedAssignment,
             }
         ];
@@ -398,8 +414,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         var requestClient = new SyncGroupRequestClient(apiVersion, new SyncGroupRequest
         {
             GroupId = _config.GroupId,
-            GenerationId = _joinGroupResponse!.Message.GenerationId,
-            MemberId = _joinGroupResponse.Message.MemberId,
+            GenerationId = _groupMembership!.GenerationId,
+            MemberId = _groupMembership.MemberId,
             GroupInstanceId = null,
             ProtocolType = "consumer",
             ProtocolName = "nkafka-consumer",
@@ -417,7 +433,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         _fetchQueue = new List<(int NodeId, string Topic, Guid? TopicId, int Partition, long lastOffset)>();
         foreach (var topicAssignment in actualAssignments.AssignedPartitions!)
         {
-            if (_metadataResponse?.Message.Topics?.TryGetValue(topicAssignment.Key, out var topicMetadata) != true)
+            if (_topicsMetadata?.TryGetValue(topicAssignment.Key, out var topicMetadata) != true)
             {
                 continue;
             }
@@ -464,8 +480,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                         var requestClient = new HeartbeatRequestClient(apiVersion, new HeartbeatRequest
                         {
                             GroupId = _config.GroupId,
-                            GenerationId = _joinGroupResponse!.Message.GenerationId,
-                            MemberId = _joinGroupResponse.Message.MemberId,
+                            GenerationId = _groupMembership!.GenerationId,
+                            MemberId = _groupMembership.MemberId,
                             GroupInstanceId = null, // ???
                         });
                         using var response = await connection.SendAsync(requestClient, CancellationToken.None);
@@ -651,14 +667,12 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         await CloseConnectionsAsync();
         
-        _metadataResponse?.Dispose();
-        _joinGroupResponse?.Dispose();
         _fetchResponse?.Dispose();
     }
 
     private async ValueTask LeaveGroupAsync(IConnection connection, CancellationToken cancellationToken)
     {
-        if (_joinGroupResponse == null)
+        if (_groupMembership == null)
         {
             return;
         }
@@ -670,11 +684,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         var requestClient = new LeaveGroupRequestClient(apiVersion, new LeaveGroupRequest
         {
             GroupId = _config.GroupId,
-            MemberId = _joinGroupResponse.Message.MemberId,
+            MemberId = _groupMembership.MemberId,
             Members = [
                 new MemberIdentity
                 {
-                    MemberId = _joinGroupResponse.Message.MemberId,
+                    MemberId = _groupMembership.MemberId,
                     GroupInstanceId = null,
                     Reason = null,
                 }
@@ -687,7 +701,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             throw new Exception($"Failed to leave consumer group. Error code {response.Message.ErrorCode}");
         }
 
-        _joinGroupResponse = null;
+        _groupMembership = null;
     }
 
     private async ValueTask CloseConnectionsAsync()
