@@ -96,13 +96,16 @@ public class Connection : IConnection
     
     private static TimeSpan _totalElapsedReadPayloadSize = TimeSpan.Zero;
     private static TimeSpan _totalElapsedReadPayload = TimeSpan.Zero;
+    private static TimeSpan _totalElapsedSocketReceive = TimeSpan.Zero;
 
     public static void PrintTotalElapsedAndReset()
     {
         Console.WriteLine($"Total elapsed read payload size: {_totalElapsedReadPayloadSize.TotalMilliseconds}ms");
-        Console.WriteLine($"Total elapse read payload: {_totalElapsedReadPayload.TotalMilliseconds}ms");
+        Console.WriteLine($"Total elapsed read payload: {_totalElapsedReadPayload.TotalMilliseconds}ms");
+        Console.WriteLine($"Total elapsed socket receive: {_totalElapsedSocketReceive.TotalMilliseconds}ms");
         _totalElapsedReadPayloadSize = TimeSpan.Zero;
         _totalElapsedReadPayload = TimeSpan.Zero;
+        _totalElapsedSocketReceive = TimeSpan.Zero;
     }
     
     private void StartProcessing()
@@ -212,10 +215,13 @@ public class Connection : IConnection
                     do
                     {
                         var memory = writer.GetMemory(_config.ResponseBufferSize);
+                        var socketReceiveStopwatch = Stopwatch.StartNew();
                         var bytesRead = await _socket.ReceiveAsync(
                             memory,
                             SocketFlags.None,
                             cancellationToken);
+                        socketReceiveStopwatch.Stop();
+                        _totalElapsedSocketReceive += socketReceiveStopwatch.Elapsed;
 
                         if (bytesRead == 0)
                         {
