@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO.Pipelines;
 using System.Net;
 using System.Net.Sockets;
@@ -93,6 +94,17 @@ public class Connection : IConnection
         await _socket.ConnectAsync(endpoint, cancellationToken);
     }
     
+    private static TimeSpan _totalElapsedReadPayloadSize = TimeSpan.Zero;
+    private static TimeSpan _totalElapsedReadPayload = TimeSpan.Zero;
+
+    public static void PrintTotalElapsedAndReset()
+    {
+        Console.WriteLine($"Total elapsed read payload size: {_totalElapsedReadPayloadSize.TotalMilliseconds}ms");
+        Console.WriteLine($"Total elapse read payload: {_totalElapsedReadPayload.TotalMilliseconds}ms");
+        _totalElapsedReadPayloadSize = TimeSpan.Zero;
+        _totalElapsedReadPayload = TimeSpan.Zero;
+    }
+    
     private void StartProcessing()
     {
         if (_socket == null)
@@ -110,13 +122,19 @@ public class Connection : IConnection
                 {
                     try
                     {
+                        var payloadSizeStopwatch = Stopwatch.StartNew();
                         var payloadSize = await _pipe.Reader.ReadIntAsync(cancellationToken);
+                        payloadSizeStopwatch.Stop();
+                        _totalElapsedReadPayloadSize += payloadSizeStopwatch.Elapsed;
                         _logger.LogDebug("Received response ({@payloadSize} bytes).", payloadSize);
 
                         var payload = _arrayPool.Rent(payloadSize);
                         try
                         {
+                            var payloadStopwatch = Stopwatch.StartNew();
                             var read = await _pipe.Reader.ReadAsync(payload, payloadSize, cancellationToken);
+                            payloadStopwatch.Stop();
+                            _totalElapsedReadPayload += payloadStopwatch.Elapsed;
                             if (read != payloadSize)
                             {
                                 throw new EndOfStreamException("Received unexpected end of stream.");

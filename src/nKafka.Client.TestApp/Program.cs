@@ -17,6 +17,7 @@ for (int i = 0; i < 10; i++)
     var stopwatchInner = Stopwatch.StartNew();
     await NKafkaFetchTest.Test(scenario);
     PendingRequest.PrintTotalElapsedTimeAndReset();
+    Connection.PrintTotalElapsedAndReset();
     stopwatchInner.Stop();
     Console.WriteLine($"Elapsed time: {stopwatchInner.ElapsedMilliseconds}ms");
 }
