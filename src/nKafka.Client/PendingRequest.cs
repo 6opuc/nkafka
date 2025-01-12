@@ -96,9 +96,13 @@ public class PendingRequest
     
     public object DeserializeResponse(MemoryStream input, ISerializationContext context)
     {
-        _responseStopwatch.Stop();
-        _totalElapsedResponse += _responseStopwatch.Elapsed;
-        
+        #warning why _responseStopwatch is null????
+        if (_responseStopwatch != null)
+        {
+            _responseStopwatch.Stop();
+            _totalElapsedResponse += _responseStopwatch.Elapsed;
+        }
+
         var stopwatch = Stopwatch.StartNew();
         var responseHeaderVersion = Payload.ApiKey == ApiKey.ApiVersions
             ? (short)0
