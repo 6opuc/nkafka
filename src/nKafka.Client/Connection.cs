@@ -257,6 +257,8 @@ public class Connection : IConnection
                         _logger.LogDebug("No more requests to send.");
                         return;
                     }
+                    
+                    request.OnDequeued();
 
                     var payload = _arrayPool.Rent(_config.RequestBufferSize);
                     try
@@ -281,6 +283,7 @@ public class Connection : IConnection
                     }
                     finally
                     {
+                        request.OnWrittenToSocket();
                         _arrayPool.Return(payload);
                     }
                 }

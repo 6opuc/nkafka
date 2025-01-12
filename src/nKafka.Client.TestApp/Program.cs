@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using nKafka.Client;
 using nKafka.Client.Benchmarks;
 
 var threads = 1;
@@ -13,7 +14,11 @@ var stopwatch = Stopwatch.StartNew();
 
 for (int i = 0; i < 10; i++)
 {
+    var stopwatchInner = Stopwatch.StartNew();
     await NKafkaFetchTest.Test(scenario);
+    PendingRequest.PrintTotalElapsedTimeAndReset();
+    stopwatchInner.Stop();
+    Console.WriteLine($"Elapsed time: {stopwatchInner.ElapsedMilliseconds}ms");
 }
 
 //await ConfluentFetchTest.Test(scenario);
@@ -22,4 +27,4 @@ for (int i = 0; i < 10; i++)
 //await NKafkaFetchTest.Test(scenario);
 stopwatch.Stop();
 
-Console.WriteLine($"Elapsed time: {stopwatch.ElapsedMilliseconds}ms.");
+Console.WriteLine($"Total elapsed time: {stopwatch.ElapsedMilliseconds}ms.");
