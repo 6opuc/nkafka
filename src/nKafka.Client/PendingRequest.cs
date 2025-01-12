@@ -16,10 +16,12 @@ public class PendingRequest
     // TODO: remove
     private Stopwatch _queueStopwatch;
     private Stopwatch _sendStopwatch;
+    private Stopwatch _responseStopwatch;
     private static TimeSpan _totalElapsedOnQueue = TimeSpan.Zero; 
     private static TimeSpan _totalElapsedSerialization = TimeSpan.Zero;
     private static TimeSpan _totalElapsedDeserialization = TimeSpan.Zero;
     private static TimeSpan _totalElapsedSending = TimeSpan.Zero;
+    private static TimeSpan _totalElapsedResponse = TimeSpan.Zero;
         
 
     public PendingRequest(
@@ -49,6 +51,7 @@ public class PendingRequest
     {
         _sendStopwatch.Stop();
         _totalElapsedSending += _sendStopwatch.Elapsed;
+        _responseStopwatch = Stopwatch.StartNew();
     }
 
     public static void PrintTotalElapsedTimeAndReset()
@@ -57,10 +60,12 @@ public class PendingRequest
         Console.WriteLine("Total serialization time: {0}ms", _totalElapsedSerialization.TotalMilliseconds);
         Console.WriteLine("Total deserialization time: {0}ms", _totalElapsedDeserialization.TotalMilliseconds);
         Console.WriteLine("Total sending time: {0}ms", _totalElapsedSending.TotalMilliseconds);
+        Console.WriteLine("Total response time: {0}ms", _totalElapsedResponse.TotalMilliseconds);
         _totalElapsedOnQueue = TimeSpan.Zero;
         _totalElapsedSerialization = TimeSpan.Zero;
         _totalElapsedDeserialization = TimeSpan.Zero;
         _totalElapsedSending = TimeSpan.Zero;
+        _totalElapsedResponse = TimeSpan.Zero;
     }
     
     public void SerializeRequest(MemoryStream output, ISerializationContext context)
@@ -91,6 +96,9 @@ public class PendingRequest
     
     public object DeserializeResponse(MemoryStream input, ISerializationContext context)
     {
+        _responseStopwatch.Stop();
+        _totalElapsedResponse += _responseStopwatch.Elapsed;
+        
         var stopwatch = Stopwatch.StartNew();
         var responseHeaderVersion = Payload.ApiKey == ApiKey.ApiVersions
             ? (short)0
