@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace nKafka.Contracts;
@@ -9,6 +10,7 @@ public static class PrimitiveSerializer
     private const byte ZeroByte = 0x00;
     private const byte OneByte = 0x01;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeString(MemoryStream output, string? value)
     {
         if (value == null)
@@ -36,6 +38,7 @@ public static class PrimitiveSerializer
         output.Position += length;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static string? DeserializeString(MemoryStream input)
     {
         var length = DeserializeShort(input);
@@ -60,6 +63,7 @@ public static class PrimitiveSerializer
         return value;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeVarString(MemoryStream output, string? value)
     {
         var length = value == null
@@ -80,6 +84,7 @@ public static class PrimitiveSerializer
         output.Position += length;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static string? DeserializeVarString(MemoryStream input)
     {
         var length = DeserializeLengthLong(input);
@@ -110,17 +115,20 @@ public static class PrimitiveSerializer
         return value;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeShort(MemoryStream output, short? value)
     {
         SerializeIntAsByte(output, value!.Value >> 8);
         SerializeIntAsByte(output, value!.Value);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void SerializeIntAsByte(MemoryStream output, int value)
     {
         output.WriteByte((byte)(value & 0xff));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static short DeserializeShort(MemoryStream input)
     {
         if (input.Position + 2 > input.Length)
@@ -132,26 +140,32 @@ public static class PrimitiveSerializer
         return (short)((input.ReadByte() << 8) | input.ReadByte());
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeUshort(MemoryStream output, ushort? value)
     {
         SerializeShort(output, (short)value!.Value);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ushort DeserializeUshort(MemoryStream input)
     {
         return (ushort)DeserializeShort(input);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeByte(MemoryStream output, byte? value)
     {
         output.WriteByte(value!.Value);
     }
 
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static byte DeserializeByte(MemoryStream input)
     {
         return (byte)input.ReadByte();
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeInt(MemoryStream output, int? value)
     {
         SerializeIntAsByte(output, value!.Value >> 8 * 3);
@@ -160,11 +174,13 @@ public static class PrimitiveSerializer
         SerializeIntAsByte(output, value!.Value);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeUint(MemoryStream output, uint? value)
     {
         SerializeInt(output, (int)value!.Value);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int DeserializeInt(MemoryStream input)
     {
         if (input.Position + 4 > input.Length)
@@ -176,11 +192,13 @@ public static class PrimitiveSerializer
         return input.ReadByte() << 3 * 8 | input.ReadByte() << 2 * 8 | input.ReadByte() << 8 | input.ReadByte();
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static uint DeserializeUint(MemoryStream input)
     {
         return (uint)DeserializeInt(input);
     }
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeLong(MemoryStream output, long? value)
     {
         ulong ui = (ulong)value!.Value;
@@ -188,6 +206,7 @@ public static class PrimitiveSerializer
             output.WriteByte((byte)(ui >> j * 8 & 0xff));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static long DeserializeLong(MemoryStream input)
     {
         if (input.Position + 8 > input.Length)
@@ -204,6 +223,7 @@ public static class PrimitiveSerializer
         return value;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeDouble(MemoryStream output, double? value)
     {
         var copy = value!.Value;
@@ -228,6 +248,7 @@ public static class PrimitiveSerializer
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static double DeserializeDouble(MemoryStream input)
     {
         if (input.Position + 8 > input.Length)
@@ -258,22 +279,26 @@ public static class PrimitiveSerializer
         return result;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeBool(MemoryStream output, bool? value)
     {
         output.WriteByte(value == true ? OneByte : ZeroByte);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool DeserializeBool(MemoryStream input)
     {
         return input.ReadByte() != ZeroByte;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeVarLong(MemoryStream output, long? value)
     {
         var asZigZag = ToZigZag(value!.Value);
         SerializeUVarLong(output, asZigZag);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeUVarLong(MemoryStream output, ulong? value)
     {
         do
@@ -294,19 +319,23 @@ public static class PrimitiveSerializer
         } while (value > 0);
     }
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeLengthLong(MemoryStream output, long value) =>
         SerializeUVarLong(output, (ulong)(value + 1));
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static long DeserializeVarLong(MemoryStream input)
     {
         return FromZigZag(DeserializeUVarLong(input));
     }
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static long FromZigZag(this ulong value)
     {
         return unchecked((long)((value >> 1) - (value & 1) * value));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ulong DeserializeUVarLong(MemoryStream input)
     {
         var more = true;
@@ -324,44 +353,53 @@ public static class PrimitiveSerializer
         return value;
     }
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static long DeserializeLengthLong(MemoryStream input) =>
         (long)DeserializeUVarLong(input) - 1;
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong ToZigZag(long i)
     {
         return unchecked((ulong)((i << 1) ^ (i >> 63)));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeVarInt(MemoryStream output, int? value)
     {
         SerializeVarLong(output, value);
     }
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeUVarInt(MemoryStream output, uint? value)
     {
         SerializeUVarLong(output, value);
     }
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeLength(MemoryStream output, int value)
     {
         SerializeLengthLong(output, value);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int DeserializeVarInt(MemoryStream input)
     {
         return checked((int)DeserializeVarLong(input));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static uint DeserializeUVarInt(MemoryStream input)
     {
         return checked((uint)DeserializeUVarLong(input));
     }
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int DeserializeLength(MemoryStream input)
     {
         return checked((int)DeserializeLengthLong(input));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SerializeGuid(MemoryStream output, Guid? value)
     {
         var availableSize = output.Length - output.Position;
@@ -375,6 +413,7 @@ public static class PrimitiveSerializer
         output.Position += 16;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Guid DeserializeGuid(MemoryStream input)
     {
         if (input.Position + 16 > input.Length)

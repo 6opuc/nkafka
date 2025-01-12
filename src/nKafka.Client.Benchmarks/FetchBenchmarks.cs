@@ -19,10 +19,10 @@ public class FetchBenchmarks
     };
 
 
-    [Benchmark]
+    //[Benchmark]
     public Task Confluent() => ConfluentFetchTest.Test(Scenario!);
     
-    [Benchmark]
+    //[Benchmark]
     public Task ConfluentString() => ConfluentConsumeStringTest.Test(Scenario!);
 
     [Benchmark]

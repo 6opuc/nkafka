@@ -25,6 +25,10 @@ public class RecordSerializerV2
             OffsetDelta = PrimitiveSerializer.DeserializeVarInt(input),
         };
 
+        // TODO: remove 
+        // input.Position = start + size;
+        // return record;
+
         var keyLength = PrimitiveSerializer.DeserializeVarInt(input);
         record.Key = keyLength == -1
             ? null
