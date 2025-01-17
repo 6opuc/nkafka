@@ -1,0 +1,66 @@
+version: '3'
+services:
+  
+  kafka-1:
+    image: 'bitnami/kafka:3.3.1'
+    container_name: kafka-1
+    restart: always
+    environment:
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9192,CONTROLLER://:9194
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_BROKER_ID=1
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9194,2@kafka-2:9294,3@kafka-3:9394
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-1:9192
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_KRAFT_CLUSTER_ID=r4zt_wrqTRuT7W2NJsB_GA
+    ports:
+      - 9192:9192
+
+  kafka-2:
+    image: 'bitnami/kafka:3.3.1'
+    container_name: kafka-2
+    restart: always
+    environment:
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9292,CONTROLLER://:9294
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_BROKER_ID=2
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9194,2@kafka-2:9294,3@kafka-3:9394
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-2:9292
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_KRAFT_CLUSTER_ID=r4zt_wrqTRuT7W2NJsB_GA
+    ports:
+      - 9292:9292
+      
+  kafka-3:
+    image: 'bitnami/kafka:3.3.1'
+    container_name: kafka-3
+    restart: always
+    environment:
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9392,CONTROLLER://:9394
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_BROKER_ID=3
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9194,2@kafka-2:9294,3@kafka-3:9394
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-3:9392
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_KRAFT_CLUSTER_ID=r4zt_wrqTRuT7W2NJsB_GA
+    ports:
+      - 9392:9392
+
+  kafka-ui:
+    container_name: kafka-ui
+    restart: always
+    image: 'provectuslabs/kafka-ui:latest'
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_BOOTSTRAP_SERVERS=kafka-1:9192
+      - KAFKA_CLUSTERS_0_NAME=r4zt_wrqTRuT7W2NJsB_GA
