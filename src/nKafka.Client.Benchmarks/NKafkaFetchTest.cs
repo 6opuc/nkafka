@@ -95,7 +95,7 @@ public static class NKafkaFetchTest
         {
             RequestApiVersionsOnOpen = false,
         };
-        var connection = new Connection(config, NullLoggerFactory.Instance);
+        await using var connection = new Connection(config, NullLoggerFactory.Instance);
 
         await connection.OpenAsync(CancellationToken.None);
 

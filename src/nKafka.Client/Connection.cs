@@ -403,6 +403,11 @@ public class Connection : IConnection
         await _processResponseBackgroundTask;
         await _receiveBackgroundTask;
 
+        if (_writerStream != null)
+        {
+            await _writerStream.DisposeAsync();
+        }
+
         _socket.Shutdown(SocketShutdown.Both);
         _socket.Dispose();
         _socket = null;

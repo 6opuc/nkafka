@@ -11,8 +11,8 @@ var scenario = benchmarks.Scenarios
 
 var stopwatch = Stopwatch.StartNew();
 
-var threads = 10;
-var iterationsPerThread = 100;
+var threads = 1;
+var iterationsPerThread = 1000;
 var tasks = new List<Task>(threads);
 for (var t = 0; t < tasks.Capacity; t++)
 {
