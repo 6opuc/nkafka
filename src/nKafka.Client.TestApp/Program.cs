@@ -11,10 +11,24 @@ var scenario = benchmarks.Scenarios
 
 var stopwatch = Stopwatch.StartNew();
 
-for (int i = 0; i < 10; i++)
+var tasks = new List<Task>(1);
+for (var t = 0; t < tasks.Capacity; t++)
 {
-    await NKafkaFetchTest.Test(scenario);
+    tasks.Add(Task.Run(async () =>
+    {
+        for (int i = 0; i < 100; i++)
+        {
+            var stopwatchInner = Stopwatch.StartNew();
+            //await ConfluentFetchTest.Test(scenario);
+            await NKafkaFetchTest.Test(scenario);
+            
+            stopwatchInner.Stop();
+            Console.WriteLine($"Elapsed time: {stopwatchInner.ElapsedMilliseconds}ms");
+        }
+    }));
 }
+
+await Task.WhenAll(tasks);
 
 //await ConfluentFetchTest.Test(scenario);
 //await ConfluentConsumeStringTest.Test(scenario);
@@ -22,4 +36,4 @@ for (int i = 0; i < 10; i++)
 //await NKafkaFetchTest.Test(scenario);
 stopwatch.Stop();
 
-Console.WriteLine($"Elapsed time: {stopwatch.ElapsedMilliseconds}ms.");
+Console.WriteLine($"Total elapsed time: {stopwatch.ElapsedMilliseconds}ms.");
