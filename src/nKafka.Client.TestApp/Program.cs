@@ -1,9 +1,9 @@
 ﻿using System.Diagnostics;
 using nKafka.Client.Benchmarks;
 
-var threads = 1;
-ThreadPool.SetMinThreads(threads, threads);
-ThreadPool.SetMaxThreads(threads, threads);
+// var threads = 1;
+// ThreadPool.SetMinThreads(threads, threads);
+// ThreadPool.SetMaxThreads(threads, threads);
 
 var benchmarks = new FetchBenchmarks();
 var scenario = benchmarks.Scenarios
@@ -11,21 +11,26 @@ var scenario = benchmarks.Scenarios
 
 var stopwatch = Stopwatch.StartNew();
 
-var tasks = new List<Task>(1);
+var threads = 10;
+var iterationsPerThread = 100;
+var tasks = new List<Task>(threads);
 for (var t = 0; t < tasks.Capacity; t++)
 {
-    tasks.Add(Task.Run(async () =>
-    {
-        for (int i = 0; i < 100; i++)
+    var t1 = t;
+    tasks.Add(Task.Factory.StartNew(
+        async () =>
         {
-            var stopwatchInner = Stopwatch.StartNew();
-            //await ConfluentFetchTest.Test(scenario);
-            await NKafkaFetchTest.Test(scenario);
-            
-            stopwatchInner.Stop();
-            Console.WriteLine($"Elapsed time: {stopwatchInner.ElapsedMilliseconds}ms");
-        }
-    }));
+            for (int i = 0; i < iterationsPerThread; i++)
+            {
+                var id = $"[{t1}:{i}]";
+                var stopwatchInner = Stopwatch.StartNew();
+                //await ConfluentFetchTest.Test(scenario);
+                await NKafkaFetchTest.Test(scenario);
+
+                stopwatchInner.Stop();
+                Console.WriteLine($"{id}: {stopwatchInner.ElapsedMilliseconds}ms");
+            }
+        }, TaskCreationOptions.LongRunning).Unwrap());
 }
 
 await Task.WhenAll(tasks);
@@ -37,3 +42,4 @@ await Task.WhenAll(tasks);
 stopwatch.Stop();
 
 Console.WriteLine($"Total elapsed time: {stopwatch.ElapsedMilliseconds}ms.");
+Console.WriteLine($"Average time: {stopwatch.ElapsedMilliseconds / threads / iterationsPerThread}ms.");
