@@ -109,11 +109,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             var connection = new Connection(connectionConfig, _loggerFactory);
             await connection.OpenAsync(cancellationToken);
             _connections[broker.NodeId!.Value] = connection;
-#warning reuse bootstrap connection
         }
     }
 
-    private async ValueTask<IConnection> OpenBootstrapConnectionAsync(
+    private async ValueTask<Connection> OpenBootstrapConnectionAsync(
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("Opening bootstrap connection.");
