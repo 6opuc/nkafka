@@ -1,9 +1,10 @@
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
+using nKafka.Client.Benchmarks;
 
-namespace nKafka.Client.Benchmarks;
+namespace nKafka.Client.TestApp;
 
-public static class NKafkaConsumeStringTest
+public static class NKafkaIdleTest
 {
     public static async Task Test(FetchScenario scenario)
     {
@@ -23,9 +24,15 @@ public static class NKafkaConsumeStringTest
         await consumer.JoinGroupAsync(CancellationToken.None);
 
         var counter = 0;
-        while (counter < scenario.MessageCount)
+        TimeSpan maxWaitTime = TimeSpan.Zero;
+        while (true)
         {
-            var consumeResult = await consumer.ConsumeAsync(TimeSpan.Zero, CancellationToken.None);
+            if (counter >= scenario.MessageCount)
+            {
+                maxWaitTime = TimeSpan.FromSeconds(5);
+                Console.WriteLine(counter);
+            }
+            var consumeResult = await consumer.ConsumeAsync(maxWaitTime, CancellationToken.None);
             if (consumeResult == null ||
                 consumeResult.Value.Message == null)
             {
@@ -34,15 +41,13 @@ public static class NKafkaConsumeStringTest
 
             counter += 1;
         }
-
-        Console.WriteLine(counter);
     }
-
+    
     private class DummyStringMessage
     {
         public string? Value { get; set; }
     }
-
+    
     private class DummyStringMessageDeserializer : IMessageDeserializer<DummyStringMessage>
     {
         public DummyStringMessage? Deserialize(MessageDeserializationContext context)
@@ -57,7 +62,7 @@ public static class NKafkaConsumeStringTest
             return result;
         }
     }
-
+    
     private class DummyOffsetStorage : IOffsetStorage
     {
         public ValueTask<long> GetOffset(string consumerGroup, string topic, int partition)

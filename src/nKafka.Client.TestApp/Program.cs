@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using nKafka.Client.Benchmarks;
+using nKafka.Client.TestApp;
 
 // var threads = 1;
 // ThreadPool.SetMinThreads(threads, threads);
@@ -11,12 +12,13 @@ var scenario = benchmarks.Scenarios
 
 var stopwatch = Stopwatch.StartNew();
 
-var threads = 10;
+var threads = 1;
 var iterationsPerThread = 100;
 var tasks = new List<Task>(threads);
 for (var t = 0; t < tasks.Capacity; t++)
 {
     var t1 = t;
+    #warning revert to task.run - we stealing threads from the OS
     tasks.Add(Task.Factory.StartNew(
         async () =>
         {
@@ -25,7 +27,8 @@ for (var t = 0; t < tasks.Capacity; t++)
                 var id = $"[{t1}:{i}]";
                 var stopwatchInner = Stopwatch.StartNew();
                 //await ConfluentFetchTest.Test(scenario);
-                await NKafkaFetchTest.Test(scenario);
+                //await NKafkaFetchTest.Test(scenario);
+                await NKafkaIdleTest.Test(scenario);
 
                 stopwatchInner.Stop();
                 Console.WriteLine($"{id}: {stopwatchInner.ElapsedMilliseconds}ms");

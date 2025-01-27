@@ -17,6 +17,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 {
     private readonly ConsumerConfig _config;
     private readonly IMessageDeserializer<TMessage> _deserializer;
+    private readonly IOffsetStorage _offsetStorage;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
     
@@ -36,13 +37,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     public Consumer(
         ConsumerConfig config,
         IMessageDeserializer<TMessage> deserializer,
+        IOffsetStorage offsetStorage,
         ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(deserializer);
+        ArgumentNullException.ThrowIfNull(offsetStorage);
         ArgumentNullException.ThrowIfNull(loggerFactory);
         _config = config;
         _deserializer = deserializer;
+        _offsetStorage = offsetStorage;
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<Consumer<TMessage>>();
         _topics = _config.Topics.Split(",", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
@@ -387,8 +391,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 {
                     continue;
                 }
-                
-                _fetchQueue.Add((partitionMetadata.LeaderId!.Value, topicAssignment.Key, topicMetadata?.TopicId, partition, 0));
+
+                #warning start offset does not work
+                var offset = await _offsetStorage.GetOffset(_config.GroupId, topicAssignment.Key, partition);
+                _fetchQueue.Add((partitionMetadata.LeaderId!.Value, topicAssignment.Key, topicMetadata?.TopicId, partition, offset));
             }
         }
 
@@ -444,9 +450,14 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             }, cancellationToken);
     }
 
-    public async ValueTask<ConsumeResult<TMessage>?> ConsumeAsync(CancellationToken cancellationToken)
+    public async ValueTask<ConsumeResult<TMessage>?> ConsumeAsync(
+        TimeSpan maxWaitTime,
+        CancellationToken cancellationToken)
     {
 #warning consume queue: Deserialization of fetch response should publish to consume queue
+#warning read from all partitions at once. if we reach the end of partition, we should wait for all partitions
+#warning check the offset shift: looks like we are reading some records twice
+        
 
         var consumerResult = ConsumeFromBuffer();
         if (consumerResult != null)
@@ -465,7 +476,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             ClusterId = null, // ???
             ReplicaId = -1, // ???
             ReplicaState = null, // ???
-            MaxWaitMs = 0, // ???
+            MaxWaitMs = (int)maxWaitTime.TotalMilliseconds,
             MinBytes = 0, // ???
             MaxBytes = 0x7fffffff,
             IsolationLevel = 0, // !!!
@@ -496,7 +507,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             RackId = string.Empty, // ???
         };
         var connection = _connections[fetchSource.NodeId];
-        _fetchResponse = await connection.SendAsync(request, CancellationToken.None);
+        _fetchResponse = await connection.SendAsync(request, cancellationToken);
 
         var lastOffset = _fetchResponse.Message
             .Responses?.LastOrDefault()?
