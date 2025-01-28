@@ -12,14 +12,13 @@ var scenario = benchmarks.Scenarios
 
 var stopwatch = Stopwatch.StartNew();
 
-var threads = 50;
+var threads = 200;
 var iterationsPerThread = 100;
 var tasks = new List<Task>(threads);
 for (var t = 0; t < tasks.Capacity; t++)
 {
     var t1 = t;
-    #warning revert to task.run - we stealing threads from the OS
-    tasks.Add(Task.Factory.StartNew(
+    tasks.Add(Task.Run(
         async () =>
         {
             for (int i = 0; i < iterationsPerThread; i++)
@@ -30,12 +29,13 @@ for (var t = 0; t < tasks.Capacity; t++)
                 //await NKafkaFetchTest.Test(scenario);
                 
                 //await NKafkaIdleTest.Test(scenario);
+                #warning why confluent eats x10 memory if TaskFactory.Run(.., longrunning) is used??
                 await ConfluentIdleTest.Test(scenario);
 
                 stopwatchInner.Stop();
                 Console.WriteLine($"{id}: {stopwatchInner.ElapsedMilliseconds}ms");
             }
-        }, TaskCreationOptions.LongRunning).Unwrap());
+        }));
 }
 
 await Task.WhenAll(tasks);
