@@ -30,7 +30,7 @@ public static class NKafkaIdleTest
             if (counter >= scenario.MessageCount)
             {
                 maxWaitTime = TimeSpan.FromSeconds(5);
-                Console.WriteLine(counter);
+                Console.WriteLine($"{DateTime.UtcNow}: {counter} of {scenario.MessageCount}");
             }
             var consumeResult = await consumer.ConsumeAsync(maxWaitTime, CancellationToken.None);
             if (consumeResult == null ||

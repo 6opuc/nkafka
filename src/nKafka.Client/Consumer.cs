@@ -456,7 +456,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
 #warning consume queue: Deserialization of fetch response should publish to consume queue
 #warning read from all partitions at once. if we reach the end of partition, we should wait for all partitions
-#warning check the offset shift: looks like we are reading some records twice
         
 
         var consumerResult = ConsumeFromBuffer();
@@ -477,7 +476,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             ReplicaId = -1, // ???
             ReplicaState = null, // ???
             MaxWaitMs = (int)maxWaitTime.TotalMilliseconds,
-            MinBytes = 0, // ???
+            MinBytes = 1, // ???
             MaxBytes = 0x7fffffff,
             IsolationLevel = 0, // !!!
             SessionId = 0, // ???

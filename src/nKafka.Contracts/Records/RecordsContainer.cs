@@ -7,7 +7,7 @@ public class RecordsContainer
     public IList<RecordBatch>? RecordBatches { get; set; }
     public IList<Message>? Messages { get; set; }
 
-    public long LastOffset
+    public long? LastOffset
     {
         get
         {
@@ -16,7 +16,7 @@ public class RecordsContainer
                 var lastBatch = RecordBatches.LastOrDefault();
                 if (lastBatch == null)
                 {
-                    return -1;
+                    return null;
                 }
                 return lastBatch.BaseOffset + lastBatch.LastOffsetDelta;
             }
@@ -26,13 +26,13 @@ public class RecordsContainer
                 var lastMessage = Messages.LastOrDefault();
                 if (lastMessage == null)
                 {
-                    return -1;
+                    return null;
                 }
 
                 return lastMessage.Offset;
             }
 
-            return -1;
+            return null;
         }
     }
     
