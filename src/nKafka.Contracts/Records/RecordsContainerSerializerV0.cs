@@ -28,9 +28,9 @@ public static class RecordsContainerSerializerV0
             Messages = new List<Message>(),
         };
         var endOfLastMessage = start;
-        while (true)
+        while (input.Position < start + size)
         {
-            var message = MessageSerializerV0.Deserialize(input, context);
+            var message = MessageSerializerV0.Deserialize(input, start + size, context);
             if (message == null)
             {
                 // incomplete message

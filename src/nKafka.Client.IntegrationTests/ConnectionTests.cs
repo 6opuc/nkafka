@@ -375,7 +375,7 @@ public class ConnectionTests
         response.Should().NotBeNull();
         response.Message.ErrorCode.Should().Be(0);
     }
-    
+
     [Test]
     [TestCase(0)]
     [TestCase(1)]
@@ -559,6 +559,122 @@ public class ConnectionTests
 
                     recordCount += responseRecordCount;
                 }
+            }
+        }
+
+        recordCount.Should().Be(1000000);
+    }
+
+    [Test]
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [TestCase(6)]
+    [TestCase(7)]
+    [TestCase(8)]
+    [TestCase(9)]
+    [TestCase(10)]
+    [TestCase(11)]
+    [TestCase(12)]
+    [TestCase(13)]
+    public async Task SendAsync_FetchRequestWithSeveralPartitions_ShouldFetchAllRecords(short apiVersion)
+    {
+        using var metadata = await RequestMetadata();
+        var topicMetadata = metadata.Message.Topics!["test_p12_m1M_s4B"];
+        var partitions = topicMetadata.Partitions!
+            .GroupBy(x => x.LeaderId!.Value);
+        var recordCount = 0;
+        foreach (var group in partitions)
+        {
+            var broker = metadata.Message.Brokers![group.Key];
+            var config = new ConnectionConfig(
+                "PLAINTEXT",
+                broker.Host!,
+                broker.Port!.Value,
+                "nKafka.Client.IntegrationTests")
+            {
+                RequestApiVersionsOnOpen = false,
+            };
+            await using var connection = new Connection(config, NullLoggerFactory.Instance);
+            await connection.OpenAsync(CancellationToken.None);
+
+            var request = new FetchRequest
+            {
+                FixedVersion = apiVersion,
+                ClusterId = null, // ???
+                ReplicaId = -1,
+                ReplicaState = null, // ???
+                MaxWaitMs = 0, // ???
+                MinBytes = 0, // ???
+                MaxBytes = 0x7fffffff,
+                IsolationLevel = 0, // !!!
+                SessionId = 0, // ???
+                SessionEpoch = -1, // ???
+                Topics =
+                [
+                    new FetchTopic
+                    {
+                        Topic = "test_p12_m1M_s4B",
+                        TopicId = topicMetadata.TopicId,
+                        Partitions = group
+                            .Select(x =>
+                                new FetchPartition
+                                {
+                                    Partition = x.PartitionIndex!.Value,
+                                    CurrentLeaderEpoch = -1, // ???
+                                    FetchOffset = 0, // ???
+                                    LastFetchedEpoch = -1, // ???
+                                    LogStartOffset = -1, // ???
+                                    PartitionMaxBytes = 512 * 1024, // !!!
+                                    ReplicaDirectoryId = Guid.Empty, // ???
+                                })
+                            .ToList(),
+                    },
+                ],
+                ForgottenTopicsData = [], // ???
+                RackId = string.Empty, // ???
+            };
+
+            while (true)
+            {
+                using var response = await connection.SendAsync(request, CancellationToken.None);
+                foreach (var topicResponse in response.Message.Responses!)
+                {
+                    var topicRequest = request.Topics.FirstOrDefault(x => x.Topic == topicResponse.Topic);
+                    if (topicRequest == null)
+                    {
+                        continue;
+                    }
+
+                    foreach (var partitionResponse in topicResponse.Partitions!)
+                    {
+                        var partitionRequest = topicRequest.Partitions!
+                            .FirstOrDefault(x => x.Partition == partitionResponse.PartitionIndex);
+                        if (partitionRequest == null)
+                        {
+                            continue;
+                        }
+
+                        var lastOffset = partitionResponse.Records?.LastOffset;
+                        if (lastOffset != null)
+                        {
+                            partitionRequest.FetchOffset = lastOffset + 1;
+                        }
+                    }
+                }
+
+                var responseRecordCount = response.Message.Responses!
+                    .SelectMany(x => x.Partitions!)
+                    .Sum(x => x.Records!.RecordCount);
+                if (responseRecordCount == 0)
+                {
+                    break;
+                }
+
+                recordCount += responseRecordCount;
             }
         }
 

@@ -2,10 +2,10 @@ namespace nKafka.Contracts.Records;
 
 public static class MessageSerializerV0
 {
-    public static Message? Deserialize(MemoryStream input, ISerializationContext context)
+    public static Message? Deserialize(MemoryStream input, long length, ISerializationContext context)
     {
         var start = input.Position;
-        if (start + 8 + 4 > input.Length)
+        if (start + 8 + 4 > length)
         {
             // we will not be able to read message size
             return null;
@@ -19,7 +19,7 @@ public static class MessageSerializerV0
         
         var messageStart = input.Position;
 
-        if (input.Position + message.MessageSize > input.Length)
+        if (input.Position + message.MessageSize > length)
         {
             // we will not be able to read full message
             input.Position = start;

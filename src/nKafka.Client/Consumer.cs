@@ -31,7 +31,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private List<Task>? _fetchTasks;
 
     private readonly Channel<MessageDeserializationContext> _consumeChannel =
-        Channel.CreateUnbounded<MessageDeserializationContext>();
+        Channel.CreateBounded<MessageDeserializationContext>(new BoundedChannelOptions(1));
 
 
     public Consumer(
@@ -461,6 +461,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     FetchOffset = offset, // ???
                     LastFetchedEpoch = -1, // ???
                     LogStartOffset = -1, // ???
+                    #warning breaks record deserialization?
                     PartitionMaxBytes = 512 * 1024, // !!!
                     ReplicaDirectoryId = Guid.Empty, // ???
                 };
@@ -496,6 +497,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
                 else
                 {
+                    #warning breaks record deserialization?
+                    continue;
+                    
                     var fetchRequestTopic = fetchRequest.Topics!.FirstOrDefault(x => x.Topic == topicMetadata.Name);
                     if (fetchRequestTopic == null)
                     {
@@ -519,7 +523,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
 
         _fetchTasks = new List<Task>(fetchRequests.Count);
-        foreach (var pair in fetchRequests)
+        #warning fetch from all in parallel
+        foreach (var pair in fetchRequests.Take(1))
         {
             var fetchTask = Task.Run(() => FetchLoopAsync(pair.Key, pair.Value, cancellationToken), cancellationToken);
             _fetchTasks.Add(fetchTask);
@@ -549,7 +554,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 try
                 {
                     var connection = _connections[nodeId];
-                    using var response = await connection.SendAsync(request, cancellationToken);
+                    #warning it is too early to dispose the response here, because it will used in ConsumeAsync
+                    #warning consider moving deserialization here
+                    /*using */var response = await connection.SendAsync(request, cancellationToken);
                     if (response.Message.ErrorCode == 0)
                     {
                         _logger.LogDebug("Fetch response was received.");

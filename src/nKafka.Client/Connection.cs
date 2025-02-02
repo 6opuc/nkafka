@@ -130,7 +130,7 @@ public class Connection : IConnection
                                 continue;
                             }
 
-                            using (BeginRequestLoggingScope(pendingRequest.CorrelationId))
+                            using (BeginRequestLoggingScope(pendingRequest))
                             {
                                 _logger.LogDebug("Deserializing response.");
 
@@ -261,7 +261,7 @@ public class Connection : IConnection
                     var payload = _arrayPool.Rent(_config.RequestBufferSize);
                     try
                     {
-                        using (BeginRequestLoggingScope(request.CorrelationId))
+                        using (BeginRequestLoggingScope(request))
                         {
                             _logger.LogDebug("Processing.");
                             _pendingRequests.Enqueue(request);
@@ -348,7 +348,7 @@ public class Connection : IConnection
                 cancellationToken,
                 IdGenerator.Next(),
                 _apiVersions.GetValueOrDefault(request.ApiKey, (short)0));
-            using (BeginRequestLoggingScope(pendingRequest.CorrelationId))
+            using (BeginRequestLoggingScope(pendingRequest))
             {
                 _logger.LogDebug("Enqueueing {request}.", pendingRequest.Payload.GetType().Name);
                 await _requestQueue.SendAsync(pendingRequest, cancellationToken);
@@ -371,9 +371,9 @@ public class Connection : IConnection
         }
     }
     
-    private IDisposable? BeginRequestLoggingScope(int correlationId)
+    private IDisposable? BeginRequestLoggingScope(PendingRequest request)
     {
-        return _logger.BeginScope($"request #{correlationId}");
+        return _logger.BeginScope($"request #{request.CorrelationId}({request.Payload.GetType().Name})");
     }
 
     public async ValueTask DisposeAsync()
