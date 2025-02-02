@@ -645,7 +645,9 @@ public class ConnectionTests
                 using var response = await connection.SendAsync(request, CancellationToken.None);
                 foreach (var topicResponse in response.Message.Responses!)
                 {
-                    var topicRequest = request.Topics.FirstOrDefault(x => x.Topic == topicResponse.Topic);
+                    var topicRequest = request.Topics.FirstOrDefault(x =>
+                        x.Topic == topicResponse.Topic ||
+                        x.TopicId == topicResponse.TopicId);
                     if (topicRequest == null)
                     {
                         continue;
