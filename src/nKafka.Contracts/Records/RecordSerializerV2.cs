@@ -4,17 +4,20 @@ namespace nKafka.Contracts.Records;
 
 public class RecordSerializerV2
 {
-    public static Record? Deserialize(MemoryStream input)
+    public static Record? Deserialize(MemoryStream input, long eof)
     {
+        var rollbackPosition = input.Position;
         var size = PrimitiveSerializer.DeserializeVarInt(input);
         if (size <= 0)
         {
+            input.Position = rollbackPosition;
             return null;
         }
 
         var start = input.Position;
-        if (start + size > input.Length)
+        if (start + size > eof)
         {
+            input.Position = rollbackPosition;
             return null;
         }
         

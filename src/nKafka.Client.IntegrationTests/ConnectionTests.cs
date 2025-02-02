@@ -594,9 +594,11 @@ public class ConnectionTests
                 "PLAINTEXT",
                 broker.Host!,
                 broker.Port!.Value,
-                "nKafka.Client.IntegrationTests")
+                "nKafka.Client.IntegrationTests",
+                10 * 512 * 1024)
             {
                 RequestApiVersionsOnOpen = false,
+                CheckCrcs = true,
             };
             await using var connection = new Connection(config, NullLoggerFactory.Instance);
             await connection.OpenAsync(CancellationToken.None);

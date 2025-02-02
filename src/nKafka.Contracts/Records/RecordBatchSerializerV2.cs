@@ -2,10 +2,10 @@ namespace nKafka.Contracts.Records;
 
 public static class RecordBatchSerializerV2
 {
-    public static RecordBatch? Deserialize(MemoryStream input, ISerializationContext context)
+    public static RecordBatch? Deserialize(MemoryStream input, long eof, ISerializationContext context)
     {
         var start = input.Position;
-        if (start + 8 + 4 > input.Length)
+        if (start + 8 + 4 > eof)
         {
             // we will not be able to read batch size
             return null;
@@ -19,7 +19,7 @@ public static class RecordBatchSerializerV2
         
         var recordBatchStart = input.Position;
 
-        if (input.Position + recordBatch.BatchLength > input.Length)
+        if (recordBatchStart + recordBatch.BatchLength > eof)
         {
             // we will not be able to read full batch
             input.Position = start;
@@ -48,11 +48,13 @@ public static class RecordBatchSerializerV2
             recordBatch.Records = new List<Record>(recordsCount);
             for (int i = 0; i < recordsCount; i++)
             {
-                var record = RecordSerializerV2.Deserialize(input);
-                if (record != null)
+                var record = RecordSerializerV2.Deserialize(input, recordBatchStart + recordBatch.BatchLength);
+                if (record == null)
                 {
-                    recordBatch.Records.Add(record);
+                    // incomplete record
+                    break;
                 }
+                recordBatch.Records.Add(record);
             }
         }
 

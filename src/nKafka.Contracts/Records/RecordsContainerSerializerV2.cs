@@ -29,7 +29,7 @@ public static class RecordsContainerSerializerV2
         var endOfLastRecordBatch = start;
         while (true)
         {
-            var recordBatch = RecordBatchSerializerV2.Deserialize(input, context);
+            var recordBatch = RecordBatchSerializerV2.Deserialize(input, start + size, context);
             if (recordBatch == null)
             {
                 // incomplete batch
