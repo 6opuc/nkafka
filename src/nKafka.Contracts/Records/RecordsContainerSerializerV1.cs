@@ -30,7 +30,7 @@ public static class RecordsContainerSerializerV1
         var endOfLastMessage = start;
         while (true)
         {
-            var message = MessageSerializerV1.Deserialize(input, context);
+            var message = MessageSerializerV1.Deserialize(input, start + size, context);
             if (message == null)
             {
                 // incomplete message
