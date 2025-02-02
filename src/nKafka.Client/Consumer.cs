@@ -31,7 +31,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private List<Task>? _fetchTasks;
 
     private readonly Channel<ConsumeResult<TMessage>> _consumeChannel =
-        Channel.CreateBounded<ConsumeResult<TMessage>>(new BoundedChannelOptions(1));
+        Channel.CreateBounded<ConsumeResult<TMessage>>(new BoundedChannelOptions(100));
 
 
     public Consumer(
