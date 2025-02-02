@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using Microsoft.Diagnostics.Tracing.Parsers.Clr;
 using nKafka.Client.Benchmarks;
 using nKafka.Client.TestApp;
 
@@ -12,7 +13,7 @@ var scenario = benchmarks.Scenarios
 
 var stopwatch = Stopwatch.StartNew();
 
-var threads = 50;
+var threads = 20;
 var iterationsPerThread = 100;
 var tasks = new List<Task>(threads);
 for (var t = 0; t < tasks.Capacity; t++)
@@ -28,8 +29,9 @@ for (var t = 0; t < tasks.Capacity; t++)
                 //await ConfluentFetchTest.Test(scenario);
                 //await NKafkaFetchTest.Test(scenario);
                 
-                await NKafkaIdleTest.Test(scenario);
+                //await NKafkaIdleTest.Test(scenario);
                 //await ConfluentIdleTest.Test(scenario);
+                await NKafkaBytesFetchParallelMultiPartTest.Test(scenario);
 
                 stopwatchInner.Stop();
                 Console.WriteLine($"{id}: {stopwatchInner.ElapsedMilliseconds}ms");
