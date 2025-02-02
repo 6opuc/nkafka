@@ -1,3 +1,4 @@
+using System.Text;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using nKafka.Contracts;
@@ -527,81 +528,101 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     private async Task FetchLoopAsync(int nodeId, FetchRequest request, CancellationToken cancellationToken)
     {
-        var deserializationContext = new MessageDeserializationContext();
-        while (!cancellationToken.IsCancellationRequested)
+        var context = new StringBuilder();
+        foreach (var topic in request.Topics!)
         {
-            try
+            context.Append(topic.Topic);
+            context.Append("[");
+            foreach (var partition in topic.Partitions!)
             {
-                var connection = _connections[nodeId];
-                using var response = await connection.SendAsync(request, cancellationToken);
-                if (response.Message.ErrorCode == 0)
+                context.Append(partition.Partition);
+                context.Append(",");
+            }
+            context.Append("] ");
+        }
+        using (_logger.BeginScope(context.ToString()))
+        {
+            _logger.LogInformation("Fetching started.");
+            var deserializationContext = new MessageDeserializationContext();
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
                 {
-                    _logger.LogDebug("Fetch response was received.");
-                }
-                else
-                {
-                    _logger.LogError(
-                        "Error in fetch response: {@errorCode}.",
-                        response.Message.ErrorCode);
-                    continue;
-                }
-
-                foreach (var topicResponse in response.Message.Responses!)
-                {
-                    var topicRequest = request.Topics!.FirstOrDefault(x => x.Topic == topicResponse.Topic);
-                    if (topicRequest == null)
+                    var connection = _connections[nodeId];
+                    using var response = await connection.SendAsync(request, cancellationToken);
+                    if (response.Message.ErrorCode == 0)
                     {
+                        _logger.LogDebug("Fetch response was received.");
+                    }
+                    else
+                    {
+                        _logger.LogError(
+                            "Error in fetch response: {@errorCode}.",
+                            response.Message.ErrorCode);
                         continue;
                     }
 
-                    foreach (var partitionResponse in topicResponse.Partitions!)
+                    foreach (var topicResponse in response.Message.Responses!)
                     {
-                        var partitionRequest = topicRequest.Partitions!.FirstOrDefault(
-                            x => x.Partition == partitionResponse.PartitionIndex);
-                        if (partitionRequest == null)
+                        var topicRequest = request.Topics!.FirstOrDefault(x => x.Topic == topicResponse.Topic);
+                        if (topicRequest == null)
                         {
                             continue;
                         }
 
-                        var lastOffset = partitionResponse.Records?.LastOffset;
-                        if (lastOffset.HasValue)
+                        foreach (var partitionResponse in topicResponse.Partitions!)
                         {
-                            partitionRequest.FetchOffset = lastOffset.Value + 1;
+                            var partitionRequest = topicRequest.Partitions!.FirstOrDefault(
+                                x => x.Partition == partitionResponse.PartitionIndex);
+                            if (partitionRequest == null)
+                            {
+                                continue;
+                            }
+
+                            var lastOffset = partitionResponse.Records?.LastOffset;
+                            if (lastOffset.HasValue)
+                            {
+                                partitionRequest.FetchOffset = lastOffset.Value + 1;
+                            }
                         }
                     }
-                }
 
-                foreach (var topicResponse in response.Message.Responses)
-                {
-                    foreach (var partitionResponse in topicResponse.Partitions!)
+                    foreach (var topicResponse in response.Message.Responses)
                     {
-                        foreach (var recordBatch in partitionResponse.Records!.RecordBatches!)
+                        foreach (var partitionResponse in topicResponse.Partitions!)
                         {
-                            foreach (var record in recordBatch.Records!)
+                            foreach (var recordBatch in partitionResponse.Records!.RecordBatches!)
                             {
-                                deserializationContext.Topic = topicResponse.Topic!;
-                                deserializationContext.Partition = partitionResponse.PartitionIndex!.Value;
-                                deserializationContext.Offset = recordBatch.BaseOffset + record.OffsetDelta;
-                                deserializationContext.Timestamp = DateTimeOffset
-                                    .FromUnixTimeMilliseconds(recordBatch.FirstTimestamp + record.TimestampDelta)
-                                    .DateTime;
-                                deserializationContext.Key = record.Key;
-                                deserializationContext.Value = record.Value;
-                                deserializationContext.Headers = record.Headers;
+                                foreach (var record in recordBatch.Records!)
+                                {
+                                    deserializationContext.Topic = topicResponse.Topic!;
+                                    deserializationContext.Partition = partitionResponse.PartitionIndex!.Value;
+                                    deserializationContext.Offset = recordBatch.BaseOffset + record.OffsetDelta;
+                                    deserializationContext.Timestamp = DateTimeOffset
+                                        .FromUnixTimeMilliseconds(recordBatch.FirstTimestamp + record.TimestampDelta)
+                                        .DateTime;
+                                    deserializationContext.Key = record.Key;
+                                    deserializationContext.Value = record.Value;
+                                    deserializationContext.Headers = record.Headers;
 
-                                await _consumeChannel.Writer.WriteAsync(deserializationContext, cancellationToken);
+                                    await _consumeChannel.Writer.WriteAsync(deserializationContext, cancellationToken);
+                                }
                             }
                         }
                     }
                 }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(exception, "Error in fetch loop.");
+                }
             }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-        }
 
-        _logger.LogDebug("Fetching was stopped.");
+            _logger.LogDebug("Fetching was stopped.");
+        }
     }
 
     public async ValueTask<ConsumeResult<TMessage>?> ConsumeAsync(
