@@ -15,7 +15,8 @@ public class ConsumerConfig
     
     public int MaxPollIntervalMs { get; }
     
-    public bool CheckCrcs { get; init; } = false;
+    public bool CheckCrcs { get; set; } = false;
+    public TimeSpan MaxWaitTime { get; set; } = TimeSpan.FromSeconds(5);
     
 
     public ConsumerConfig(

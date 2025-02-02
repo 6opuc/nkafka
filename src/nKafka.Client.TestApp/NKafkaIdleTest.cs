@@ -24,15 +24,13 @@ public static class NKafkaIdleTest
         await consumer.JoinGroupAsync(CancellationToken.None);
 
         var counter = 0;
-        TimeSpan maxWaitTime = TimeSpan.Zero;
         while (true)
         {
             if (counter >= scenario.MessageCount)
             {
-                maxWaitTime = TimeSpan.FromSeconds(5);
                 Console.WriteLine($"{DateTime.UtcNow}: {counter} of {scenario.MessageCount}");
             }
-            var consumeResult = await consumer.ConsumeAsync(maxWaitTime, CancellationToken.None);
+            var consumeResult = await consumer.ConsumeAsync(CancellationToken.None);
             if (consumeResult == null ||
                 consumeResult.Value.Message == null)
             {

@@ -25,7 +25,7 @@ public static class NKafkaConsumeStringTest
         var counter = 0;
         while (counter < scenario.MessageCount)
         {
-            var consumeResult = await consumer.ConsumeAsync(TimeSpan.Zero, CancellationToken.None);
+            var consumeResult = await consumer.ConsumeAsync(CancellationToken.None);
             if (consumeResult == null ||
                 consumeResult.Value.Message == null)
             {
