@@ -30,8 +30,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private IDictionary<string, MetadataResponseTopic>? _topicsMetadata;
     private List<Task>? _fetchTasks;
 
-    private readonly Channel<MessageDeserializationContext> _consumeChannel =
-        Channel.CreateBounded<MessageDeserializationContext>(new BoundedChannelOptions(1));
+    private readonly Channel<ConsumeResult<TMessage>> _consumeChannel =
+        Channel.CreateBounded<ConsumeResult<TMessage>>(new BoundedChannelOptions(1));
 
 
     public Consumer(
@@ -461,7 +461,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     FetchOffset = offset, // ???
                     LastFetchedEpoch = -1, // ???
                     LogStartOffset = -1, // ???
-                    #warning breaks record deserialization?
                     PartitionMaxBytes = 512 * 1024, // !!!
                     ReplicaDirectoryId = Guid.Empty, // ???
                 };
@@ -497,10 +496,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
                 else
                 {
-                    #warning breaks record deserialization?
-                    continue;
-                    
-                    var fetchRequestTopic = fetchRequest.Topics!.FirstOrDefault(x => x.Topic == topicMetadata.Name);
+                    var fetchRequestTopic = fetchRequest.Topics!.FirstOrDefault(x => 
+                        x.Topic == topicMetadata.Name ||
+                        x.TopicId == topicMetadata.TopicId);
                     if (fetchRequestTopic == null)
                     {
                         fetchRequestTopic = new FetchTopic
@@ -523,8 +521,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
 
         _fetchTasks = new List<Task>(fetchRequests.Count);
-        #warning fetch from all in parallel
-        foreach (var pair in fetchRequests.Take(1))
+        foreach (var pair in fetchRequests)
         {
             var fetchTask = Task.Run(() => FetchLoopAsync(pair.Key, pair.Value, cancellationToken), cancellationToken);
             _fetchTasks.Add(fetchTask);
@@ -554,9 +551,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 try
                 {
                     var connection = _connections[nodeId];
-                    #warning it is too early to dispose the response here, because it will used in ConsumeAsync
-                    #warning consider moving deserialization here
-                    /*using */var response = await connection.SendAsync(request, cancellationToken);
+                    using var response = await connection.SendAsync(request, cancellationToken);
                     if (response.Message.ErrorCode == 0)
                     {
                         _logger.LogDebug("Fetch response was received.");
@@ -571,7 +566,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
                     foreach (var topicResponse in response.Message.Responses!)
                     {
-                        var topicRequest = request.Topics!.FirstOrDefault(x => x.Topic == topicResponse.Topic);
+                        var topicRequest = request.Topics!.FirstOrDefault(x =>
+                            x.Topic == topicResponse.Topic ||
+                            x.TopicId == topicResponse.TopicId);
                         if (topicRequest == null)
                         {
                             continue;
@@ -612,7 +609,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                                     deserializationContext.Value = record.Value;
                                     deserializationContext.Headers = record.Headers;
 
-                                    await _consumeChannel.Writer.WriteAsync(deserializationContext, cancellationToken);
+                                    var message = _deserializer.Deserialize(deserializationContext);
+                                    var consumeResult = new ConsumeResult<TMessage>
+                                    {
+                                        Topic = deserializationContext.Topic,
+                                        Partition = deserializationContext.Partition,
+                                        Offset = deserializationContext.Offset,
+                                        Timestamp = deserializationContext.Timestamp,
+                                        Message = message,
+                                    };
+                                    await _consumeChannel.Writer.WriteAsync(consumeResult, cancellationToken);
                                 }
                             }
                         }
@@ -632,20 +638,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
     }
 
-    public async ValueTask<ConsumeResult<TMessage>?> ConsumeAsync(
+    public ValueTask<ConsumeResult<TMessage>> ConsumeAsync(
         CancellationToken cancellationToken)
     {
-        var deserializationContext = await _consumeChannel.Reader.ReadAsync(cancellationToken);
-
-        var message = _deserializer.Deserialize(deserializationContext);
-        return new ConsumeResult<TMessage>
-        {
-            Topic = deserializationContext.Topic,
-            Partition = deserializationContext.Partition,
-            Offset = deserializationContext.Offset,
-            Timestamp = deserializationContext.Timestamp,
-            Message = message,
-        };
+        return _consumeChannel.Reader.ReadAsync(cancellationToken);
     }
 
     public async ValueTask DisposeAsync()

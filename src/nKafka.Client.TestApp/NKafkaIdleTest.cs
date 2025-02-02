@@ -25,7 +25,7 @@ public static class NKafkaIdleTest
             consumerConfig,
             new DummyStringMessageDeserializer(),
             new DummyOffsetStorage(),
-            loggerFactory);
+            NullLoggerFactory.Instance/*loggerFactory*/);
         await consumer.JoinGroupAsync(CancellationToken.None);
 
         var counter = 0;
@@ -36,8 +36,7 @@ public static class NKafkaIdleTest
                 Console.WriteLine($"{DateTime.UtcNow}: {counter} of {scenario.MessageCount}");
             }
             var consumeResult = await consumer.ConsumeAsync(CancellationToken.None);
-            if (consumeResult == null ||
-                consumeResult.Value.Message == null)
+            if (consumeResult.Message == null)
             {
                 continue;
             }
