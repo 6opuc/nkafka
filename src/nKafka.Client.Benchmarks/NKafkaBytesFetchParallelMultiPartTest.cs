@@ -28,7 +28,7 @@ public static class NKafkaBytesFetchParallelMultiPartTest
                     10 * 512 * 1024)
                 {
                     RequestApiVersionsOnOpen = false,
-                    CheckCrcs = true,
+                    CheckCrcs = false,
                 };
                 await using var connection = new Connection(config, NullLoggerFactory.Instance);
                 await connection.OpenAsync(CancellationToken.None);
