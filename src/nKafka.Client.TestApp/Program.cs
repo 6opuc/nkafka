@@ -31,7 +31,8 @@ for (var t = 0; t < tasks.Capacity; t++)
                 
                 //await NKafkaIdleTest.Test(scenario);
                 //await ConfluentIdleTest.Test(scenario);
-                await NKafkaBytesFetchParallelMultiPartTest.Test(scenario);
+                //await NKafkaBytesFetchParallelMultiPartTest.Test(scenario);
+                await NKafkaConsumeStringTest.Test(scenario);
 
                 stopwatchInner.Stop();
                 Console.WriteLine($"{id}: {stopwatchInner.ElapsedMilliseconds}ms");

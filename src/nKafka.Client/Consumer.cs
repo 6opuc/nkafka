@@ -24,14 +24,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private CancellationTokenSource? _stop;
     private Task? _heartbeatsBackgroundTask;
     private readonly Dictionary<int, IConnection> _connections = new();
-    private int _coordinatorNodeId;
+    private IConnection? _coordinatorConnection;
     private readonly string[] _topics;
     private GroupMembership? _groupMembership;
     private IDictionary<string, MetadataResponseTopic>? _topicsMetadata;
     private List<Task>? _fetchTasks;
 
-    private readonly Channel<ConsumeResult<TMessage>> _consumeChannel =
-        Channel.CreateBounded<ConsumeResult<TMessage>>(new BoundedChannelOptions(100));
+    private readonly Channel<IDisposableMessage<FetchResponse>> _consumeChannel =
+        Channel.CreateBounded<IDisposableMessage<FetchResponse>>(new BoundedChannelOptions(1));
+    private IDisposableMessage<FetchResponse>? _fetchResponse = null;
+    private IEnumerator<MessageDeserializationContext>? _messageDeserializeEnumerator = null;
 
 
     public Consumer(
@@ -82,7 +84,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     private IConnection GetCoordinatorConnection()
     {
-        return _connections[_coordinatorNodeId];
+        return _coordinatorConnection!;
     }
 
     private async ValueTask OpenConnectionsAsync(
@@ -90,7 +92,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         await using (var bootstrapConnection = await OpenBootstrapConnectionAsync(cancellationToken))
         {
-            await OpenCoordinatorConnectionAsync(bootstrapConnection, cancellationToken);
+            _coordinatorConnection = await OpenCoordinatorConnectionAsync(bootstrapConnection, cancellationToken);
         }
 
         using var metadataResponse = await RequestMetadata(GetCoordinatorConnection(), cancellationToken);
@@ -174,7 +176,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 throw new Exception($"Failed to find group coordinator. Error code {response.Message.ErrorCode}");
             }
 
-            _coordinatorNodeId = response.Message.NodeId!.Value;
             coordinatorConnectionConfig = new ConnectionConfig(
                 _config.Protocol,
                 response.Message.Host!,
@@ -200,7 +201,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 throw new Exception($"Failed to find group coordinator. Error code {coordinator.ErrorCode}");
             }
 
-            _coordinatorNodeId = coordinator.NodeId!.Value;
             coordinatorConnectionConfig = new ConnectionConfig(
                 _config.Protocol,
                 coordinator.Host!,
@@ -215,8 +215,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         var coordinatorConnection = new Connection(coordinatorConnectionConfig, _loggerFactory);
         await coordinatorConnection.OpenAsync(cancellationToken);
-
-        _connections[_coordinatorNodeId] = coordinatorConnection;
 
         return coordinatorConnection;
     }
@@ -545,13 +543,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         using (_logger.BeginScope(context.ToString()))
         {
             _logger.LogInformation("Fetching started.");
-            var deserializationContext = new MessageDeserializationContext();
             while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
                     var connection = _connections[nodeId];
-                    using var response = await connection.SendAsync(request, cancellationToken);
+                    // disposal in ConsumeFromBuffer()
+                    var response = await connection.SendAsync(request, cancellationToken);
                     if (response.Message.ErrorCode == 0)
                     {
                         _logger.LogDebug("Fetch response was received.");
@@ -591,38 +589,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                         }
                     }
 
-                    foreach (var topicResponse in response.Message.Responses)
-                    {
-                        foreach (var partitionResponse in topicResponse.Partitions!)
-                        {
-                            foreach (var recordBatch in partitionResponse.Records!.RecordBatches!)
-                            {
-                                foreach (var record in recordBatch.Records!)
-                                {
-                                    deserializationContext.Topic = topicResponse.Topic!;
-                                    deserializationContext.Partition = partitionResponse.PartitionIndex!.Value;
-                                    deserializationContext.Offset = recordBatch.BaseOffset + record.OffsetDelta;
-                                    deserializationContext.Timestamp = DateTimeOffset
-                                        .FromUnixTimeMilliseconds(recordBatch.FirstTimestamp + record.TimestampDelta)
-                                        .DateTime;
-                                    deserializationContext.Key = record.Key;
-                                    deserializationContext.Value = record.Value;
-                                    deserializationContext.Headers = record.Headers;
-
-                                    var message = _deserializer.Deserialize(deserializationContext);
-                                    var consumeResult = new ConsumeResult<TMessage>
-                                    {
-                                        Topic = deserializationContext.Topic,
-                                        Partition = deserializationContext.Partition,
-                                        Offset = deserializationContext.Offset,
-                                        Timestamp = deserializationContext.Timestamp,
-                                        Message = message,
-                                    };
-                                    await _consumeChannel.Writer.WriteAsync(consumeResult, cancellationToken);
-                                }
-                            }
-                        }
-                    }
+                    await _consumeChannel.Writer.WriteAsync(response, cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -638,10 +605,87 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
     }
 
-    public ValueTask<ConsumeResult<TMessage>> ConsumeAsync(
+    public async ValueTask<ConsumeResult<TMessage>?> ConsumeAsync(
         CancellationToken cancellationToken)
     {
-        return _consumeChannel.Reader.ReadAsync(cancellationToken);
+        var consumerResult = ConsumeFromBuffer();
+        if (consumerResult != null)
+        {
+            return consumerResult;
+        }
+        
+        _fetchResponse = await _consumeChannel.Reader.ReadAsync(cancellationToken);
+        _messageDeserializeEnumerator = GetMessageEnumerator();
+        
+        return ConsumeFromBuffer();
+    }
+    
+    private IEnumerator<MessageDeserializationContext> GetMessageEnumerator()
+    {
+        if (_fetchResponse == null ||
+            _fetchResponse.Message.ErrorCode != 0)
+        {
+            yield break;
+        }
+
+        foreach (var response in _fetchResponse.Message.Responses!)
+        {
+            var topic = response.Topic;
+            if (string.IsNullOrEmpty(topic))
+            {
+                #warning create a lookup by id if needed(not sure if topic is returned in the response)
+                topic = _topicsMetadata!.FirstOrDefault(x => x.Value.TopicId == response.TopicId).Key;
+            }
+            foreach (var partition in response.Partitions!)
+            {
+                foreach (var recordBatch in partition.Records!.RecordBatches!)
+                {
+                    foreach (var record in recordBatch.Records!)
+                    {
+                        yield return new MessageDeserializationContext
+                        {
+                            Topic = topic,
+                            Partition = partition.PartitionIndex!.Value,
+                            Offset = recordBatch.BaseOffset + record.OffsetDelta,
+                            Timestamp = DateTimeOffset
+                                .FromUnixTimeMilliseconds(recordBatch.FirstTimestamp + record.TimestampDelta)
+                                .DateTime,
+                            Key = record.Key,
+                            Value = record.Value,
+                            Headers = record.Headers,
+                        };
+                    }
+                }
+            }
+        }
+    }
+
+    private ConsumeResult<TMessage>? ConsumeFromBuffer()
+    {
+        if (_messageDeserializeEnumerator == null)
+        {
+            return null;
+        }
+        
+        if (_messageDeserializeEnumerator.MoveNext())
+        {
+            var deserializationContext = _messageDeserializeEnumerator.Current;
+            var message = _deserializer.Deserialize(deserializationContext);
+            return new ConsumeResult<TMessage>
+            {
+                Topic = deserializationContext.Topic,
+                Partition = deserializationContext.Partition,
+                Offset = deserializationContext.Offset,
+                Timestamp = deserializationContext.Timestamp,
+                Message = message,
+            };
+        }
+        
+        _messageDeserializeEnumerator.Dispose();
+        _messageDeserializeEnumerator = null;
+        _fetchResponse?.Dispose();
+
+        return null;
     }
 
     public async ValueTask DisposeAsync()
@@ -657,26 +701,39 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 _heartbeatsBackgroundTask = null;
             }
 
+            CancelAllPending();
             if (_fetchTasks != null)
             {
-                foreach (var fetchTask in _fetchTasks)
-                {
-                    await fetchTask;
-                }
+                await Task.WhenAll(_fetchTasks);
             }
         }
 
-        await LeaveGroupAsync(GetCoordinatorConnection(), CancellationToken.None);
+        await LeaveGroupAsync(CancellationToken.None);
 
         await CloseConnectionsAsync();
     }
 
-    private async ValueTask LeaveGroupAsync(IConnection connection, CancellationToken cancellationToken)
+    private void CancelAllPending()
+    {
+        if (_connections.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var connection in _connections)
+        {
+            connection.Value.CancelAllPending();
+        }
+    }
+
+    private async ValueTask LeaveGroupAsync(CancellationToken cancellationToken)
     {
         if (_groupMembership == null)
         {
             return;
         }
+
+        var connection = GetCoordinatorConnection();
 
         _logger.LogInformation("Leaving consumer group.");
 
@@ -703,18 +760,22 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         _groupMembership = null;
     }
-
+    
     private async ValueTask CloseConnectionsAsync()
     {
-        if (_connections.Count == 0)
+        if (_connections.Count > 0)
         {
-            return;
+            var closeRequests = _connections.Values
+                .Select(x => x.DisposeAsync().AsTask());
+            await Task.WhenAll(closeRequests);
+
+            _connections.Clear();
         }
-
-        var closeRequests = _connections.Values
-            .Select(x => x.DisposeAsync().AsTask());
-        await Task.WhenAll(closeRequests);
-
-        _connections.Clear();
+        
+        if (_coordinatorConnection != null)
+        {
+            await _coordinatorConnection.DisposeAsync();
+            _coordinatorConnection = null;
+        }
     }
 }

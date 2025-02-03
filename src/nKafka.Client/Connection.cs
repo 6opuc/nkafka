@@ -7,7 +7,6 @@ using System.Threading.Tasks.Dataflow;
 using Microsoft.Extensions.Logging;
 using nKafka.Contracts;
 using nKafka.Contracts.MessageDefinitions;
-using nKafka.Contracts.MessageDefinitions.ApiVersionsResponseNested;
 
 namespace nKafka.Client;
 
@@ -29,7 +28,7 @@ public class Connection : IConnection
 
     private BufferBlock<PendingRequest> _requestQueue = new();
     private Task _sendBackgroundTask = default!;
-    private ConcurrentQueue<PendingRequest> _pendingRequests = new();
+    private ConcurrentDictionary<int, PendingRequest> _pendingRequests = new();
     
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
     
@@ -123,10 +122,12 @@ public class Connection : IConnection
                             }
                             _logger.LogDebug("Read response payload ({@payloadSize} bytes).", payloadSize);
 
-                            if (!_pendingRequests.TryDequeue(out var pendingRequest))
+                            var correlationId = PeekCorrelationId(payload);
+                            if (correlationId == null ||
+                                !_pendingRequests.TryRemove(correlationId.Value, out var pendingRequest))
                             {
                                 _arrayPool.Return(payload);
-                                _logger.LogError("Received unexpected response: no pending requests.");
+                                _logger.LogError($"Received unexpected response: no pending requests. {correlationId}");
                                 continue;
                             }
 
@@ -172,6 +173,17 @@ public class Connection : IConnection
                 }
                 _logger.LogDebug("Response processing was stopped.");
             }, cancellationToken);
+    }
+
+    private int? PeekCorrelationId(byte[] payload)
+    {
+        #warning measure and optimize
+        if (payload.Length < 4)
+        {
+            return null;
+        }
+        using var stream = new MemoryStream(payload, 0, 4, false, true);
+        return PrimitiveSerializer.DeserializeInt(stream);
     }
 
     private void StartReceiving()
@@ -264,20 +276,22 @@ public class Connection : IConnection
                         using (BeginRequestLoggingScope(request))
                         {
                             _logger.LogDebug("Processing.");
-                            _pendingRequests.Enqueue(request);
+                            _pendingRequests.TryAdd(request.CorrelationId, request);
 
                             _logger.LogDebug("Serializing.");
                             using var output = new MemoryStream(payload, 0, payload.Length, true, true);
                             request.SerializeRequest(output, _serializationContext);
 
                             _logger.LogDebug("Sending {@size} bytes.", output.Position);
-                            await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position, request.CancellationToken);
+#warning request.CancellationToken does not work here: blocking request will never be cancelled
+                            await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position,
+                                request.CancellationToken);
                             _logger.LogDebug("Sent.");
                         }
                     }
                     catch (Exception exception)
                     {
-                        request.Response.SetException(exception);
+                        request.Response.TrySetException(exception);
                     }
                     finally
                     {
@@ -374,6 +388,18 @@ public class Connection : IConnection
     private IDisposable? BeginRequestLoggingScope(PendingRequest request)
     {
         return _logger.BeginScope($"request #{request.CorrelationId}({request.Payload.GetType().Name})");
+    }
+
+    public void CancelAllPending()
+    {
+        #warning measure and optimize
+        foreach (var correlationId in _pendingRequests.Keys)
+        {
+            if (_pendingRequests.TryRemove(correlationId, out var pendingRequest))
+            {
+                pendingRequest.Response.SetCanceled();
+            }
+        }
     }
 
     public async ValueTask DisposeAsync()

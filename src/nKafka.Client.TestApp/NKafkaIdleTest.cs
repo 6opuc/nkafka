@@ -36,7 +36,7 @@ public static class NKafkaIdleTest
                 Console.WriteLine($"{DateTime.UtcNow}: {counter} of {scenario.MessageCount}");
             }
             var consumeResult = await consumer.ConsumeAsync(CancellationToken.None);
-            if (consumeResult.Message == null)
+            if (consumeResult?.Message == null)
             {
                 continue;
             }
