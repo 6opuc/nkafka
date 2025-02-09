@@ -2,11 +2,11 @@ namespace nKafka.Client;
 
 public struct MessageDeserializationContext
 {
-    public string Topic { get; set; }
-    public int Partition { get; set; }
-    public long Offset { get; set; }
-    public DateTime Timestamp { get; set; }
-    public Memory<byte>? Key { get; set; }
-    public Memory<byte>? Value { get; set; }
-    public IReadOnlyDictionary<string, Memory<byte>?>? Headers { get; set; }
+    public string Topic;
+    public int Partition;
+    public long Offset;
+    public DateTime Timestamp;
+    public Memory<byte>? Key;
+    public Memory<byte>? Value;
+    public IReadOnlyDictionary<string, Memory<byte>?>? Headers;
 }

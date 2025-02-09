@@ -15,7 +15,7 @@ public static class NKafkaConsumeStringTest
             "PLAINTEXT",
             "nKafka.Client.Benchmarks");
         
-        await using var consumer = new Consumer<DummyStringMessage>(
+        await using var consumer = new Consumer<string>(
             consumerConfig,
             new DummyStringMessageDeserializer(),
             new DummyOffsetStorage(),
@@ -37,23 +37,17 @@ public static class NKafkaConsumeStringTest
         Console.WriteLine(counter);
     }
 
-    private class DummyStringMessage
+    private class DummyStringMessageDeserializer : IMessageDeserializer<string>
     {
-        public string? Value { get; set; }
-    }
-
-    private class DummyStringMessageDeserializer : IMessageDeserializer<DummyStringMessage>
-    {
-        public DummyStringMessage? Deserialize(MessageDeserializationContext context)
+        public string? Deserialize(MessageDeserializationContext context)
         {
-            var result = new DummyStringMessage();
             if (context.Value != null &&
                 context.Value.Value.Length > 0)
             {
-                result.Value = Encoding.UTF8.GetString(context.Value.Value.Span);
+                return Encoding.UTF8.GetString(context.Value.Value.Span);
             }
 
-            return result;
+            return null;
         }
     }
 
