@@ -150,12 +150,12 @@ public class Connection : IConnection
 
                                     var disposableResponse =
                                         new MessageWithPooledPayload(response, _arrayPool, payload);
-                                    pendingRequest.Response.SetResult(disposableResponse);
+                                    pendingRequest.Response.TrySetResult(disposableResponse);
                                 }
                                 catch (Exception exception)
                                 {
                                     _arrayPool.Return(payload);
-                                    pendingRequest.Response.SetException(exception);
+                                    pendingRequest.Response.TrySetException(exception);
                                 }
                             }
                         }
@@ -397,7 +397,7 @@ public class Connection : IConnection
         {
             if (_pendingRequests.TryRemove(correlationId, out var pendingRequest))
             {
-                pendingRequest.Response.SetCanceled();
+                pendingRequest.Response.TrySetCanceled();
             }
         }
     }
