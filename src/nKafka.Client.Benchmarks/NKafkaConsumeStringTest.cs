@@ -11,7 +11,7 @@ public static class NKafkaConsumeStringTest
             "PLAINTEXT://kafka-1:9192, PLAINTEXT://kafka-2:9292, PLAINTEXT://kafka-3:9392",
             scenario.TopicName,
             "test-consumer-group",
-            $"testapp-{DateTime.UtcNow.Ticks}",
+            $"testapp-{DateTime.UtcNow.Date:yyyyMMdd}-{Guid.NewGuid():N}",
             "PLAINTEXT",
             "nKafka.Client.Benchmarks");
         
