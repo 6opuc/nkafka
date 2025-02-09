@@ -640,6 +640,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             {
                 foreach (var recordBatch in partition.Records!.RecordBatches!)
                 {
+                    var firstTimestamp = DateTimeOffset.FromUnixTimeMilliseconds(recordBatch.FirstTimestamp).DateTime;
                     foreach (var record in recordBatch.Records!)
                     {
                         yield return new MessageDeserializationContext
@@ -647,9 +648,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             Topic = topic,
                             Partition = partition.PartitionIndex!.Value,
                             Offset = recordBatch.BaseOffset + record.OffsetDelta,
-                            Timestamp = DateTimeOffset
-                                .FromUnixTimeMilliseconds(recordBatch.FirstTimestamp + record.TimestampDelta)
-                                .DateTime,
+                            Timestamp = firstTimestamp.AddMilliseconds(record.TimestampDelta),
                             Key = record.Key,
                             Value = record.Value,
                             Headers = record.Headers,
