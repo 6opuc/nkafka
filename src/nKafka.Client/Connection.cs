@@ -26,8 +26,6 @@ public class Connection : IConnection
     private Task _receiveBackgroundTask = default!;
     private Task _processResponseBackgroundTask = default!;
 
-    private BufferBlock<PendingRequest> _requestQueue = new();
-    private Task _sendBackgroundTask = default!;
     private ConcurrentDictionary<int, PendingRequest> _pendingRequests = new();
     
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
@@ -60,7 +58,6 @@ public class Connection : IConnection
         
         StartProcessing();
         StartReceiving();
-        StartSending();
         await RequestApiVersionsAsync(cancellationToken);
     }
 
@@ -90,6 +87,7 @@ public class Connection : IConnection
         var endpoint = new IPEndPoint(ip.First(), _config.Port);
         _socket = new Socket(endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
         await _socket.ConnectAsync(endpoint, cancellationToken);
+        _writerStream = new SocketWriterStream(_socket);
     }
     
     private void StartProcessing()
@@ -245,62 +243,6 @@ public class Connection : IConnection
             }, cancellationToken);
     }
 
-    private void StartSending()
-    {
-        if (_socket == null)
-        {
-            return;
-        }
-        
-        _writerStream = new SocketWriterStream(_socket);
-
-        _sendBackgroundTask = Task.Run(
-            async () =>
-            {
-                while (!_requestQueue.Completion.IsCompleted)
-                {
-                    PendingRequest? request = null;
-                    try
-                    {
-                        request = await _requestQueue.ReceiveAsync();
-                    }
-                    catch (InvalidOperationException)
-                    {
-                        _logger.LogDebug("No more requests to send.");
-                        return;
-                    }
-
-                    var payload = _arrayPool.Rent(_config.RequestBufferSize);
-                    try
-                    {
-                        using (BeginRequestLoggingScope(request))
-                        {
-                            _logger.LogDebug("Processing.");
-                            _pendingRequests.TryAdd(request.CorrelationId, request);
-
-                            _logger.LogDebug("Serializing.");
-                            using var output = new MemoryStream(payload, 0, payload.Length, true, true);
-                            request.SerializeRequest(output, _serializationContext);
-
-                            _logger.LogDebug("Sending {@size} bytes.", output.Position);
-#warning request.CancellationToken does not work here: blocking request will never be cancelled
-                            await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position,
-                                request.CancellationToken);
-                            _logger.LogDebug("Sent.");
-                        }
-                    }
-                    catch (Exception exception)
-                    {
-                        request.Response.TrySetException(exception);
-                    }
-                    finally
-                    {
-                        _arrayPool.Return(payload);
-                    }
-                }
-            });
-    }
-
     private async Task RequestApiVersionsAsync(CancellationToken cancellationToken)
     {
         var clientApiVersions = ApiVersions.ValidVersions;
@@ -352,6 +294,11 @@ public class Connection : IConnection
         IRequest<TResponse> request,
         CancellationToken cancellationToken)
     {
+        if (_writerStream == null)
+        {
+            throw new InvalidOperationException("Socket connection is not open.");
+        }
+        
         using (BeginDefaultLoggingScope())
         {
             var completionPromise = new TaskCompletionSource<MessageWithPooledPayload>();
@@ -364,8 +311,34 @@ public class Connection : IConnection
                 _apiVersions.GetValueOrDefault(request.ApiKey, (short)0));
             using (BeginRequestLoggingScope(pendingRequest))
             {
-                _logger.LogDebug("Enqueueing {request}.", pendingRequest.Payload.GetType().Name);
-                await _requestQueue.SendAsync(pendingRequest, cancellationToken);
+                var payload = _arrayPool.Rent(_config.RequestBufferSize);
+                try
+                {
+                    using (BeginRequestLoggingScope(pendingRequest))
+                    {
+                        _logger.LogDebug("Processing.");
+                        _pendingRequests.TryAdd(pendingRequest.CorrelationId, pendingRequest);
+
+                        _logger.LogDebug("Serializing.");
+                        using var output = new MemoryStream(payload, 0, payload.Length, true, true);
+                        pendingRequest.SerializeRequest(output, _serializationContext);
+
+                        _logger.LogDebug("Sending {@size} bytes.", output.Position);
+#warning request.CancellationToken does not work here: blocking request will never be cancelled
+                        await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position,
+                            pendingRequest.CancellationToken);
+                        _logger.LogDebug("Sent.");
+                    }
+                }
+                catch (Exception exception)
+                {
+                    pendingRequest.Response.TrySetException(exception);
+                }
+                finally
+                {
+                    _arrayPool.Return(payload);
+                }
+                
                 _logger.LogDebug("Enqueued.");
             }
 
@@ -413,10 +386,6 @@ public class Connection : IConnection
         
         _logger.LogInformation("Closing socket connection.");
         
-        _requestQueue.Complete();
-        await _requestQueue.Completion;
-        await _sendBackgroundTask;
-
         if (_signalNoMoreDataToRead != null)
         {
             await _signalNoMoreDataToRead.CancelAsync();
