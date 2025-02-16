@@ -202,7 +202,6 @@ public class Connection : IConnection
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int? GetIntFromByteArray(byte[] payload)
     {
-#warning measure and optimize
         if (payload.Length < 4)
         {
             return null;
@@ -334,7 +333,6 @@ public class Connection : IConnection
 
     public void CancelAllPending()
     {
-        #warning measure and optimize
         foreach (var correlationId in _pendingRequests.Keys)
         {
             if (_pendingRequests.TryRemove(correlationId, out var pendingRequest))
