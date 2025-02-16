@@ -1,9 +1,8 @@
 using System.Buffers;
 using System.Collections.Concurrent;
-using System.IO.Pipelines;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading.Tasks.Dataflow;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using nKafka.Contracts;
 using nKafka.Contracts.MessageDefinitions;
@@ -17,14 +16,9 @@ public class Connection : IConnection
     private readonly ConnectionConfig _config;
     
     private SocketWriterStream? _writerStream;
-    private CancellationTokenSource? _signalNoMoreDataToWrite;
-    private CancellationTokenSource? _signalNoMoreDataToRead;
-
-    private readonly Pipe _pipe = new Pipe(new PipeOptions(
-        useSynchronizationContext: false));
+    private CancellationTokenSource? _stop;
 
     private Task _receiveBackgroundTask = default!;
-    private Task _processResponseBackgroundTask = default!;
 
     private ConcurrentDictionary<int, PendingRequest> _pendingRequests = new();
     
@@ -55,8 +49,6 @@ public class Connection : IConnection
     {
         using var _ = BeginDefaultLoggingScope();
         await OpenSocketAsync(cancellationToken);
-        
-        StartProcessing();
         StartReceiving();
         await RequestApiVersionsAsync(cancellationToken);
     }
@@ -86,46 +78,72 @@ public class Connection : IConnection
         }
         var endpoint = new IPEndPoint(ip.First(), _config.Port);
         _socket = new Socket(endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+        _socket.ReceiveBufferSize = _config.ResponseBufferSize;
+        _socket.SendBufferSize = _config.RequestBufferSize;
         await _socket.ConnectAsync(endpoint, cancellationToken);
         _writerStream = new SocketWriterStream(_socket);
     }
-    
-    private void StartProcessing()
+
+    private void StartReceiving()
     {
         if (_socket == null)
         {
             return;
         }
         
-        _signalNoMoreDataToRead = new CancellationTokenSource();
-        var cancellationToken = _signalNoMoreDataToRead.Token;
+        _stop = new CancellationTokenSource();
+        var cancellationToken = _stop.Token;
+        
+        var sizeBuffer = new byte[4];
 
-        _processResponseBackgroundTask = Task.Run(
+        _receiveBackgroundTask = Task.Run(
             async () =>
             {
-                while (!cancellationToken.IsCancellationRequested)
+                try
                 {
-                    try
+                    await using var stream = new NetworkStream(_socket);
+                    while (!cancellationToken.IsCancellationRequested)
                     {
-                        var payloadSize = await _pipe.Reader.ReadIntAsync(cancellationToken);
-                        _logger.LogDebug("Received response ({@payloadSize} bytes).", payloadSize);
+                        var bytesRead = await stream.ReadAtLeastAsync(
+                            sizeBuffer,
+                            sizeBuffer.Length,
+                            true,
+                            cancellationToken);
+                        if (bytesRead == 0)
+                        {
+                            break;
+                        }
 
-                        var payload = _arrayPool.Rent(payloadSize);
+                        var payloadSize = GetIntFromByteArray(sizeBuffer);
+                        if (payloadSize == null)
+                        {
+                            throw new EndOfStreamException("Received unexpected response size.");
+                        }
+
+                        _logger.LogDebug("Receiving payload ({@payloadSize} bytes).", payloadSize);
+
+                        var payload = _arrayPool.Rent(payloadSize.Value);
                         try
                         {
-                            var read = await _pipe.Reader.ReadAsync(payload, payloadSize, cancellationToken);
+                            var read = await stream.ReadAtLeastAsync(
+                                payload,
+                                payloadSize.Value,
+                                true,
+                                cancellationToken);
                             if (read != payloadSize)
                             {
                                 throw new EndOfStreamException("Received unexpected end of stream.");
                             }
+
                             _logger.LogDebug("Read response payload ({@payloadSize} bytes).", payloadSize);
 
-                            var correlationId = PeekCorrelationId(payload);
+                            var correlationId = GetIntFromByteArray(payload);
                             if (correlationId == null ||
                                 !_pendingRequests.TryRemove(correlationId.Value, out var pendingRequest))
                             {
                                 _arrayPool.Return(payload);
-                                _logger.LogError($"Received unexpected response: no pending requests. {correlationId}");
+                                _logger.LogError(
+                                    $"Received unexpected response: no pending request was found. {correlationId}");
                                 continue;
                             }
 
@@ -135,7 +153,7 @@ public class Connection : IConnection
 
                                 try
                                 {
-                                    using var input = new MemoryStream(payload, 0, payloadSize, false, true);
+                                    using var input = new MemoryStream(payload, 0, payloadSize.Value, false, true);
                                     var response = pendingRequest.DeserializeResponse(input, _serializationContext);
                                     if (input.Length != input.Position)
                                     {
@@ -144,6 +162,7 @@ public class Connection : IConnection
                                             input.Position,
                                             input.Length);
                                     }
+
                                     _logger.LogDebug("Deserialized.");
 
                                     var disposableResponse =
@@ -164,83 +183,34 @@ public class Connection : IConnection
                         }
 
                     }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
                 }
-                _logger.LogDebug("Response processing was stopped.");
-            }, cancellationToken);
-    }
-
-    private int? PeekCorrelationId(byte[] payload)
-    {
-        #warning measure and optimize
-        if (payload.Length < 4)
-        {
-            return null;
-        }
-        using var stream = new MemoryStream(payload, 0, 4, false, true);
-        return PrimitiveSerializer.DeserializeInt(stream);
-    }
-
-    private void StartReceiving()
-    {
-        if (_socket == null)
-        {
-            return;
-        }
-        
-        _signalNoMoreDataToWrite = new CancellationTokenSource();
-        var cancellationToken = _signalNoMoreDataToWrite.Token;
-
-        _receiveBackgroundTask = Task.Run(
-            async () =>
-            {
-                var writer = _pipe.Writer;
-                try
-                {
-                    FlushResult result;
-                    do
-                    {
-                        var memory = writer.GetMemory(_config.ResponseBufferSize);
-                        var bytesRead = await _socket.ReceiveAsync(
-                            memory,
-                            SocketFlags.None,
-                            cancellationToken);
-
-                        if (bytesRead == 0)
-                        {
-                            break;
-                        }
-
-                        _logger.LogDebug("Received {bytesRead} bytes.", bytesRead);
-                        writer.Advance(bytesRead);
-
-                        result = await writer
-                            .FlushAsync(cancellationToken);
-                    } while (result.IsCanceled == false &&
-                             result.IsCompleted == false);
-                }
-                catch when (_signalNoMoreDataToWrite.IsCancellationRequested)
+                catch when (cancellationToken.IsCancellationRequested)
                 {
                     // Shutdown in progress
                 }
                 catch (OperationCanceledException)
                 {
                 }
-                catch (Exception ex)
+                catch (Exception exception)
                 {
-                    await writer.CompleteAsync(ex);
-                    throw;
+                    _logger.LogError(exception, "Unhandled exception in receive loop.");
                 }
-                finally
-                {
-                    await _signalNoMoreDataToWrite.CancelAsync();
-                }
-
-                await writer.CompleteAsync();
             }, cancellationToken);
+    }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int? GetIntFromByteArray(byte[] payload)
+    {
+#warning measure and optimize
+        if (payload.Length < 4)
+        {
+            return null;
+        }
+        return
+            (payload[0] << 24) |
+            (payload[1] << 16) |
+            (payload[2] << 8) |
+            payload[3];
     }
 
     private async Task RequestApiVersionsAsync(CancellationToken cancellationToken)
@@ -338,8 +308,6 @@ public class Connection : IConnection
                 {
                     _arrayPool.Return(payload);
                 }
-                
-                _logger.LogDebug("Enqueued.");
             }
 
             var response = await completionPromise.Task;
@@ -386,16 +354,10 @@ public class Connection : IConnection
         
         _logger.LogInformation("Closing socket connection.");
         
-        if (_signalNoMoreDataToRead != null)
+        if (_stop != null)
         {
-            await _signalNoMoreDataToRead.CancelAsync();
+            await _stop.CancelAsync();
         }
-        if (_signalNoMoreDataToWrite != null)
-        {
-            await _signalNoMoreDataToWrite.CancelAsync();
-        }
-
-        await _processResponseBackgroundTask;
         await _receiveBackgroundTask;
 
         if (_writerStream != null)
