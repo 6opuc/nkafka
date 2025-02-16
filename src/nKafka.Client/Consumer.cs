@@ -28,6 +28,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private readonly string[] _topics;
     private GroupMembership? _groupMembership;
     private IDictionary<string, MetadataResponseTopic>? _topicsMetadata;
+    private IDictionary<Guid, MetadataResponseTopic>? _topicsMetadataById;
     private List<Task>? _fetchTasks;
 
     private readonly Channel<IDisposableMessage<FetchResponse>> _consumeChannel =
@@ -99,7 +100,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
 
         using var metadataResponse = await RequestMetadata(GetCoordinatorConnection(), cancellationToken);
+        if (metadataResponse.Message.Topics == null)
+        {
+            throw new Exception("Metadata response did not contain topics.");
+        }
         _topicsMetadata = metadataResponse.Message.Topics;
+        _topicsMetadataById = metadataResponse.Message.Topics
+            .GroupBy(x => x.Value.TopicId)
+            .Where(x => x.Key.HasValue)
+            .ToDictionary(g => g.Key!.Value, g => g.First().Value);
         foreach (var broker in metadataResponse.Message.Brokers!.Values)
         {
             if (_connections.ContainsKey(broker.NodeId!.Value))
@@ -644,10 +653,12 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         foreach (var response in _fetchResponse.Message.Responses!)
         {
             var topic = response.Topic;
-            if (string.IsNullOrEmpty(topic))
+            if (string.IsNullOrEmpty(topic) && response.TopicId != null)
             {
-                #warning create a lookup by id if needed(not sure if topic is returned in the response)
-                topic = _topicsMetadata!.FirstOrDefault(x => x.Value.TopicId == response.TopicId).Key;
+                if (_topicsMetadataById!.TryGetValue(response.TopicId.Value, out var topicMetadata))
+                {
+                    topic = topicMetadata.Name;
+                }
             }
             foreach (var partition in response.Partitions!)
             {
