@@ -28,7 +28,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private readonly string[] _topics;
     private GroupMembership? _groupMembership;
     private IDictionary<string, MetadataResponseTopic>? _topicsMetadata;
-    private List<Task>? _fetchTasks;
+    private Task? _fetchTask;
 
     private readonly Channel<IDisposableMessage<FetchResponse>> _consumeChannel =
         Channel.CreateBounded<IDisposableMessage<FetchResponse>>(new BoundedChannelOptions(1)
@@ -436,7 +436,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         var cancellationToken = _stop!.Token;
 
-        var fetchRequests = new Dictionary<int, FetchRequest>(_connections.Count);
+        var fetchRequestContexts = new Dictionary<int, FetchRequestContext>(_connections.Count);
         foreach (var topicAssignment in assignedPartitions)
         {
             if (_topicsMetadata?.TryGetValue(topicAssignment.Key, out var topicMetadata) != true ||
@@ -465,9 +465,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     PartitionMaxBytes = 512 * 1024, // !!!
                     ReplicaDirectoryId = Guid.Empty, // ???
                 };
-                if (!fetchRequests.TryGetValue(partitionMetadata.LeaderId!.Value, out var fetchRequest))
+                if (!fetchRequestContexts.TryGetValue(partitionMetadata.LeaderId!.Value, out var fetchRequestContext))
                 {
-                    fetchRequest = new FetchRequest
+                    var fetchRequest = new FetchRequest
                     {
                         ClusterId = null, // ???
                         ReplicaId = -1, // ???
@@ -493,11 +493,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                         ForgottenTopicsData = [], // ???
                         RackId = string.Empty, // ???
                     };
-                    fetchRequests[partitionMetadata.LeaderId!.Value] = fetchRequest;
+                    fetchRequestContext = new FetchRequestContext
+                    {
+                        Request = fetchRequest,
+                    };
+                    fetchRequestContexts[partitionMetadata.LeaderId!.Value] = fetchRequestContext;
                 }
                 else
                 {
-                    var fetchRequestTopic = fetchRequest.Topics!.FirstOrDefault(x => 
+                    var fetchRequestTopic = fetchRequestContext.Request.Topics!.FirstOrDefault(x => 
                         x.Topic == topicMetadata.Name ||
                         x.TopicId == topicMetadata.TopicId);
                     if (fetchRequestTopic == null)
@@ -511,7 +515,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                                 fetchPartition,
                             ]
                         };
-                        fetchRequest.Topics!.Add(fetchRequestTopic);
+                        fetchRequestContext.Request.Topics!.Add(fetchRequestTopic);
                     }
                     else
                     {
@@ -521,91 +525,133 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             }
         }
 
-        _fetchTasks = new List<Task>(fetchRequests.Count);
-        foreach (var pair in fetchRequests)
+        _fetchTask = Task.Run(() => FetchLoopAsync(fetchRequestContexts, cancellationToken), cancellationToken);
+    }
+
+    private class FetchRequestContext
+    {
+        public required FetchRequest Request;
+        public bool NoDataInLastResponse = false;
+        private string? _loggerScope;
+
+        public string LoggerScope
         {
-            var fetchTask = Task.Run(() => FetchLoopAsync(pair.Key, pair.Value, cancellationToken), cancellationToken);
-            _fetchTasks.Add(fetchTask);
+            get
+            {
+                if (_loggerScope != null)
+                {
+                    return _loggerScope;
+                }
+                
+                var loggerScope = new StringBuilder();
+                foreach (var topic in Request.Topics!)
+                {
+                    loggerScope.Append(topic.Topic);
+                    loggerScope.Append("[");
+                    foreach (var partition in topic.Partitions!)
+                    {
+                        loggerScope.Append(partition.Partition);
+                        loggerScope.Append(",");
+                    }
+                    loggerScope.Append("] ");
+                }
+                _loggerScope = loggerScope.ToString();
+                return _loggerScope;
+            }
         }
     }
 
-    private async Task FetchLoopAsync(int nodeId, FetchRequest request, CancellationToken cancellationToken)
+    private async Task FetchLoopAsync(Dictionary<int, FetchRequestContext> fetchRequestContexts, CancellationToken cancellationToken)
     {
-        var context = new StringBuilder();
-        foreach (var topic in request.Topics!)
+        _logger.LogInformation("Fetching started.");
+        while (!cancellationToken.IsCancellationRequested)
         {
-            context.Append(topic.Topic);
-            context.Append("[");
-            foreach (var partition in topic.Partitions!)
+            foreach (var pair in fetchRequestContexts)
             {
-                context.Append(partition.Partition);
-                context.Append(",");
-            }
-            context.Append("] ");
-        }
-        using (_logger.BeginScope(context.ToString()))
-        {
-            _logger.LogInformation("Fetching started.");
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                try
+                var nodeId = pair.Key;
+                var context = pair.Value;
+                if (context.NoDataInLastResponse)
                 {
-                    var connection = _connections[nodeId];
-                    // disposal in ConsumeFromBuffer()
-                    var response = await connection.SendAsync(request, cancellationToken);
-                    if (response.Message.ErrorCode == 0)
+                    continue;
+                }
+                var request = context.Request;
+                using (_logger.BeginScope(context.LoggerScope))
+                {
+                    try
                     {
-                        _logger.LogDebug("Fetch response was received.");
-                    }
-                    else
-                    {
-                        _logger.LogError(
-                            "Error in fetch response: {@errorCode}.",
-                            response.Message.ErrorCode);
-                        continue;
-                    }
-
-                    foreach (var topicResponse in response.Message.Responses!)
-                    {
-                        var topicRequest = request.Topics!.FirstOrDefault(x =>
-                            x.Topic == topicResponse.Topic ||
-                            x.TopicId == topicResponse.TopicId);
-                        if (topicRequest == null)
+                        var connection = _connections[nodeId];
+                        request.MaxWaitMs = context.NoDataInLastResponse
+                            ? (int)_config.MaxWaitTime.TotalMicroseconds
+                            : 0;
+                        // disposal in ConsumeFromBuffer()
+                        var response = await connection.SendAsync(request, cancellationToken);
+                        context.NoDataInLastResponse = true;
+                        if (response.Message.ErrorCode == 0)
                         {
+                            _logger.LogDebug("Fetch response was received.");
+                        }
+                        else
+                        {
+                            _logger.LogError(
+                                "Error in fetch response: {@errorCode}.",
+                                response.Message.ErrorCode);
                             continue;
                         }
 
-                        foreach (var partitionResponse in topicResponse.Partitions!)
+                        foreach (var topicResponse in response.Message.Responses!)
                         {
-                            var partitionRequest = topicRequest.Partitions!.FirstOrDefault(
-                                x => x.Partition == partitionResponse.PartitionIndex);
-                            if (partitionRequest == null)
+                            var topicRequest = request.Topics!.FirstOrDefault(x =>
+                                x.Topic == topicResponse.Topic ||
+                                x.TopicId == topicResponse.TopicId);
+                            if (topicRequest == null)
                             {
                                 continue;
                             }
 
-                            var lastOffset = partitionResponse.Records?.LastOffset;
-                            if (lastOffset.HasValue)
+                            foreach (var partitionResponse in topicResponse.Partitions!)
                             {
-                                partitionRequest.FetchOffset = lastOffset.Value + 1;
+                                var partitionRequest = topicRequest.Partitions!.FirstOrDefault(
+                                    x => x.Partition == partitionResponse.PartitionIndex);
+                                if (partitionRequest == null)
+                                {
+                                    continue;
+                                }
+
+                                var lastOffset = partitionResponse.Records?.LastOffset;
+                                if (lastOffset.HasValue)
+                                {
+                                    partitionRequest.FetchOffset = lastOffset.Value + 1;
+                                    context.NoDataInLastResponse = false;
+                                }
                             }
                         }
-                    }
 
-                    await _consumeChannel.Writer.WriteAsync(response, cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception exception)
-                {
-                    _logger.LogError(exception, "Error in fetch loop.");
+                        if (!context.NoDataInLastResponse)
+                        {
+                            await _consumeChannel.Writer.WriteAsync(response, cancellationToken);
+                        }
+                        else
+                        {
+                            response.Dispose();
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (Exception exception)
+                    {
+                        _logger.LogError(exception, "Error in fetch loop.");
+                    }
+                    
                 }
             }
-
-            _logger.LogDebug("Fetching was stopped.");
+            
+            #warning in case all context without data, we need to wait for all brokers at once
         }
+
+        _logger.LogDebug("Fetching was stopped.");
+        
     }
 
     public async ValueTask<ConsumeResult<TMessage>?> ConsumeAsync(
@@ -704,9 +750,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             }
 
             CancelAllPending();
-            if (_fetchTasks != null)
+            if (_fetchTask != null)
             {
-                await Task.WhenAll(_fetchTasks);
+                await _fetchTask;
             }
         }
 
