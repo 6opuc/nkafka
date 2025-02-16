@@ -80,6 +80,7 @@ public class Connection : IConnection
         _socket = new Socket(endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
         _socket.ReceiveBufferSize = _config.ResponseBufferSize;
         _socket.SendBufferSize = _config.RequestBufferSize;
+        _socket.NoDelay = true;
         await _socket.ConnectAsync(endpoint, cancellationToken);
         _writerStream = new SocketWriterStream(_socket);
     }
