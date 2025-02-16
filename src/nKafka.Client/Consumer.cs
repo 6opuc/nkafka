@@ -31,7 +31,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private List<Task>? _fetchTasks;
 
     private readonly Channel<IDisposableMessage<FetchResponse>> _consumeChannel =
-        Channel.CreateBounded<IDisposableMessage<FetchResponse>>(new BoundedChannelOptions(1));
+        Channel.CreateBounded<IDisposableMessage<FetchResponse>>(new BoundedChannelOptions(1)
+        {
+            SingleReader = true,
+        });
     private IDisposableMessage<FetchResponse>? _fetchResponse = null;
     private IEnumerator<MessageDeserializationContext>? _messageDeserializeEnumerator = null;
 
