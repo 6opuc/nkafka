@@ -162,7 +162,12 @@ public static class PrimitiveSerializer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static byte DeserializeByte(MemoryStream input)
     {
-        return (byte)input.ReadByte();
+        var result = input.ReadByte();
+        if (result == -1)
+        {
+            throw new EndOfStreamException("Unable to read byte, end of stream reached.");
+        }
+        return unchecked((byte)result);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -214,13 +219,18 @@ public static class PrimitiveSerializer
             throw new Exception($"DeserializeLong needs 8 bytes but got only {input.Length - input.Position}");
         }
 
-        var value = 0L;
-        for (var i = 0; i < 8; i++)
-        {
-            value = value << 8 | (uint)input.ReadByte();
-        }
+        var buffer = input.GetBuffer();
+        var position = (int)input.Position;
+        input.Position += 8;
 
-        return value;
+        return ((long)buffer[position] << 56) |
+               ((long)buffer[position + 1] << 48) |
+               ((long)buffer[position + 2] << 40) |
+               ((long)buffer[position + 3] << 32) |
+               ((long)buffer[position + 4] << 24) |
+               ((long)buffer[position + 5] << 16) |
+               ((long)buffer[position + 6] << 8) |
+               buffer[position + 7];
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -338,18 +348,17 @@ public static class PrimitiveSerializer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ulong DeserializeUVarLong(MemoryStream input)
     {
-        var more = true;
         ulong value = 0;
-        var shift = 0;
-        while (more)
-        {
-            var lowerBits = DeserializeByte(input);
+        int shift = 0;
+        int lowerBits;
 
-            more = (lowerBits & 128) != 0;
-            value |= (ulong)(lowerBits & 0x7f) << shift;
+        while (((lowerBits = DeserializeByte(input)) & 128) != 0)
+        {
+            value |= (ulong)(lowerBits & 0x7F) << shift;
             shift += 7;
         }
 
+        value |= (ulong)(lowerBits & 0x7F) << shift;
         return value;
     }
     

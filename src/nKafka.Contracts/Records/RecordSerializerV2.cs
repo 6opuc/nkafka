@@ -1,9 +1,11 @@
 using System.Collections.ObjectModel;
+using System.Runtime.CompilerServices;
 
 namespace nKafka.Contracts.Records;
 
 public class RecordSerializerV2
 {
+    //[MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Record? Deserialize(MemoryStream input, long eof)
     {
         var rollbackPosition = input.Position;
