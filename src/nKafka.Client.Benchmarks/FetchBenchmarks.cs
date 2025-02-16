@@ -36,4 +36,7 @@ public class FetchBenchmarks
     
     [Benchmark]
     public Task NKafkaConsumeString() => NKafkaConsumeStringTest.Test(Scenario!);
+    
+    [Benchmark]
+    public Task NKafkaConsumeBytes() => NKafkaConsumeBytesTest.Test(Scenario!);
 }
