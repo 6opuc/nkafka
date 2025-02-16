@@ -462,8 +462,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     continue;
                 }
 
-#warning start offset does not work
-                var offset = await _offsetStorage.GetOffset(_config.GroupId, topicAssignment.Key, partition);
+                var connection = _connections[partitionMetadata.LeaderId!.Value];
+                var offset = await _offsetStorage.GetOffset(
+                    connection,
+                    _config.GroupId,
+                    topicAssignment.Key,
+                    partition,
+                    cancellationToken);
                 var fetchPartition = new FetchPartition
                 {
                     Partition = partition,
@@ -669,7 +674,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     {
                         yield return new MessageDeserializationContext
                         {
-                            Topic = topic,
+                            Topic = topic ?? "unknown_topic",
                             Partition = partition.PartitionIndex!.Value,
                             Offset = recordBatch.BaseOffset + record.OffsetDelta,
                             Timestamp = firstTimestamp.AddMilliseconds(record.TimestampDelta),

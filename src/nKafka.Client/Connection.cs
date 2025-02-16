@@ -110,10 +110,6 @@ public class Connection : IConnection
                             sizeBuffer.Length,
                             true,
                             cancellationToken);
-                        if (bytesRead == 0)
-                        {
-                            break;
-                        }
 
                         var payloadSize = GetIntFromByteArray(sizeBuffer);
                         if (payloadSize == null)

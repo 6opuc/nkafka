@@ -7,6 +7,7 @@ using nKafka.Contracts.MessageDefinitions.FetchRequestNested;
 using nKafka.Contracts.MessageDefinitions.JoinGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.LeaveGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
+using nKafka.Contracts.MessageDefinitions.OffsetFetchRequestNested;
 using nKafka.Contracts.MessageDefinitions.SyncGroupRequestNested;
 
 namespace nKafka.Client.IntegrationTests;
@@ -683,6 +684,56 @@ public class ConnectionTests
         }
 
         recordCount.Should().Be(1000000);
+    }
+    
+    [Test]
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [TestCase(6)]
+    [TestCase(7)]
+    [TestCase(8)]
+    //[TestCase(9)]
+    #warning fix version 9
+    public async Task SendAsync_OffsetFetchRequest_ShouldReturnExpectedResult(short apiVersion)
+    {
+        var metadata = await RequestMetadata();
+        await using var connection = await OpenConnection();
+        var request = new OffsetFetchRequest
+        {
+            GroupId = Guid.NewGuid().ToString(),
+            Groups = new List<OffsetFetchRequestGroup>
+            {
+                new()
+                {
+                    GroupId = Guid.NewGuid().ToString(),
+                    MemberId = Guid.NewGuid().ToString(),
+                    MemberEpoch = -1,
+                    Topics = metadata.Message.Topics!.Values
+                        .Select(topic => new OffsetFetchRequestTopics
+                        {
+                            Name = topic.Name,
+                            PartitionIndexes = topic.Partitions!.Select(p => p.PartitionIndex!.Value).ToArray(),
+                        })
+                        .ToArray()
+                }
+            },
+            FixedVersion = apiVersion,
+            Topics = metadata.Message.Topics!.Values
+                .Select(topic => new OffsetFetchRequestTopic
+                {
+                    Name = topic.Name,
+                    PartitionIndexes = topic.Partitions!.Select(p => p.PartitionIndex!.Value).ToArray(),
+                })
+                .ToArray(),
+        };
+
+        var response = await connection.SendAsync(request, CancellationToken.None);
+
+        response.Should().NotBeNull();
     }
 
     private async Task<Connection> OpenCoordinatorConnection(string groupId)
