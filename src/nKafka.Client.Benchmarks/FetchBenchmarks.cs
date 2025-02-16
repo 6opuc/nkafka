@@ -20,7 +20,7 @@ public class FetchBenchmarks
 
 
     [Benchmark]
-    public Task ConfluentBytes() => ConfluentFetchTest.Test(Scenario!);
+    public Task ConfluentBytes() => ConfluentConsumeBytesTest.Test(Scenario!);
     
     [Benchmark]
     public Task ConfluentString() => ConfluentConsumeStringTest.Test(Scenario!);

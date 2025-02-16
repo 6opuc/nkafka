@@ -562,9 +562,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                         _logger.LogError(
                             "Error in fetch response: {@errorCode}.",
                             response.Message.ErrorCode);
+                        response.Dispose();
                         continue;
                     }
 
+                    bool noData = true;
                     foreach (var topicResponse in response.Message.Responses!)
                     {
                         var topicRequest = request.Topics!.FirstOrDefault(x =>
@@ -588,11 +590,19 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             if (lastOffset.HasValue)
                             {
                                 partitionRequest.FetchOffset = lastOffset.Value + 1;
+                                noData = false;
                             }
                         }
                     }
 
-                    await _consumeChannel.Writer.WriteAsync(response, cancellationToken);
+                    if (noData)
+                    {
+                        response.Dispose();
+                    }
+                    else
+                    {
+                        await _consumeChannel.Writer.WriteAsync(response, cancellationToken);
+                    }
                 }
                 catch (OperationCanceledException)
                 {

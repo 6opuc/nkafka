@@ -2,7 +2,7 @@ using Confluent.Kafka;
 
 namespace nKafka.Client.Benchmarks;
 
-public class ConfluentFetchTest
+public class ConfluentConsumeBytesTest
 {
     public static Task Test(FetchScenario scenario)
     {
