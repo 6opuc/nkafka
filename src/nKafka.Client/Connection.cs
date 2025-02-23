@@ -267,9 +267,8 @@ public class Connection : IConnection
         
         using (BeginDefaultLoggingScope())
         {
-            #warning consider taskCreationOptions.RunContAsync
-            var completionPromise = new TaskCompletionSource<MessageWithPooledPayload>(/*
-                TaskCreationOptions.RunContinuationsAsynchronously*/);
+            var completionPromise = new TaskCompletionSource<MessageWithPooledPayload>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
             #warning uncomment the line below and remove CancellPending method
             // await using var cancellationRegistration = cancellationToken.Register(
             //     () => completionPromise.TrySetCanceled());
