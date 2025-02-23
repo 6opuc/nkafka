@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using nKafka.Contracts.MessageDefinitions;
 using nKafka.Contracts.MessageDefinitions.FetchRequestNested;
@@ -73,6 +74,7 @@ public static class NKafkaFetchBytesParallelMultiPartTest
                 while (true)
                 {
                     using var response = await connection.SendAsync(request, CancellationToken.None);
+                    var responseRecordCount = 0;
                     foreach (var topicResponse in response.Message.Responses!)
                     {
                         var topicRequest = request.Topics.FirstOrDefault(x =>
@@ -97,12 +99,25 @@ public static class NKafkaFetchBytesParallelMultiPartTest
                             {
                                 partitionRequest.FetchOffset = lastOffset + 1;
                             }
+                            
+                            foreach (var recordBatch in partitionResponse.Records!.RecordBatches!)
+                            {
+                                foreach (var record in recordBatch.Records!)
+                                {
+                                    if (record.Value != null &&
+                                        record.Value.Value.Length > 0)
+                                    {
+                                        // just to calculate overhead of Encoding.UTF8.GetString
+                                        responseRecordCount += 1;
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    var responseRecordCount = response.Message.Responses!
-                        .SelectMany(x => x.Partitions!)
-                        .Sum(x => x.Records!.RecordCount);
+                    // var responseRecordCount = response.Message.Responses!
+                    //     .SelectMany(x => x.Partitions!)
+                    //     .Sum(x => x.Records!.RecordCount);
                     if (responseRecordCount == 0)
                     {
                         break;

@@ -8,6 +8,7 @@ public static class NKafkaConsumeStringTest
 {
     public static async Task Test(FetchScenario scenario)
     {
+        #warning thread leak + performance degradation!!!
         var loggerFactory = LoggerFactory.Create(builder => builder
             .SetMinimumLevel(LogLevel.Warning)
             .AddSimpleConsole(o => o.IncludeScopes = true));
