@@ -696,8 +696,6 @@ public class ConnectionTests
     [TestCase(6)]
     [TestCase(7)]
     [TestCase(8)]
-    //[TestCase(9)]
-    #warning fix version 9
     public async Task SendAsync_OffsetFetchRequest_ShouldReturnExpectedResult(short apiVersion)
     {
         var metadata = await RequestMetadata();
