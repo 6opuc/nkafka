@@ -9,6 +9,4 @@ public interface IConnection : IAsyncDisposable
     ValueTask<IDisposableMessage<TResponse>> SendAsync<TResponse>(
         IRequest<TResponse> request,
         CancellationToken cancellationToken);
-
-    void CancelAllPending();
 }

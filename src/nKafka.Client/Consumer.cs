@@ -729,7 +729,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 _heartbeatsBackgroundTask = null;
             }
 
-            CancelAllPending();
             if (_fetchTasks != null)
             {
                 await Task.WhenAll(_fetchTasks);
@@ -739,19 +738,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         await LeaveGroupAsync(CancellationToken.None);
 
         await CloseConnectionsAsync();
-    }
-
-    private void CancelAllPending()
-    {
-        if (_connections.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var connection in _connections)
-        {
-            connection.Value.CancelAllPending();
-        }
     }
 
     private async ValueTask LeaveGroupAsync(CancellationToken cancellationToken)

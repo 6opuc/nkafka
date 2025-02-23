@@ -269,16 +269,19 @@ public class Connection : IConnection
         {
             var completionPromise = new TaskCompletionSource<MessageWithPooledPayload>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
-            #warning uncomment the line below and remove CancellPending method
-            // await using var cancellationRegistration = cancellationToken.Register(
-            //     () => completionPromise.TrySetCanceled());
-            
             var pendingRequest = new PendingRequest(
                 request,
                 completionPromise,
                 cancellationToken,
                 IdGenerator.Next(),
                 _apiVersions.GetValueOrDefault(request.ApiKey, (short)0));
+            await using var cancellationRegistration = cancellationToken.Register(
+                () =>
+                {
+                    completionPromise.TrySetCanceled();
+                    _pendingRequests.TryRemove(pendingRequest.CorrelationId, out _);
+                });
+            
             using (BeginRequestLoggingScope(pendingRequest))
             {
                 var payload = _arrayPool.Rent(_config.RequestBufferSize);
@@ -294,7 +297,6 @@ public class Connection : IConnection
                         pendingRequest.SerializeRequest(output, _serializationContext);
 
                         _logger.LogDebug("Sending {@size} bytes.", output.Position);
-#warning request.CancellationToken does not work here: blocking request will never be cancelled
                         await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position,
                             pendingRequest.CancellationToken);
                         _logger.LogDebug("Sent.");
@@ -329,17 +331,6 @@ public class Connection : IConnection
     private IDisposable? BeginRequestLoggingScope(PendingRequest request)
     {
         return _logger.BeginScope($"request #{request.CorrelationId}({request.Payload.GetType().Name})");
-    }
-
-    public void CancelAllPending()
-    {
-        foreach (var correlationId in _pendingRequests.Keys)
-        {
-            if (_pendingRequests.TryRemove(correlationId, out var pendingRequest))
-            {
-                pendingRequest.Response.TrySetCanceled();
-            }
-        }
     }
 
     public async ValueTask DisposeAsync()
