@@ -1,4 +1,5 @@
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace nKafka.Client.Benchmarks;
@@ -7,6 +8,10 @@ public static class NKafkaConsumeStringTest
 {
     public static async Task Test(FetchScenario scenario)
     {
+        var loggerFactory = LoggerFactory.Create(builder => builder
+            .SetMinimumLevel(LogLevel.Warning)
+            .AddSimpleConsole(o => o.IncludeScopes = true));
+        
         var consumerConfig = new ConsumerConfig(
             "PLAINTEXT://kafka-1:9192, PLAINTEXT://kafka-2:9292, PLAINTEXT://kafka-3:9392",
             scenario.TopicName,
@@ -19,7 +24,7 @@ public static class NKafkaConsumeStringTest
             consumerConfig,
             new DummyStringMessageDeserializer(),
             new DummyOffsetStorage(),
-            NullLoggerFactory.Instance);
+            NullLoggerFactory.Instance/*loggerFactory*/);
         await consumer.JoinGroupAsync(CancellationToken.None);
 
         var counter = 0;
@@ -34,7 +39,7 @@ public static class NKafkaConsumeStringTest
             counter += 1;
         }
 
-        Console.WriteLine(counter);
+        Console.WriteLine($"{DateTime.UtcNow}: {counter}");
     }
 
     private class DummyStringMessageDeserializer : IMessageDeserializer<string>

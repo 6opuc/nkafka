@@ -5,7 +5,7 @@ using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
 
 namespace nKafka.Client.Benchmarks;
 
-public static class NKafkaBytesFetchParallelMultiPartTest
+public static class NKafkaFetchBytesParallelMultiPartTest
 {
     public static async Task Test(FetchScenario scenario)
     {

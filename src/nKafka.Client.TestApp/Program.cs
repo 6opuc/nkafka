@@ -12,7 +12,7 @@ var scenario = benchmarks.Scenarios
 
 var stopwatch = Stopwatch.StartNew();
 
-var threads = 200;
+var threads = 20;
 var iterationsPerThread = 100;
 var tasks = new List<Task>(threads);
 for (var t = 0; t < tasks.Capacity; t++)
@@ -25,20 +25,21 @@ for (var t = 0; t < tasks.Capacity; t++)
             {
                 var id = $"[{t1}:{i}]";
                 var stopwatchInner = Stopwatch.StartNew();
-                //await ConfluentFetchTest.Test(scenario);
-                //await NKafkaFetchTest.Test(scenario);
-                
-                //await NKafkaIdleTest.Test(scenario);
-                await ConfluentIdleTest.Test(scenario);
-                //await NKafkaBytesFetchParallelMultiPartTest.Test(scenario);
-                
-                //NKafkaConsumeStringTest.Test(scenario);
+                //await ConfluentConsumeBytesTest.Test(scenario);
+                //await NKafkaFetchBytesSeqSinglePartTest.Test(scenario);
+                //await NKafkaFetchBytesSeqMultiPartTest.Test(scenario);
+                //await NKafkaFetchBytesParallelMultiPartTest.Test(scenario);
                 //await NKafkaConsumeBytesTest.Test(scenario);
                 
+                //await ConfluentIdleTest.Test(scenario);
+                //await NKafkaIdleTest.Test(scenario);
+                
                 //await ConfluentConsumeStringTest.Test(scenario);
+                await NKafkaFetchStringParallelMultiPartTest.Test(scenario);
+                //await NKafkaConsumeStringTest.Test(scenario);
 
                 stopwatchInner.Stop();
-                Console.WriteLine($"{id}: {stopwatchInner.ElapsedMilliseconds}ms");
+                Console.WriteLine($"{DateTime.UtcNow}: {id}: {stopwatchInner.ElapsedMilliseconds}ms");
             }
         }));
 }
