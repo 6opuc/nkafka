@@ -11,12 +11,12 @@ namespace nKafka.Client.TestApp;
 
 public static class NKafkaIdleTest
 {
+    private static ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder
+        .SetMinimumLevel(LogLevel.Debug)
+        .AddSimpleConsole(o => o.IncludeScopes = true));
+    
     public static async Task Test(FetchScenario scenario)
     {
-        var loggerFactory = LoggerFactory.Create(builder => builder
-            .SetMinimumLevel(LogLevel.Debug)
-            .AddSimpleConsole(o => o.IncludeScopes = true));
-
         var consumerConfig = new ConsumerConfig(
             "PLAINTEXT://kafka-1:9192, PLAINTEXT://kafka-2:9292, PLAINTEXT://kafka-3:9392",
             scenario.TopicName,
