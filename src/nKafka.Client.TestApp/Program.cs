@@ -31,7 +31,8 @@ for (var t = 0; t < tasks.Capacity; t++)
                 //await NKafkaFetchBytesSeqSinglePartTest.Test(scenario);
                 //await NKafkaFetchBytesSeqMultiPartTest.Test(scenario);
                 //await NKafkaFetchBytesParallelMultiPartTest.Test(scenario);
-                await NKafkaConsumeBytesTest.Test(scenario);
+                //await NKafkaConsumeBytesTest.Test(scenario);
+                await NKafkaBatchConsumeBytesTest.Test(scenario);
                 
                 //await ConfluentIdleTest.Test(scenario);
                 //await NKafkaIdleTest.Test(scenario);

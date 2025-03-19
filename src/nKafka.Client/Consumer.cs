@@ -646,6 +646,71 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         
         return ConsumeFromBuffer();
     }
+
+    private ConsumeResult<TMessage>? ConsumeFromBuffer()
+    {
+        if (_messageDeserializeEnumerator == null)
+        {
+            return null;
+        }
+        
+        if (_messageDeserializeEnumerator.MoveNext())
+        {
+            var deserializationContext = _messageDeserializeEnumerator.Current;
+            var message = _deserializer.Deserialize(deserializationContext);
+            return new ConsumeResult<TMessage>
+            {
+                Topic = deserializationContext.Topic,
+                Partition = deserializationContext.Partition,
+                Offset = deserializationContext.Offset,
+                Timestamp = deserializationContext.Timestamp,
+                Message = message,
+            };
+        }
+        
+        _messageDeserializeEnumerator.Dispose();
+        _messageDeserializeEnumerator = null;
+        _fetchResponse?.Dispose();
+
+        return null;
+    }
+
+    public async ValueTask<IEnumerable<ConsumeResult<TMessage>>> ConsumeBatchAsync(CancellationToken cancellationToken)
+    {
+        if (_messageDeserializeEnumerator == null)
+        {
+            _fetchResponse = await _consumeChannel.Reader.ReadAsync(cancellationToken);
+            _messageDeserializeEnumerator = GetMessageEnumerator();
+        }
+
+        return ConsumeBatchFromBuffer();
+    }
+    
+    private IEnumerable<ConsumeResult<TMessage>> ConsumeBatchFromBuffer()
+    {
+        if (_messageDeserializeEnumerator == null)
+        {
+            yield break;
+        }
+        
+        while (_messageDeserializeEnumerator.MoveNext())
+        {
+            var deserializationContext = _messageDeserializeEnumerator.Current;
+            var message = _deserializer.Deserialize(deserializationContext);
+            yield return new ConsumeResult<TMessage>
+            {
+                Topic = deserializationContext.Topic,
+                Partition = deserializationContext.Partition,
+                Offset = deserializationContext.Offset,
+                Timestamp = deserializationContext.Timestamp,
+                Message = message,
+            };
+        }
+        
+        _messageDeserializeEnumerator.Dispose();
+        _messageDeserializeEnumerator = null;
+        _fetchResponse?.Dispose();
+    }
     
     private IEnumerator<MessageDeserializationContext> GetMessageEnumerator()
     {
@@ -688,33 +753,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
     }
 
-    private ConsumeResult<TMessage>? ConsumeFromBuffer()
-    {
-        if (_messageDeserializeEnumerator == null)
-        {
-            return null;
-        }
-        
-        if (_messageDeserializeEnumerator.MoveNext())
-        {
-            var deserializationContext = _messageDeserializeEnumerator.Current;
-            var message = _deserializer.Deserialize(deserializationContext);
-            return new ConsumeResult<TMessage>
-            {
-                Topic = deserializationContext.Topic,
-                Partition = deserializationContext.Partition,
-                Offset = deserializationContext.Offset,
-                Timestamp = deserializationContext.Timestamp,
-                Message = message,
-            };
-        }
-        
-        _messageDeserializeEnumerator.Dispose();
-        _messageDeserializeEnumerator = null;
-        _fetchResponse?.Dispose();
-
-        return null;
-    }
+    
 
     public async ValueTask DisposeAsync()
     {

@@ -42,4 +42,7 @@ public class FetchBenchmarks
     
     [Benchmark]
     public Task NKafkaConsumeBytes() => NKafkaConsumeBytesTest.Test(Scenario!);
+    
+    [Benchmark]
+    public Task NKafkaBatchConsumeBytes() => NKafkaBatchConsumeBytesTest.Test(Scenario!);
 }
