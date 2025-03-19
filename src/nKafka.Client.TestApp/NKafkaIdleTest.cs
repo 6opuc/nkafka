@@ -62,7 +62,7 @@ public static class NKafkaIdleTest
     {
         private ConcurrentDictionary<(string, int), long> _offsets = new();
 
-        public async ValueTask<long> GetOffset(
+        public async ValueTask<long> GetAsync(
             IConnection connection,
             string consumerGroup,
             string topic,
@@ -101,6 +101,17 @@ public static class NKafkaIdleTest
             }
 
             return offset;
+        }
+
+        public ValueTask SetAsync(
+            IConnection connection,
+            string consumerGroup,
+            string topic,
+            int partition,
+            long offset,
+            CancellationToken cancellationToken)
+        {
+            return ValueTask.CompletedTask;
         }
     }
 }

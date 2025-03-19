@@ -52,7 +52,7 @@ public static class NKafkaConsumeBytesTest
 
     private class DummyOffsetStorage : IOffsetStorage
     {
-        public ValueTask<long> GetOffset(
+        public ValueTask<long> GetAsync(
             IConnection connection,
             string consumerGroup,
             string topic,
@@ -60,6 +60,17 @@ public static class NKafkaConsumeBytesTest
             CancellationToken cancellationToken)
         {
             return ValueTask.FromResult(0L);
+        }
+
+        public ValueTask SetAsync(
+            IConnection connection,
+            string consumerGroup,
+            string topic,
+            int partition,
+            long offset,
+            CancellationToken cancellationToken)
+        {
+            return ValueTask.CompletedTask;
         }
     }
 }

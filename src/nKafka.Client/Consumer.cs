@@ -463,7 +463,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
 
                 var connection = _connections[partitionMetadata.LeaderId!.Value];
-                var offset = await _offsetStorage.GetOffset(
+                var offset = await _offsetStorage.GetAsync(
                     connection,
                     _config.GroupId,
                     topicAssignment.Key,
@@ -753,7 +753,39 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
     }
 
-    
+    public ValueTask CommitAsync(ConsumeResult<TMessage> consumeResult, CancellationToken cancellationToken)
+    {
+        if (_topicsMetadata?.TryGetValue(consumeResult.Topic, out var topicMetadata) != true ||
+            topicMetadata == null)
+        {
+            _logger.LogError(
+                "Topic metadata was not found. Commit failed. {topic} {partition} {offset}",
+                consumeResult.Topic,
+                consumeResult.Partition,
+                consumeResult.Offset);
+            return ValueTask.CompletedTask;
+        }
+
+        var partitionMetadata = topicMetadata!.Partitions?.FirstOrDefault(x => x.PartitionIndex == consumeResult.Partition);
+        if (partitionMetadata == null)
+        {
+            _logger.LogError(
+                "Partition metadata was not found. Commit failed. {topic} {partition} {offset}",
+                consumeResult.Topic,
+                consumeResult.Partition,
+                consumeResult.Offset);
+            return ValueTask.CompletedTask;
+        }
+
+        var connection = _connections[partitionMetadata.LeaderId!.Value];
+        return _offsetStorage.SetAsync(
+            connection,
+            _config.GroupId,
+            consumeResult.Topic,
+            consumeResult.Partition,
+            consumeResult.Offset,
+            cancellationToken);
+    }
 
     public async ValueTask DisposeAsync()
     {

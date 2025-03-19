@@ -32,6 +32,7 @@ while (true)
     {
         counter += 1;
         logger.LogInformation("Consumed message count: {counter}", counter);
+        await consumer.CommitAsync(consumeResult.Value, CancellationToken.None);
     }
     
     await Task.Delay(TimeSpan.FromMilliseconds(300));
