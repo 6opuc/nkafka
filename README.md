@@ -22,10 +22,10 @@ AMD Ryzen 5 7530U with Radeon Graphics, 1 CPU, 12 logical and 6 physical cores
   [Host]     : .NET 8.0.10 (8.0.1024.46610), X64 RyuJIT AVX2
   DefaultJob : .NET 8.0.10 (8.0.1024.46610), X64 RyuJIT AVX2
 ```
-| Method                    | Scenario     | Mean       | Error   | StdDev  | Completed Work Items | Lock Contentions | Gen0        | Gen1       | Allocated |
-|-------------------------- |------------- |-----------:|--------:|--------:|---------------------:|-----------------:|------------:|-----------:|----------:|
-| ConfluentConsumeBytes     | 12p 40Kx10KB | 2,227.6 ms | 5.58 ms | 4.94 ms |                    - |                - |  50000.0000 |  1000.0000 | 405.61 MB |
-| **NKafkaConsumeBytes**    | 12p 40Kx10KB |   137.8 ms | 1.68 ms | 1.31 ms |           14230.7500 |                - |    750.0000 |          - |    6.8 MB |
+| Method                    | Scenario     | Mean       | Gen0        | Gen1       | Allocated |
+|-------------------------- |------------- |-----------:|------------:|-----------:|----------:|
+| ConfluentConsumeBytes     | 12p 40Kx10KB | 2,227.6 ms |  50000.0000 |  1000.0000 | 405.61 MB |
+| **NKafkaConsumeBytes**    | 12p 40Kx10KB |   137.8 ms |    750.0000 |          - |    6.8 MB |
 
 ## Current status
 > [!CAUTION]
