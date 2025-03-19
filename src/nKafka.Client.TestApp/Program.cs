@@ -2,9 +2,11 @@
 using nKafka.Client.Benchmarks;
 using nKafka.Client.TestApp;
 
-// var threads = 1;
-// ThreadPool.SetMinThreads(threads, threads);
-// ThreadPool.SetMaxThreads(threads, threads);
+/*
+var threadPoolThreads = 1;
+ThreadPool.SetMinThreads(threadPoolThreads, threadPoolThreads);
+ThreadPool.SetMaxThreads(threadPoolThreads, threadPoolThreads);
+*/
 
 var benchmarks = new FetchBenchmarks();
 var scenario = benchmarks.Scenarios
@@ -12,7 +14,7 @@ var scenario = benchmarks.Scenarios
 
 var stopwatch = Stopwatch.StartNew();
 
-var threads = 20;
+var threads = 1;
 var iterationsPerThread = 100;
 var tasks = new List<Task>(threads);
 for (var t = 0; t < tasks.Capacity; t++)
@@ -29,14 +31,14 @@ for (var t = 0; t < tasks.Capacity; t++)
                 //await NKafkaFetchBytesSeqSinglePartTest.Test(scenario);
                 //await NKafkaFetchBytesSeqMultiPartTest.Test(scenario);
                 //await NKafkaFetchBytesParallelMultiPartTest.Test(scenario);
-                //await NKafkaConsumeBytesTest.Test(scenario);
+                await NKafkaConsumeBytesTest.Test(scenario);
                 
                 //await ConfluentIdleTest.Test(scenario);
                 //await NKafkaIdleTest.Test(scenario);
                 
                 //await ConfluentConsumeStringTest.Test(scenario);
                 //await NKafkaFetchStringParallelMultiPartTest.Test(scenario);
-                await NKafkaConsumeStringTest.Test(scenario);
+                //await NKafkaConsumeStringTest.Test(scenario);
 
                 stopwatchInner.Stop();
                 Console.WriteLine($"{DateTime.UtcNow}: {id}: {stopwatchInner.ElapsedMilliseconds}ms");
