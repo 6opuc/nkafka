@@ -5,7 +5,7 @@ using nKafka.Client;
 using nKafka.Client.TestAppConsumerGroup;
 
 var loggerFactory = LoggerFactory.Create(builder => builder
-    .SetMinimumLevel(LogLevel.Debug)
+    .SetMinimumLevel(LogLevel.Information)
     .AddSimpleConsole(o => o.IncludeScopes = true));
 var logger = loggerFactory.CreateLogger<Program>();
 
@@ -31,7 +31,7 @@ while (true)
     if (consumeResult?.Message != null)
     {
         counter += 1;
-        logger.LogInformation("Consumed message count: {counter}", counter);
+        logger.LogDebug("Consumed message: {partition}:{offset}", consumeResult.Value.Partition, consumeResult.Value.Offset);
         await consumer.CommitAsync(consumeResult.Value, CancellationToken.None);
     }
     

@@ -6,6 +6,7 @@ using nKafka.Contracts.MessageDefinitions;
 using nKafka.Contracts.MessageDefinitions.ConsumerProtocolAssignmentNested;
 using nKafka.Contracts.MessageDefinitions.FetchRequestNested;
 using nKafka.Contracts.MessageDefinitions.JoinGroupRequestNested;
+using nKafka.Contracts.MessageDefinitions.JoinGroupResponseNested;
 using nKafka.Contracts.MessageDefinitions.LeaveGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataResponseNested;
@@ -70,13 +71,25 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             MemberId = joinGroupResponse.Message.MemberId!,
             LeaderId = joinGroupResponse.Message.Leader!,
             GenerationId = joinGroupResponse.Message.GenerationId,
+            Members = joinGroupResponse.Message.Members == null
+                ? Array.Empty<GroupMembershipMember>()
+                : joinGroupResponse.Message.Members
+                    .Select(x => new GroupMembershipMember
+                    {
+                        MemberId = x.MemberId!,
+                        Topics = x.Metadata?.Topics == null
+                            ? Array.Empty<string>()
+                            : x.Metadata?.Topics.Select(x => x!).ToList()
+                    })
+                    .ToList(),
         };
+        IList<SyncGroupRequestAssignment> assignments = Array.Empty<SyncGroupRequestAssignment>();
         if (_groupMembership.MemberId == _groupMembership.LeaderId)
         {
             _logger.LogInformation("Promoted as a leader.");
-            IList<SyncGroupRequestAssignment> assignments = ReassignGroup();
-            await SyncGroup(connection, assignments, cancellationToken);
+            assignments = ReassignGroup();
         }
+        await SyncGroup(connection, assignments, cancellationToken);
 
         StartSendingHeartbeats();
     }
@@ -94,6 +107,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private async ValueTask OpenConnectionsAsync(
         CancellationToken cancellationToken)
     {
+        if (_coordinatorConnection != null)
+        {
+            return;
+        }
+        
         await using (var bootstrapConnection = await OpenBootstrapConnectionAsync(cancellationToken))
         {
             _coordinatorConnection = await OpenCoordinatorConnectionAsync(bootstrapConnection, cancellationToken);
@@ -332,37 +350,60 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         public required string MemberId { get; init; }
         public required string LeaderId { get; init; }
         public int? GenerationId { get; init; }
+        public required IList<GroupMembershipMember> Members { get; init; }
+    }
+
+    private class GroupMembershipMember
+    {
+        public required string MemberId { get; init; }
+        public required IList<string> Topics { get; init; }
     }
 
     private IList<SyncGroupRequestAssignment> ReassignGroup()
     {
-#warning implement reassignment logic for all members. take into account current assignments if possible
-        var requestedAssignment = new ConsumerProtocolAssignment
-        {
-            AssignedPartitions = new Dictionary<string, TopicPartition>(),
-        };
+#warning take into account topic-coordinator binding
+        var assignments = _groupMembership!.Members.Select(x =>
+            new SyncGroupRequestAssignment
+            {
+                MemberId = x.MemberId,
+                Assignment = new ConsumerProtocolAssignment
+                {
+                    AssignedPartitions = new Dictionary<string, TopicPartition>(),
+                }
+            })
+            .ToDictionary(x => x.MemberId!);
         foreach (var topicName in _topics)
         {
             if (!_topicsMetadata!.TryGetValue(topicName, out var topic))
             {
                 continue;
             }
-
-            requestedAssignment.AssignedPartitions[topicName] = new TopicPartition
+            
+            var members = _groupMembership!.Members.Where(x => x.Topics.Contains(topicName)).ToList();
+            if (members.Count == 0)
             {
-                Topic = topicName,
-                Partitions = topic.Partitions!.Select(x => x.PartitionIndex!.Value).ToArray(),
-            };
+                continue;
+            }
+            
+            foreach (var partition in topic.Partitions!)
+            {
+                var memberIndex = partition.PartitionIndex!.Value % members.Count;
+                var member = members[memberIndex];
+                var assignment = assignments[member.MemberId];
+                if (!assignment.Assignment!.AssignedPartitions!.TryGetValue(topicName, out var topicPartition))
+                {
+                    topicPartition = new TopicPartition
+                    {
+                        Topic = topicName,
+                        Partitions = new List<int>(),
+                    };
+                    assignment.Assignment.AssignedPartitions[topicName] = topicPartition;
+                }
+                topicPartition.Partitions!.Add(partition.PartitionIndex.Value);
+            }
         }
 
-        return
-        [
-            new SyncGroupRequestAssignment
-            {
-                MemberId = _groupMembership!.MemberId,
-                Assignment = requestedAssignment,
-            }
-        ];
+        return assignments.Values.ToList();
     }
 
     private async Task SyncGroup(
@@ -391,6 +432,19 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         var actualAssignments = response.Message.Assignment!;
 
+        var context = new StringBuilder();
+        foreach (var topic in actualAssignments.AssignedPartitions!)
+        {
+            context.Append(topic.Value.Topic);
+            context.Append("[");
+            foreach (var partition in topic.Value.Partitions!)
+            {
+                context.Append(partition);
+                context.Append(",");
+            }
+            context.Append("] ");
+        }
+        _logger.LogInformation("Assigned partitions: {context}", context);
         await StartFetchingAsync(actualAssignments.AssignedPartitions!);
     }
 
@@ -421,6 +475,17 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                                 "Heartbeat was sent. Waiting for {@interval}ms.",
                                 _config.HeartbeatIntervalMs);
                         }
+                        else if (response.Message.ErrorCode == (short)ErrorCode.RebalanceInProgress)
+                        {
+                            _logger.LogInformation("The group is rebalancing, so a rejoin is needed.");
+                            // stop fetching
+                            // re-join the group
+                            // exit heartbeat loop
+                            await StopFetchingAsync();
+                            await JoinGroupAsync(CancellationToken.None);
+                            break;
+                        }
+                        #warning error 25(UnknownMemberId) in non-leader consumer after leader left the group.
                         else
                         {
                             _logger.LogError(
@@ -715,7 +780,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private IEnumerator<MessageDeserializationContext> GetMessageEnumerator()
     {
         if (_fetchResponse == null ||
-            _fetchResponse.Message.ErrorCode != 0)
+            _fetchResponse.Message.ErrorCode != 0 ||
+            (_stop?.IsCancellationRequested ?? true))
         {
             yield break;
         }
@@ -791,24 +857,47 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         using var _ = BeginDefaultLoggingScope();
 
-        if (_stop != null)
+        await StopFetchingAsync();
+        
+        if (_heartbeatsBackgroundTask != null)
         {
-            await _stop.CancelAsync();
-            if (_heartbeatsBackgroundTask != null)
-            {
-                await _heartbeatsBackgroundTask;
-                _heartbeatsBackgroundTask = null;
-            }
-
-            if (_fetchTasks != null)
-            {
-                await Task.WhenAll(_fetchTasks);
-            }
+            await _heartbeatsBackgroundTask;
+            _heartbeatsBackgroundTask = null;
         }
 
         await LeaveGroupAsync(CancellationToken.None);
 
         await CloseConnectionsAsync();
+    }
+
+    private async ValueTask StopFetchingAsync()
+    {
+        if (_stop == null)
+        {
+            return;
+        }
+        
+        await _stop.CancelAsync();
+
+        if (_fetchTasks != null)
+        {
+            await Task.WhenAll(_fetchTasks);
+            _fetchTasks = null;
+        }
+
+        if (_fetchResponse != null)
+        {
+            _fetchResponse.Dispose();
+            _fetchResponse = null;
+        }
+
+        if (_messageDeserializeEnumerator != null)
+        {
+            _messageDeserializeEnumerator.Dispose();
+            _messageDeserializeEnumerator = null;
+        }
+
+        #warning cleanup the consume channel
     }
 
     private async ValueTask LeaveGroupAsync(CancellationToken cancellationToken)
