@@ -74,12 +74,12 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             Members = joinGroupResponse.Message.Members == null
                 ? Array.Empty<GroupMembershipMember>()
                 : joinGroupResponse.Message.Members
-                    .Select(x => new GroupMembershipMember
+                    .Select(m => new GroupMembershipMember
                     {
-                        MemberId = x.MemberId!,
-                        Topics = x.Metadata?.Topics == null
+                        MemberId = m.MemberId!,
+                        Topics = m.Metadata?.Topics == null
                             ? Array.Empty<string>()
-                            : x.Metadata?.Topics.Select(x => x!).ToList()
+                            : m.Metadata.Topics.Select(t => t!).ToList()
                     })
                     .ToList(),
         };
