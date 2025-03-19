@@ -4,7 +4,7 @@ Yet another [more] efficient Kafka client implementation for .net ;)
 
 The work is still ongoing, but there are already promising results comparing to the official client:
 - **60x** less memory allocations
-- **16x** faster
+- **16x** ~~faster~~ more efficient in CPU utilization
 - it scales much better with the number of consumers (**10x** less memory footprint for 20 consumers)
 
 ## Benchmarks
