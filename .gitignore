@@ -399,3 +399,5 @@ FodyWeavers.xsd
 .idea
 *.DotSettings
 Generated
+
+.aider*
