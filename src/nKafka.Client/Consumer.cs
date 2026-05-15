@@ -6,7 +6,6 @@ using nKafka.Contracts.MessageDefinitions;
 using nKafka.Contracts.MessageDefinitions.ConsumerProtocolAssignmentNested;
 using nKafka.Contracts.MessageDefinitions.FetchRequestNested;
 using nKafka.Contracts.MessageDefinitions.JoinGroupRequestNested;
-using nKafka.Contracts.MessageDefinitions.JoinGroupResponseNested;
 using nKafka.Contracts.MessageDefinitions.LeaveGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataResponseNested;
@@ -32,12 +31,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private IDictionary<Guid, MetadataResponseTopic>? _topicsMetadataById;
     private List<Task>? _fetchTasks;
 
-    private readonly Channel<IDisposableMessage<FetchResponse>> _consumeChannel =
-        Channel.CreateBounded<IDisposableMessage<FetchResponse>>(new BoundedChannelOptions(1)
+    private readonly Channel<FetchResult> _consumeChannel =
+        Channel.CreateBounded<FetchResult>(new BoundedChannelOptions(1)
         {
             SingleReader = true,
         });
-    private IDisposableMessage<FetchResponse>? _fetchResponse = null;
+    private FetchResult? _fetchResult;
+    private IDisposableMessage<FetchResponse>? _fetchResponse => _fetchResult?.Response;
     private IEnumerator<MessageDeserializationContext>? _messageDeserializeEnumerator = null;
 
 
@@ -548,6 +548,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 {
                     fetchRequest = new FetchRequest
                     {
+                        FixedVersion = 13, // TODO: obtain dynamically
                         ClusterId = null, // ???
                         ReplicaId = -1, // ???
                         ReplicaState = null, // ???
@@ -625,63 +626,53 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         using (_logger.BeginScope(context.ToString()))
         {
             _logger.LogInformation("Fetching started.");
+            int consecutiveErrors = 0;
             while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
                     var connection = _connections[nodeId];
-                    // disposal in ConsumeFromBuffer()
                     var response = await connection.SendAsync(request, cancellationToken);
-                    if (response.Message.ErrorCode == 0)
-                    {
-                        _logger.LogDebug("Fetch response was received.");
-                    }
-                    else
+                    if (response.Message.ErrorCode != 0)
                     {
                         _logger.LogError(
                             "Error in fetch response: {@errorCode}.",
                             response.Message.ErrorCode);
-                        response.Dispose();
-                        continue;
                     }
-
-                    bool noData = true;
-                    foreach (var topicResponse in response.Message.Responses!)
+                    else
                     {
-                        var topicRequest = request.Topics!.FirstOrDefault(x =>
-                            x.Topic == topicResponse.Topic ||
-                            x.TopicId == topicResponse.TopicId);
-                        if (topicRequest == null)
-                        {
-                            continue;
-                        }
+                        _logger.LogDebug("Fetch response was received.");
 
-                        foreach (var partitionResponse in topicResponse.Partitions!)
+                        foreach (var topicResponse in response.Message.Responses!)
                         {
-                            var partitionRequest = topicRequest.Partitions!.FirstOrDefault(
-                                x => x.Partition == partitionResponse.PartitionIndex);
-                            if (partitionRequest == null)
+                            var topicRequest = request.Topics!.FirstOrDefault(x =>
+                                x.Topic == topicResponse.Topic ||
+                                x.TopicId == topicResponse.TopicId);
+                            if (topicRequest == null)
                             {
                                 continue;
                             }
 
-                            var lastOffset = partitionResponse.Records?.LastOffset;
-                            if (lastOffset.HasValue)
+                            foreach (var partitionResponse in topicResponse.Partitions!)
                             {
-                                partitionRequest.FetchOffset = lastOffset.Value + 1;
-                                noData = false;
+                                var partitionRequest = topicRequest.Partitions!.FirstOrDefault(
+                                    x => x.Partition == partitionResponse.PartitionIndex);
+                                if (partitionRequest == null)
+                                {
+                                    continue;
+                                }
+
+                                var lastOffset = partitionResponse.Records?.LastOffset;
+                                if (lastOffset.HasValue)
+                                {
+                                    partitionRequest.FetchOffset = lastOffset.Value + 1;
+                                }
                             }
                         }
                     }
 
-                    if (noData)
-                    {
-                        response.Dispose();
-                    }
-                    else
-                    {
-                        await _consumeChannel.Writer.WriteAsync(response, cancellationToken);
-                    }
+                    consecutiveErrors = 0;
+                    await _consumeChannel.Writer.WriteAsync(new FetchResult(response), cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -689,7 +680,29 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
                 catch (Exception exception)
                 {
-                    _logger.LogError(exception, "Error in fetch loop.");
+                    consecutiveErrors++;
+
+                    if (consecutiveErrors >= _config.MaxFetchRetries)
+                    {
+                        _logger.LogError(exception,
+                            "Fetch loop failed after {retries} retries. Writing error to channel.", consecutiveErrors);
+                        await _consumeChannel.Writer.WriteAsync(new FetchResult(exception), cancellationToken);
+                        break;
+                    }
+
+                    var delay = _config.FetchRetryBaseDelay * Math.Pow(2, consecutiveErrors - 1);
+                    _logger.LogWarning(exception,
+                        "Fetch loop error (attempt {attempt}/{maxRetries}). Retrying in {delay}ms.",
+                        consecutiveErrors, _config.MaxFetchRetries, delay.TotalMilliseconds);
+
+                    try
+                    {
+                        await Task.Delay(delay, cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
                 }
             }
 
@@ -706,7 +719,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             return consumerResult;
         }
         
-        _fetchResponse = await _consumeChannel.Reader.ReadAsync(cancellationToken);
+        _fetchResult = await _consumeChannel.Reader.ReadAsync(cancellationToken);
+        
+        if (!_fetchResult.IsSuccess)
+        {
+            var ex = _fetchResult.Exception;
+            _fetchResult.Dispose();
+            _fetchResult = null;
+            throw new InvalidOperationException("Fetch loop failed.", ex);
+        }
+        
         _messageDeserializeEnumerator = GetMessageEnumerator();
         
         return ConsumeFromBuffer();
@@ -735,7 +757,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         
         _messageDeserializeEnumerator.Dispose();
         _messageDeserializeEnumerator = null;
-        _fetchResponse?.Dispose();
+        _fetchResult?.Dispose();
+        _fetchResult = null;
 
         return null;
     }
@@ -744,7 +767,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         if (_messageDeserializeEnumerator == null)
         {
-            _fetchResponse = await _consumeChannel.Reader.ReadAsync(cancellationToken);
+            _fetchResult = await _consumeChannel.Reader.ReadAsync(cancellationToken);
+            
+            if (!_fetchResult.IsSuccess)
+            {
+                var ex = _fetchResult.Exception;
+                _fetchResult.Dispose();
+                _fetchResult = null;
+                throw new InvalidOperationException("Fetch loop failed.", ex);
+            }
+            
             _messageDeserializeEnumerator = GetMessageEnumerator();
         }
 
@@ -774,7 +806,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         
         _messageDeserializeEnumerator.Dispose();
         _messageDeserializeEnumerator = null;
-        _fetchResponse?.Dispose();
+        _fetchResult?.Dispose();
+        _fetchResult = null;
     }
     
     private IEnumerator<MessageDeserializationContext> GetMessageEnumerator()
@@ -877,6 +910,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             return;
         }
         
+        _consumeChannel.Writer.TryComplete();
+        
         await _stop.CancelAsync();
 
         if (_fetchTasks != null)
@@ -885,10 +920,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _fetchTasks = null;
         }
 
-        if (_fetchResponse != null)
+        if (_fetchResult != null)
         {
-            _fetchResponse.Dispose();
-            _fetchResponse = null;
+            _fetchResult.Dispose();
+            _fetchResult = null;
         }
 
         if (_messageDeserializeEnumerator != null)

@@ -183,10 +183,24 @@ public class Connection : IConnection
                 }
                 catch when (cancellationToken.IsCancellationRequested)
                 {
-                    // Shutdown in progress
+                    // Shutdown in progress.
                 }
                 catch (OperationCanceledException)
                 {
+                }
+                catch (EndOfStreamException endOfStreamException)
+                {
+                    // Network stream is closed.
+                    // Cancel all pending requests.
+
+                    foreach (var pendingRequest in _pendingRequests.Values)
+                    {
+                        pendingRequest.Response.SetException(endOfStreamException);
+                    }
+                    _pendingRequests.Clear();
+                    
+                    // TODO: introduce a state-machine and do a transition to a failed state,
+                    // rejecting all incoming requests.
                 }
                 catch (Exception exception)
                 {
@@ -267,8 +281,7 @@ public class Connection : IConnection
         
         using (BeginDefaultLoggingScope())
         {
-            var completionPromise = new TaskCompletionSource<MessageWithPooledPayload>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
+            var completionPromise = new TaskCompletionSource<MessageWithPooledPayload>();
             var pendingRequest = new PendingRequest(
                 request,
                 completionPromise,

@@ -5,12 +5,12 @@ using nKafka.Client;
 using nKafka.Client.TestAppConsumerGroup;
 
 var loggerFactory = LoggerFactory.Create(builder => builder
-    .SetMinimumLevel(LogLevel.Information)
+    .SetMinimumLevel(LogLevel.Debug)
     .AddSimpleConsole(o => o.IncludeScopes = true));
 var logger = loggerFactory.CreateLogger<Program>();
 
 var consumerConfig = new ConsumerConfig(
-    "PLAINTEXT://kafka-1:9192, PLAINTEXT://kafka-2:9292, PLAINTEXT://kafka-3:9392",
+    "PLAINTEXT://localhost:9192, PLAINTEXT://localhost:9292, PLAINTEXT://localhost:9392",
     "test_p12_m40K_s10KB",
     $"testapp-{DateTime.UtcNow.Ticks}",
     "test-consumer-group",

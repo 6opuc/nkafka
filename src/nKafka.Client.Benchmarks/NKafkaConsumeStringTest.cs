@@ -13,7 +13,7 @@ public static class NKafkaConsumeStringTest
     public static async Task Test(FetchScenario scenario)
     {
         var consumerConfig = new ConsumerConfig(
-            "PLAINTEXT://kafka-1:9192, PLAINTEXT://kafka-2:9292, PLAINTEXT://kafka-3:9392",
+            "PLAINTEXT://localhost:9192, PLAINTEXT://localhost:9292, PLAINTEXT://localhost:9392",
             scenario.TopicName,
             "test-consumer-group",
             $"testapp-{DateTime.UtcNow.Date:yyyyMMdd}-{Guid.NewGuid():N}",
@@ -38,8 +38,6 @@ public static class NKafkaConsumeStringTest
 
             counter += 1;
         }
-
-        Console.WriteLine($"{DateTime.UtcNow}: {counter}");
     }
 
     private class DummyStringMessageDeserializer : IMessageDeserializer<string>

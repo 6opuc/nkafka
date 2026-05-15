@@ -27,7 +27,7 @@ public class ConnectionTests
 
     private async Task<Connection> OpenConnection()
     {
-        var config = new ConnectionConfig("PLAINTEXT", "kafka-1", 9192, "nKafka.Client.IntegrationTests")
+        var config = new ConnectionConfig("PLAINTEXT", "localhost", 9192, "nKafka.Client.IntegrationTests")
         {
             RequestApiVersionsOnOpen = false,
         };
@@ -378,10 +378,10 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCase(0)]
-    [TestCase(1)]
-    [TestCase(2)]
-    [TestCase(3)]
+    //[TestCase(0)] // dropped in Kafka 4.2
+    //[TestCase(1)] // dropped in Kafka 4.2
+    //[TestCase(2)] // dropped in Kafka 4.2
+    //[TestCase(3)] // dropped in Kafka 4.2
     [TestCase(4)]
     [TestCase(5)]
     [TestCase(6)]
@@ -392,6 +392,7 @@ public class ConnectionTests
     [TestCase(11)]
     [TestCase(12)]
     [TestCase(13)]
+    // TODO: add latest versions here and in all other tests
     public async Task SendAsync_FetchRequest_ShouldReturnExpectedResult(short apiVersion)
     {
         using var metadata = await RequestMetadata();
@@ -466,10 +467,10 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCase(0)]
-    [TestCase(1)]
-    [TestCase(2)]
-    [TestCase(3)]
+    //[TestCase(0)] // dropped in Kafka 4.2
+    //[TestCase(1)] // dropped in Kafka 4.2
+    //[TestCase(2)] // dropped in Kafka 4.2
+    //[TestCase(3)] // dropped in Kafka 4.2
     [TestCase(4)]
     [TestCase(5)]
     [TestCase(6)]
@@ -567,10 +568,10 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCase(0)]
-    [TestCase(1)]
-    [TestCase(2)]
-    [TestCase(3)]
+    //[TestCase(0)] // dropped in Kafka 4.2
+    //[TestCase(1)] // dropped in Kafka 4.2
+    //[TestCase(2)] // dropped in Kafka 4.2
+    //[TestCase(3)] // dropped in Kafka 4.2
     [TestCase(4)]
     [TestCase(5)]
     [TestCase(6)]
@@ -687,7 +688,7 @@ public class ConnectionTests
     }
     
     [Test]
-    [TestCase(0)]
+    //[TestCase(0)] // dropped in Kafka 4.2
     [TestCase(1)]
     [TestCase(2)]
     [TestCase(3)]
@@ -736,7 +737,7 @@ public class ConnectionTests
 
     private async Task<Connection> OpenCoordinatorConnection(string groupId)
     {
-        var config = new ConnectionConfig("PLAINTEXT", "kafka-1", 9192, "nKafka.Client.IntegrationTests")
+        var config = new ConnectionConfig("PLAINTEXT", "localhost", 9192, "nKafka.Client.IntegrationTests")
         {
             RequestApiVersionsOnOpen = false,
         };
