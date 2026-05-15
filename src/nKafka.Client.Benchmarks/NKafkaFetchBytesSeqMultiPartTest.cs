@@ -108,13 +108,11 @@ public static class NKafkaFetchBytesSeqMultiPartTest
                 recordCount += responseRecordCount;
             }
         }
-
-        Console.WriteLine(recordCount);
     }
 
     private static async Task<IDisposableMessage<MetadataResponse>> RequestMetadata(FetchScenario scenario)
     {
-        var config = new ConnectionConfig("PLAINTEXT", "kafka-1", 9192, "nKafka.Client.Benchmarks")
+        var config = new ConnectionConfig("PLAINTEXT", "localhost", 9192, "nKafka.Client.Benchmarks")
         {
             RequestApiVersionsOnOpen = false,
         };

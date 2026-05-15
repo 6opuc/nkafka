@@ -8,7 +8,7 @@ public class TopicInitializer
 {
     public static async Task InitializeTestTopic(FetchScenario scenario)
     {
-        var bootstrapServers = "PLAINTEXT://kafka-1:9192, PLAINTEXT://kafka-2:9292, PLAINTEXT://kafka-3:9392";
+        var bootstrapServers = "PLAINTEXT://localhost:9192, PLAINTEXT://localhost:9292, PLAINTEXT://localhost:9392";
         var adminClientConfig = new AdminClientConfig { BootstrapServers = bootstrapServers };
         using var adminClient = new AdminClientBuilder(adminClientConfig).Build();
         

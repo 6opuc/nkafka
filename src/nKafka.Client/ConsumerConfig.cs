@@ -17,6 +17,8 @@ public class ConsumerConfig
     
     public bool CheckCrcs { get; set; } = false;
     public TimeSpan MaxWaitTime { get; set; } = TimeSpan.FromSeconds(5);
+    public int MaxFetchRetries { get; set; } = 3;
+    public TimeSpan FetchRetryBaseDelay { get; set; } = TimeSpan.FromMilliseconds(500);
     
 
     public ConsumerConfig(
