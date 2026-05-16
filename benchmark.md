@@ -19,15 +19,15 @@ AMD Ryzen 7 5700X 1.74GHz, 1 CPU, 16 logical and 8 physical cores
 
 
 BenchmarkDotNet v0.15.8, Linux Fedora Linux 44 (Workstation Edition)
-AMD Ryzen 5 7530U with Radeon Graphics 1.10GHz, 1 CPU, 12 logical and 6 physical cores
+AMD Ryzen 5 7530U with Radeon Graphics 3.51GHz, 1 CPU, 12 logical and 6 physical cores
 .NET SDK 10.0.203
   [Host]     : .NET 10.0.7 (10.0.7, 10.0.726.21808), X64 RyuJIT x86-64-v3
   DefaultJob : .NET 10.0.7 (10.0.7, 10.0.726.21808), X64 RyuJIT x86-64-v3
 
 
-| Method                   | Scenario     | Mean     | Error    | StdDev   | Gen0     | Completed Work Items | Lock Contentions | Allocated |
-|------------------------- |------------- |---------:|---------:|---------:|---------:|---------------------:|-----------------:|----------:|
-| NKafkaFetchBytesParNPart | 12p 40Kx10KB | 163.5 ms |  3.14 ms |  2.93 ms | 666.6667 |            6547.3333 |                - |   6.81 MB |
-| NKafkaConsumeBytes       | 12p 40Kx10KB | 465.1 ms | 19.68 ms | 57.10 ms | 500.0000 |           47932.5000 |           0.5000 |   6.61 MB |
-| NKafkaBatchConsumeBytes  | 12p 40Kx10KB | 499.1 ms | 18.00 ms | 52.78 ms |        - |           42165.0000 |           1.0000 |   6.59 MB |
+| Method                  | Scenario     | Mean     | Error    | StdDev   | Median   | Completed Work Items | Lock Contentions | Gen0     | Allocated |
+|------------------------ |------------- |---------:|---------:|---------:|---------:|---------------------:|-----------------:|---------:|----------:|
+| NKafkaConsumeBytes      | 12p 40Kx10KB | 326.4 ms | 23.95 ms | 70.60 ms | 346.6 ms |           36089.0000 |                - | 500.0000 |   6.82 MB |
+| NKafkaBatchConsumeBytes | 12p 40Kx10KB | 314.9 ms | 30.66 ms | 86.97 ms | 342.2 ms |           23434.0000 |                - |        - |    6.8 MB |
+
 
