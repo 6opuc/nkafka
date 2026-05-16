@@ -721,7 +721,8 @@ public class ConnectionTests
                     Topics = metadata.Message.Topics!.Values
                         .Select(topic => new OffsetFetchRequestTopics
                         {
-                            Name = topic.Name,
+                            Name = apiVersion < 10 ? topic.Name : null,
+                            TopicId = apiVersion >= 10 ? topic.TopicId : null,
                             PartitionIndexes = topic.Partitions!.Select(p => p.PartitionIndex!.Value).ToArray(),
                         })
                         .ToArray()
@@ -731,7 +732,7 @@ public class ConnectionTests
             Topics = metadata.Message.Topics!.Values
                 .Select(topic => new OffsetFetchRequestTopic
                 {
-                    Name = topic.Name,
+                    Name = apiVersion < 10 ? topic.Name : null,
                     PartitionIndexes = topic.Partitions!.Select(p => p.PartitionIndex!.Value).ToArray(),
                 })
                 .ToArray(),
