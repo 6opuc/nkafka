@@ -548,7 +548,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 {
                     fetchRequest = new FetchRequest
                     {
-                        FixedVersion = 13, // TODO: obtain dynamically
                         ClusterId = null, // ???
                         ReplicaId = -1, // ???
                         ReplicaState = null, // ???
