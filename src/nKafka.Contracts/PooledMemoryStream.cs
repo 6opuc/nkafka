@@ -3,7 +3,7 @@ using System.Buffers;
 namespace nKafka.Contracts;
 
 public class PooledMemoryStream(ArrayPool<byte> arrayPool, byte[] buffer)
-    : MemoryStream(buffer, 0, 0, true, true)
+    : MemoryStream(buffer, 0, buffer.Length, true, true)
 {
     private readonly byte[] _buffer = buffer;
 
