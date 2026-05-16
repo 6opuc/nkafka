@@ -88,7 +88,6 @@ public static class NKafkaIdleTest
                                         PartitionIndex = partition,
                                         CurrentLeaderEpoch = -1,
                                         Timestamp = -1,
-                                        MaxNumOffsets = 1,
                                     }
                                 },
                             }

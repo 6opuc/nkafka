@@ -4,12 +4,7 @@ public static class VersionRangeExtensions
 {
     public static string ToLiteral(this VersionRange? versions)
     {
-        if (versions == null)
-        {
-            return "null";
-        }
-        
-        return versions.Value.IsNone
+        return versions == null || versions.Value.IsNone
             ? "VersionRange.None"
             : versions.Value.To != null
                 ? $"new VersionRange({versions.Value.From}, {versions.Value.To})"

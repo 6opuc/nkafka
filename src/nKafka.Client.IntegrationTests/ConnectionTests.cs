@@ -43,6 +43,7 @@ public class ConnectionTests
     [TestCase(1)]
     [TestCase(2)]
     [TestCase(3)]
+    [TestCase(4)]
     public async Task SendAsync_ApiVersionsRequest_ShouldReturnExpectedResult(short apiVersion)
     {
         await using var connection = await OpenConnection();
@@ -83,6 +84,8 @@ public class ConnectionTests
     [TestCase(2)]
     [TestCase(3)]
     [TestCase(4)]
+    [TestCase(5)]
+    [TestCase(6)]
     public async Task SendAsync_FindCoordinatorRequest_ShouldReturnExpectedResult(short apiVersion)
     {
         await using var connection = await OpenConnection();
@@ -134,6 +137,7 @@ public class ConnectionTests
     [TestCase(10)]
     [TestCase(11)]
     [TestCase(12)]
+    [TestCase(13)]
     public async Task SendAsync_MetadataRequest_ShouldReturnExpectedResult(short apiVersion)
     {
         await using var connection = await OpenConnection();
@@ -378,10 +382,6 @@ public class ConnectionTests
     }
 
     [Test]
-    //[TestCase(0)] // dropped in Kafka 4.2
-    //[TestCase(1)] // dropped in Kafka 4.2
-    //[TestCase(2)] // dropped in Kafka 4.2
-    //[TestCase(3)] // dropped in Kafka 4.2
     [TestCase(4)]
     [TestCase(5)]
     [TestCase(6)]
@@ -392,7 +392,11 @@ public class ConnectionTests
     [TestCase(11)]
     [TestCase(12)]
     [TestCase(13)]
-    // TODO: add latest versions here and in all other tests
+    [TestCase(14)]
+    [TestCase(15)]
+    [TestCase(16)]
+    [TestCase(17)]
+    [TestCase(18)]
     public async Task SendAsync_FetchRequest_ShouldReturnExpectedResult(short apiVersion)
     {
         using var metadata = await RequestMetadata();
@@ -467,10 +471,6 @@ public class ConnectionTests
     }
 
     [Test]
-    //[TestCase(0)] // dropped in Kafka 4.2
-    //[TestCase(1)] // dropped in Kafka 4.2
-    //[TestCase(2)] // dropped in Kafka 4.2
-    //[TestCase(3)] // dropped in Kafka 4.2
     [TestCase(4)]
     [TestCase(5)]
     [TestCase(6)]
@@ -481,6 +481,11 @@ public class ConnectionTests
     [TestCase(11)]
     [TestCase(12)]
     [TestCase(13)]
+    [TestCase(14)]
+    [TestCase(15)]
+    [TestCase(16)]
+    [TestCase(17)]
+    [TestCase(18)]
     public async Task SendAsync_FetchRequest_ShouldFetchAllRecords(short apiVersion)
     {
         using var metadata = await RequestMetadata();
@@ -568,10 +573,6 @@ public class ConnectionTests
     }
 
     [Test]
-    //[TestCase(0)] // dropped in Kafka 4.2
-    //[TestCase(1)] // dropped in Kafka 4.2
-    //[TestCase(2)] // dropped in Kafka 4.2
-    //[TestCase(3)] // dropped in Kafka 4.2
     [TestCase(4)]
     [TestCase(5)]
     [TestCase(6)]
@@ -582,6 +583,11 @@ public class ConnectionTests
     [TestCase(11)]
     [TestCase(12)]
     [TestCase(13)]
+    [TestCase(14)]
+    [TestCase(15)]
+    [TestCase(16)]
+    [TestCase(17)]
+    [TestCase(18)]
     public async Task SendAsync_FetchRequestWithSeveralPartitions_ShouldFetchAllRecords(short apiVersion)
     {
         using var metadata = await RequestMetadata();
@@ -688,7 +694,6 @@ public class ConnectionTests
     }
     
     [Test]
-    //[TestCase(0)] // dropped in Kafka 4.2
     [TestCase(1)]
     [TestCase(2)]
     [TestCase(3)]
@@ -697,6 +702,8 @@ public class ConnectionTests
     [TestCase(6)]
     [TestCase(7)]
     [TestCase(8)]
+    [TestCase(9)]
+    [TestCase(10)]
     public async Task SendAsync_OffsetFetchRequest_ShouldReturnExpectedResult(short apiVersion)
     {
         var metadata = await RequestMetadata();
