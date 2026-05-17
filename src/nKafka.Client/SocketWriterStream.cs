@@ -4,11 +4,16 @@ namespace nKafka.Client;
 
 public class SocketWriterStream : Stream
 {
-    private readonly Socket _socket;
+    private readonly Stream _stream;
 
-    public SocketWriterStream(Socket socket)
+    public SocketWriterStream(Stream stream)
     {
-        _socket = socket;
+        _stream = stream;
+    }
+
+    public static SocketWriterStream FromSocket(Socket socket)
+    {
+        return new SocketWriterStream(new NetworkStream(socket));
     }
 
     public override void Flush()
@@ -32,20 +37,13 @@ public class SocketWriterStream : Stream
 
     public override void Write(byte[] buffer, int offset, int count)
     {
-        _socket.Send(buffer, offset, count, SocketFlags.None);
+        _stream.Write(buffer, offset, count);
     }
 
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            await _socket.SendAsync(buffer, SocketFlags.None, cancellationToken);
-        }
-        catch (SocketException) when (!_socket.Connected)
-        {
-            throw new OperationCanceledException(cancellationToken);
-        }
+        await _stream.WriteAsync(buffer, cancellationToken);
     }
 
     public override bool CanRead => false;

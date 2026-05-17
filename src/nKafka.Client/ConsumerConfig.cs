@@ -12,14 +12,18 @@ public class ConsumerConfig
     public int RequestBufferSize { get; }
     public int SessionTimeoutMs { get; }
     public int HeartbeatIntervalMs { get; }
-    
+
     public int MaxPollIntervalMs { get; }
-    
+
     public bool CheckCrcs { get; set; } = false;
     public TimeSpan MaxWaitTime { get; set; } = TimeSpan.FromSeconds(5);
     public int MaxFetchRetries { get; set; } = 3;
     public TimeSpan FetchRetryBaseDelay { get; set; } = TimeSpan.FromMilliseconds(500);
-    
+
+    public string? SaslMechanism { get; init; }
+    public string? SaslUsername { get; init; }
+    public string? SaslPassword { get; init; }
+    public string? SslCaCertPath { get; init; }
 
     public ConsumerConfig(
         string bootstrapServers,

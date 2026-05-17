@@ -10,9 +10,14 @@ public class ConnectionConfig
     public string ClientId { get; }
     public int ResponseBufferSize { get; }
     public int RequestBufferSize { get; }
-    
+
     public bool CheckCrcs { get; init; } = false;
     public bool RequestApiVersionsOnOpen { get; init; } = true;
+
+    public string? SaslMechanism { get; init; }
+    public string? SaslUsername { get; init; }
+    public string? SaslPassword { get; init; }
+    public string? SslCaCertPath { get; init; }
 
     public ConnectionConfig(
         string protocol,

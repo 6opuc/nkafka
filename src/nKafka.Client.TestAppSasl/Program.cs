@@ -1,4 +1,5 @@
 using Confluent.Kafka;
+using Confluent.Kafka.Admin;
 
 // Parse CLI args
 var bootstrapServers = args.ElementAtOrDefault(0) ?? "localhost:9192";
