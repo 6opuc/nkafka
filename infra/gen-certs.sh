@@ -73,6 +73,16 @@ END
 
   # Convert PKCS12 to JKS using keytool in container
   chmod a+rwX "${SECRETS_DIR}/${BROKER}.p12" "${SECRETS_DIR}/ca-cert.pem"
+
+  # Test write access first
+  echo "  Testing write access to volume..."
+  ${CONTAINER_TOOL} run --rm \
+    -v "${SECRETS_DIR}:/secrets:rw${SELINUX_RELABEL}" \
+    --entrypoint touch \
+    "${KAFKA_IMAGE}" \
+    /secrets/.write-test 2>&1
+  rm -f "${SECRETS_DIR}/.write-test"
+
   ${CONTAINER_TOOL} run --rm \
     -v "${SECRETS_DIR}:/secrets:rw${SELINUX_RELABEL}" \
     --entrypoint keytool \
@@ -83,7 +93,7 @@ END
     -srckeystore "/secrets/${BROKER}.p12" \
     -srcstoretype PKCS12 \
     -srcstorepass "${PASSWORD}" \
-    -alias "${BROKER}" 2>/dev/null
+    -alias "${BROKER}"
 
   rm -f "${SECRETS_DIR}/${BROKER}.p12"
 
@@ -98,7 +108,7 @@ ${CONTAINER_TOOL} run --rm \
   "${KAFKA_IMAGE}" \
   -keystore "/secrets/server.truststore.jks" \
   -alias CARoot -import -file "/secrets/ca-cert.pem" \
-  -storepass "${PASSWORD}" -noprompt 2>/dev/null
+  -storepass "${PASSWORD}" -noprompt
 
 echo "=== Creating Password Files ==="
 echo -n "${PASSWORD}" > "${SECRETS_DIR}/keystore-creds"
