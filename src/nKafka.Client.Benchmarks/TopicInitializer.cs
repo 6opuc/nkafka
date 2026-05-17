@@ -8,8 +8,17 @@ public class TopicInitializer
 {
     public static async Task InitializeTestTopic(FetchScenario scenario)
     {
-        string bootstrapServers = "PLAINTEXT://localhost:9192, PLAINTEXT://localhost:9292, PLAINTEXT://localhost:9392";
-        var adminClientConfig = new AdminClientConfig { BootstrapServers = bootstrapServers };
+        var bootstrapServers = "SASL_SSL://localhost:9192, SASL_SSL://localhost:9292, SASL_SSL://localhost:9392";
+        var adminClientConfig = new AdminClientConfig
+        {
+            BootstrapServers = bootstrapServers,
+            SslCaLocation = BenchmarkHelper.GetCACertPath(),
+            SaslMechanism = SaslMechanism.ScramSha512,
+            SaslUsername = "admin",
+            SaslPassword = "admin-secret",
+            SecurityProtocol = SecurityProtocol.SaslSsl,
+        };
+
         using var adminClient = new AdminClientBuilder(adminClientConfig).Build();
 
         var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(5));
@@ -39,6 +48,11 @@ public class TopicInitializer
             BootstrapServers = bootstrapServers,
             MessageTimeoutMs = 5000,
             Debug = "protocol",
+            SslCaLocation = BenchmarkHelper.GetCACertPath(),
+            SaslMechanism = SaslMechanism.ScramSha512,
+            SaslUsername = "admin",
+            SaslPassword = "admin-secret",
+            SecurityProtocol = SecurityProtocol.SaslSsl,
         };
 
         using var producer = new ProducerBuilder<Null, string>(config).Build();

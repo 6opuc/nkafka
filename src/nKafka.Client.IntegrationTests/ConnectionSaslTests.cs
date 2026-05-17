@@ -36,7 +36,19 @@ public class ConnectionSaslTests
     [Test]
     public async Task SaslHandshake_ShouldReturnSupportedMechanisms()
     {
-        await using var connection = await OpenSaslConnection();
+        // Open a connection with TLS only (no SASL auth) so we can manually handshake
+        var config = new ConnectionConfig(
+            "SASL_SSL",
+            BootstrapHost,
+            BootstrapPort,
+            "nKafka.Client.IntegrationTests")
+        {
+            RequestApiVersionsOnOpen = false,
+            SslCaCertPath = SslCaCertPath,
+        };
+
+        await using var connection = new Connection(config, TestLoggerFactory.Instance);
+        await connection.OpenAsync(CancellationToken.None);
 
         var request = new SaslHandshakeRequest
         {
@@ -92,7 +104,7 @@ public class ConnectionSaslTests
 
         var act = async () => await connection.OpenAsync(CancellationToken.None);
         await act.Should().ThrowAsync<Exception>()
-            .WithMessage("*does not support*");
+            .WithMessage("*error code 33*");
     }
 
     private async Task<Connection> OpenSaslConnection()

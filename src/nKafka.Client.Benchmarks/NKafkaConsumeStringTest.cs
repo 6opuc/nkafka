@@ -13,13 +13,19 @@ public static class NKafkaConsumeStringTest
     public static async Task Test(FetchScenario scenario)
     {
         var consumerConfig = new ConsumerConfig(
-            "PLAINTEXT://localhost:9192, PLAINTEXT://localhost:9292, PLAINTEXT://localhost:9392",
+            "SASL_SSL://localhost:9192, SASL_SSL://localhost:9292, SASL_SSL://localhost:9392",
             scenario.TopicName,
-            "test-consumer-group",
             $"testapp-{DateTime.UtcNow.Date:yyyyMMdd}-{Guid.NewGuid():N}",
-            "PLAINTEXT",
-            "nKafka.Client.Benchmarks");
-
+            "test-consumer-group",
+            "SASL_SSL",
+            "SASL_SSL")
+        {
+            SslCaCertPath = BenchmarkHelper.GetCACertPath(),
+            SaslMechanism = "SCRAM-SHA-512",
+            SaslUsername = "admin",
+            SaslPassword = "admin-secret",
+        };
+        
         await using var consumer = new Consumer<string>(
             consumerConfig,
             new DummyStringMessageDeserializer(),

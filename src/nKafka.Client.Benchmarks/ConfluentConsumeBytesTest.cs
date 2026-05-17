@@ -8,10 +8,15 @@ public class ConfluentConsumeBytesTest
     {
         var config = new Confluent.Kafka.ConsumerConfig
         {
-            BootstrapServers = "PLAINTEXT://localhost:9192, PLAINTEXT://localhost:9292, PLAINTEXT://localhost:9392",
+            BootstrapServers = "SASL_SSL://localhost:9192, SASL_SSL://localhost:9292, SASL_SSL://localhost:9392",
             GroupId = Guid.NewGuid().ToString(),
             AutoOffsetReset = AutoOffsetReset.Earliest,
             CheckCrcs = false,
+            SslCaLocation = BenchmarkHelper.GetCACertPath(),
+            SaslMechanism = SaslMechanism.ScramSha512,
+            SaslUsername = "admin",
+            SaslPassword = "admin-secret",
+            SecurityProtocol = SecurityProtocol.SaslSsl,
         };
 
         using var consumer = new ConsumerBuilder<Null, byte[]>(config).Build();

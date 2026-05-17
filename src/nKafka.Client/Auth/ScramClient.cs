@@ -27,15 +27,15 @@ public class ScramClient
 
     public string Mechanism => _hashAlgorithm switch
     {
-        { Name: "SHA-512" } => "SCRAM-SHA-512",
-        { Name: "SHA-256" } => "SCRAM-SHA-256",
+        { Name: "SHA512" } => "SCRAM-SHA-512",
+        { Name: "SHA256" } => "SCRAM-SHA-256",
         _ => throw new NotSupportedException($"Hash algorithm {_hashAlgorithm.Name} is not supported for SCRAM"),
     };
 
     private static int HashSize(HashAlgorithmName algorithm) => algorithm switch
     {
-        { Name: "SHA-512" } => 64,
-        { Name: "SHA-256" } => 32,
+        { Name: "SHA512" } => 64,
+        { Name: "SHA256" } => 32,
         _ => throw new NotSupportedException(),
     };
 
