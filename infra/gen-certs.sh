@@ -17,10 +17,10 @@ KAFKA_IMAGE="${KAFKA_IMAGE:-apache/kafka:4.2.0}"
 rm -rf "${SECRETS_DIR}"
 mkdir -p "${SECRETS_DIR}"
 
-# SELinux relabel flag: needed on Fedora with container tools
-SELINUX_RELABEL=""
+# SELinux: disable confinement so the container can write to bind-mounted dirs
+SELINUX_OPTS=()
 if command -v selinuxenabled &>/dev/null && selinuxenabled; then
-  SELINUX_RELABEL=",Z"
+  SELINUX_OPTS=(--security-opt label=disable)
 fi
 
 echo "=== Generating Certificate Authority (OpenSSL) ==="
@@ -73,18 +73,8 @@ END
 
   # Convert PKCS12 to JKS using keytool in container
   chmod a+rwX "${SECRETS_DIR}/${BROKER}.p12" "${SECRETS_DIR}/ca-cert.pem"
-
-  # Test write access first
-  echo "  Testing write access to volume..."
-  ${CONTAINER_TOOL} run --rm \
-    -v "${SECRETS_DIR}:/secrets:rw${SELINUX_RELABEL}" \
-    --entrypoint touch \
-    "${KAFKA_IMAGE}" \
-    /secrets/.write-test 2>&1
-  rm -f "${SECRETS_DIR}/.write-test"
-
-  ${CONTAINER_TOOL} run --rm \
-    -v "${SECRETS_DIR}:/secrets:rw${SELINUX_RELABEL}" \
+  ${CONTAINER_TOOL} run --rm "${SELINUX_OPTS[@]}" \
+    -v "${SECRETS_DIR}:/secrets:rw" \
     --entrypoint keytool \
     "${KAFKA_IMAGE}" \
     -importkeystore \
@@ -102,8 +92,8 @@ done
 
 echo "=== Creating Truststore (JKS) ==="
 chmod a+rwX "${SECRETS_DIR}/ca-cert.pem"
-${CONTAINER_TOOL} run --rm \
-  -v "${SECRETS_DIR}:/secrets:rw${SELINUX_RELABEL}" \
+${CONTAINER_TOOL} run --rm "${SELINUX_OPTS[@]}" \
+  -v "${SECRETS_DIR}:/secrets:rw" \
   --entrypoint keytool \
   "${KAFKA_IMAGE}" \
   -keystore "/secrets/server.truststore.jks" \
