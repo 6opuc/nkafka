@@ -47,6 +47,7 @@ docker exec "${CONTAINER}" /opt/kafka/bin/kafka-configs.sh \
 
 echo ""
 echo "=== Cluster init complete ==="
-echo "Connect external clients to: localhost:9192 (SASL_SSL + SCRAM-SHA-512)"
-echo "  Username: admin"
-echo "  Password: admin-secret"
+echo "External listeners:"
+echo "  SASL_SSL + SCRAM-SHA-512: localhost:9192,9292,9392"
+echo "    Username: admin  Password: admin-secret"
+echo "  PLAINTEXT: localhost:9193,9293,9393"

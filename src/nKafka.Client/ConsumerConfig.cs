@@ -20,10 +20,10 @@ public class ConsumerConfig
     public int MaxFetchRetries { get; set; } = 3;
     public TimeSpan FetchRetryBaseDelay { get; set; } = TimeSpan.FromMilliseconds(500);
 
-    public string? SaslMechanism { get; init; }
-    public string? SaslUsername { get; init; }
-    public string? SaslPassword { get; init; }
-    public string? SslCaCertPath { get; init; }
+    public string? SaslMechanism { get; set; }
+    public string? SaslUsername { get; set; }
+    public string? SaslPassword { get; set; }
+    public string? SslCaCertPath { get; set; }
 
 
     public ConsumerConfig(
