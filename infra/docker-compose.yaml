@@ -9,17 +9,33 @@ services:
       - KAFKA_PROCESS_ROLES=broker,controller
       - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
       - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      # Define three listeners: Internal, External (Host), and Controller
-      - KAFKA_LISTENERS=INTERNAL://:9092,EXTERNAL://:9192,CONTROLLER://:9194
-      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka-1:9092,EXTERNAL://localhost:9192
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      # INTERNAL + CONTROLLER stay PLAINTEXT (trusted Docker network)
+      # EXTERNAL_SASL is mapped to SASL_SSL for client authentication
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL_SASL:SASL_SSL,CONTROLLER:PLAINTEXT
+      - KAFKA_LISTENERS=INTERNAL://:9092,EXTERNAL_SASL://:9192,CONTROLLER://:9194
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka-1:9092,EXTERNAL_SASL://localhost:9192,CONTROLLER://kafka-1:9194
       - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9194,2@kafka-2:9294,3@kafka-3:9394
       - KAFKA_CLUSTER_ID=r4zt_wrqTRuT7W2NJsB_GA
       - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      # SASL / SCRAM
+      - KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-512
+      - KAFKA_LISTENER_NAME_EXTERNAL_SASL_SCRAM_SHA_512_SASL_JAAS_CONFIG=org.apache.kafka.common.security.scram.ScramLoginModule required;
+      # SSL (TLS for EXTERNAL_SASL listener)
+      - KAFKA_SSL_KEYSTORE_FILENAME=kafka-1.keystore.jks
+      - KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-creds
+      - KAFKA_SSL_KEY_CREDENTIALS=key-creds
+      - KAFKA_SSL_CLIENT_AUTH=none
+      - KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM=
+      # KAFKA_OPTS with JAAS reference (required by Docker configure script for SASL)
+      - KAFKA_OPTS=-Djava.security.auth.login.config=/etc/kafka/secrets/empty-jaas.conf
     ports:
       - 9192:9192
     volumes:
       - kafka-1-data:/var/lib/kafka/data
+      - ./secrets/kafka-1.keystore.jks:/etc/kafka/secrets/kafka-1.keystore.jks
+      - ./secrets/keystore-creds:/etc/kafka/secrets/keystore-creds
+      - ./secrets/key-creds:/etc/kafka/secrets/key-creds
+      - ./secrets/empty-jaas.conf:/etc/kafka/secrets/empty-jaas.conf
 
   kafka-2:
     image: 'apache/kafka:4.2.0'
@@ -30,16 +46,28 @@ services:
       - KAFKA_PROCESS_ROLES=broker,controller
       - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
       - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_LISTENERS=INTERNAL://:9092,EXTERNAL://:9292,CONTROLLER://:9294
-      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka-2:9092,EXTERNAL://localhost:9292
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL_SASL:SASL_SSL,CONTROLLER:PLAINTEXT
+      - KAFKA_LISTENERS=INTERNAL://:9092,EXTERNAL_SASL://:9292,CONTROLLER://:9294
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka-2:9092,EXTERNAL_SASL://localhost:9292,CONTROLLER://kafka-2:9294
       - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9194,2@kafka-2:9294,3@kafka-3:9394
       - KAFKA_CLUSTER_ID=r4zt_wrqTRuT7W2NJsB_GA
       - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      - KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-512
+      - KAFKA_LISTENER_NAME_EXTERNAL_SASL_SCRAM_SHA_512_SASL_JAAS_CONFIG=org.apache.kafka.common.security.scram.ScramLoginModule required;
+      - KAFKA_SSL_KEYSTORE_FILENAME=kafka-2.keystore.jks
+      - KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-creds
+      - KAFKA_SSL_KEY_CREDENTIALS=key-creds
+      - KAFKA_SSL_CLIENT_AUTH=none
+      - KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM=
+      - KAFKA_OPTS=-Djava.security.auth.login.config=/etc/kafka/secrets/empty-jaas.conf
     ports:
       - 9292:9292
     volumes:
       - kafka-2-data:/var/lib/kafka/data
+      - ./secrets/kafka-2.keystore.jks:/etc/kafka/secrets/kafka-2.keystore.jks
+      - ./secrets/keystore-creds:/etc/kafka/secrets/keystore-creds
+      - ./secrets/key-creds:/etc/kafka/secrets/key-creds
+      - ./secrets/empty-jaas.conf:/etc/kafka/secrets/empty-jaas.conf
 
   kafka-3:
     image: 'apache/kafka:4.2.0'
@@ -50,16 +78,28 @@ services:
       - KAFKA_PROCESS_ROLES=broker,controller
       - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
       - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_LISTENERS=INTERNAL://:9092,EXTERNAL://:9392,CONTROLLER://:9394
-      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka-3:9092,EXTERNAL://localhost:9392
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL_SASL:SASL_SSL,CONTROLLER:PLAINTEXT
+      - KAFKA_LISTENERS=INTERNAL://:9092,EXTERNAL_SASL://:9392,CONTROLLER://:9394
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka-3:9092,EXTERNAL_SASL://localhost:9392,CONTROLLER://kafka-3:9394
       - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9194,2@kafka-2:9294,3@kafka-3:9394
       - KAFKA_CLUSTER_ID=r4zt_wrqTRuT7W2NJsB_GA
       - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      - KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-512
+      - KAFKA_LISTENER_NAME_EXTERNAL_SASL_SCRAM_SHA_512_SASL_JAAS_CONFIG=org.apache.kafka.common.security.scram.ScramLoginModule required;
+      - KAFKA_SSL_KEYSTORE_FILENAME=kafka-3.keystore.jks
+      - KAFKA_SSL_KEYSTORE_CREDENTIALS=keystore-creds
+      - KAFKA_SSL_KEY_CREDENTIALS=key-creds
+      - KAFKA_SSL_CLIENT_AUTH=none
+      - KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM=
+      - KAFKA_OPTS=-Djava.security.auth.login.config=/etc/kafka/secrets/empty-jaas.conf
     ports:
       - 9392:9392
     volumes:
       - kafka-3-data:/var/lib/kafka/data
+      - ./secrets/kafka-3.keystore.jks:/etc/kafka/secrets/kafka-3.keystore.jks
+      - ./secrets/keystore-creds:/etc/kafka/secrets/keystore-creds
+      - ./secrets/key-creds:/etc/kafka/secrets/key-creds
+      - ./secrets/empty-jaas.conf:/etc/kafka/secrets/empty-jaas.conf
 
   kafka-ui:
     image: provectuslabs/kafka-ui:v0.7.2
@@ -67,7 +107,6 @@ services:
     restart: always
     environment:
       - KAFKA_CLUSTERS_0_NAME=test-cluster
-      # Since kafka-ui is inside the Docker network, it uses the INTERNAL port (9092)
       - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka-1:9092,kafka-2:9092,kafka-3:9092
     ports:
       - 8081:8080
