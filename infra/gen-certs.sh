@@ -97,7 +97,9 @@ echo -n "${PASSWORD}" > "${SECRETS_DIR}/truststore-creds"
 
 echo "=== Creating Empty JAAS Config ==="
 cat > "${SECRETS_DIR}/empty-jaas.conf" << 'EOF'
-// Empty JAAS config - per-listener JAAS config is used instead
+KafkaServer {
+    org.apache.kafka.common.security.scram.ScramLoginModule required;
+};
 EOF
 
 echo "=== Verifying ==="

@@ -22,12 +22,16 @@ public static class NKafkaFetchStringParallelMultiPartTest
             {
                 var broker = metadata.Message.Brokers![group.Key];
                 var config = new ConnectionConfig(
-                    "PLAINTEXT",
+                    "SASL_SSL",
                     broker.Host!,
                     broker.Port!.Value,
                     "nKafka.Client.IntegrationTests",
                     10 * 512 * 1024)
                 {
+                    SslCaCertPath = BenchmarkHelper.GetCACertPath(),
+                    SaslMechanism = "SCRAM-SHA-512",
+                    SaslUsername = "admin",
+                    SaslPassword = "admin-secret",
                     RequestApiVersionsOnOpen = false,
                     CheckCrcs = false,
                 };
@@ -134,8 +138,12 @@ public static class NKafkaFetchStringParallelMultiPartTest
 
     private static async Task<IDisposableMessage<MetadataResponse>> RequestMetadata(FetchScenario scenario)
     {
-        var config = new ConnectionConfig("PLAINTEXT", "localhost", 9192, "nKafka.Client.Benchmarks")
+        var config = new ConnectionConfig("SASL_SSL", "localhost", 9192, "nKafka.Client.Benchmarks")
         {
+            SslCaCertPath = BenchmarkHelper.GetCACertPath(),
+            SaslMechanism = "SCRAM-SHA-512",
+            SaslUsername = "admin",
+            SaslPassword = "admin-secret",
             RequestApiVersionsOnOpen = false,
         };
         await using var connection = new Connection(config, NullLoggerFactory.Instance);
