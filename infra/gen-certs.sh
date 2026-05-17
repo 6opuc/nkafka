@@ -16,6 +16,7 @@ KAFKA_IMAGE="${KAFKA_IMAGE:-apache/kafka:4.2.0}"
 
 rm -rf "${SECRETS_DIR}"
 mkdir -p "${SECRETS_DIR}"
+chmod 0777 "${SECRETS_DIR}"
 
 # SELinux: disable confinement so the container can write to bind-mounted dirs
 SELINUX_OPTS=()
