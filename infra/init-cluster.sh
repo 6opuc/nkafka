@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Creates SCRAM users after the Kafka cluster is up.
-# Connects via the internal PLAINTEXT listener (no auth needed inside Docker network).
+# Connects via the internal PLAINTEXT listener (no auth needed inside container network).
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/container-tool.sh"
 
 BROKER="${1:-kafka-1}"
 CONTAINER="${2:-kafka-1}"
@@ -14,7 +17,7 @@ USERS=(
 
 echo "=== Waiting for cluster to be ready ==="
 for i in $(seq 1 30); do
-  if docker exec "${CONTAINER}" /opt/kafka/bin/kafka-configs.sh \
+  if ${CONTAINER_TOOL} exec "${CONTAINER}" /opt/kafka/bin/kafka-configs.sh \
     --bootstrap-server "${BOOTSTRAP}" \
     --describe --entity-type users 2>/dev/null; then
     echo "Cluster is ready (attempt $i)"
@@ -31,7 +34,7 @@ for USERPASS in "${USERS[@]}"; do
   PASSWORD="${USERPASS##*:}"
   echo "Creating user: ${USERNAME}"
 
-  docker exec "${CONTAINER}" /opt/kafka/bin/kafka-configs.sh \
+  ${CONTAINER_TOOL} exec "${CONTAINER}" /opt/kafka/bin/kafka-configs.sh \
     --bootstrap-server "${BOOTSTRAP}" \
     --alter --add-config "SCRAM-SHA-512=[iterations=4096,password=${PASSWORD}]" \
     --entity-type users --entity-name "${USERNAME}" 2>/dev/null || {
@@ -41,7 +44,7 @@ done
 
 echo ""
 echo "=== Verifying SCRAM users ==="
-docker exec "${CONTAINER}" /opt/kafka/bin/kafka-configs.sh \
+${CONTAINER_TOOL} exec "${CONTAINER}" /opt/kafka/bin/kafka-configs.sh \
   --bootstrap-server "${BOOTSTRAP}" \
   --describe --entity-type users 2>/dev/null
 

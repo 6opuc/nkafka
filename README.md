@@ -37,5 +37,34 @@ AMD Ryzen 5 7530U with Radeon Graphics, 1 CPU, 12 logical and 6 physical cores
 - [ ] Compression is not implemented yet
 - [ ] Metrics/Telemetry is not implemented yet
 
+## Setting up the environment
+
+Requires either [Docker](https://docker.com) or [Podman](https://podman.io). The scripts auto-detect which tool is installed.
+
+Override detection via `CONTAINER_TOOL` env var:
+
+```bash
+export CONTAINER_TOOL=docker   # or podman
+```
+
+```bash
+# 1. Generate self-signed TLS certificates (JKS keystores for each broker)
+./infra/gen-certs.sh
+
+# 2. Start the Kafka cluster (3 nodes + Kafka UI on port 8081)
+#    (auto-detects docker compose, podman compose, or podman-compose)
+${CONTAINER_TOOL:-docker} compose -f infra/docker-compose.yaml up -d
+
+# 3. Create SCRAM users (admin / admin-secret)
+./infra/init-cluster.sh
+```
+
+Broker ports (SASL_SSL / PLAINTEXT):
+| Broker | SASL_SSL | PLAINTEXT |
+|--------|----------|-----------|
+| kafka-1 | `localhost:9192` | `localhost:9193` |
+| kafka-2 | `localhost:9292` | `localhost:9293` |
+| kafka-3 | `localhost:9392` | `localhost:9393` |
+
 ## Links
 - The idea of code generation from kafka message definitions is taken from this interesting project: https://github.com/Fresa/Kafka.Protocol
