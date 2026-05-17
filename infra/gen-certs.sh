@@ -65,6 +65,7 @@ END
     -password "pass:${PASSWORD}"
 
   # Convert PKCS12 to JKS using keytool in container
+  chmod -R a+rwX "${SECRETS_DIR}"
   ${CONTAINER_TOOL} run --rm \
     -v "${SECRETS_DIR}:/secrets:rw" \
     --entrypoint keytool \
@@ -83,6 +84,7 @@ END
 done
 
 echo "=== Creating Truststore (JKS) ==="
+chmod -R a+rwX "${SECRETS_DIR}"
 ${CONTAINER_TOOL} run --rm \
   -v "${SECRETS_DIR}:/secrets:rw" \
   --entrypoint keytool \
