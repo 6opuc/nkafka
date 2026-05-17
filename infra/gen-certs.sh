@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Generates self-signed TLS certificates for the Kafka cluster.
-# Uses Docker (apache/kafka image) for keytool since JKS format is needed.
+# Uses a container (apache/kafka image) for keytool since JKS format is needed.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/container-tool.sh"
+
 SECRETS_DIR="${SCRIPT_DIR}/secrets"
 PASSWORD="${PASSWORD:-changeit}"
 DAYS="${DAYS:-3650}"
@@ -21,9 +23,8 @@ openssl req -new -x509 -keyout "${SECRETS_DIR}/ca-key.pem" \
   -days "${DAYS}" -newkey rsa:${KEY_SIZE} -nodes \
   -subj "/CN=Kafka-CA/O=nKafka/C=US"
 
-echo "=== Creating Per-Broker Certificates and JKS Keystores ==="
-# Use Docker to run keytool so we don't need Java on the host
-docker pull "${KAFKA_IMAGE}" --quiet
+echo "=== Creating Per-Broker Certificates and JKS Keystores (via ${CONTAINER_TOOL}) ==="
+${CONTAINER_TOOL} pull "${KAFKA_IMAGE}" --quiet
 
 for BROKER in "${BROKERS[@]}"; do
   echo "--- ${BROKER} ---"
@@ -63,8 +64,8 @@ END
     -out "${SECRETS_DIR}/${BROKER}.p12" \
     -password "pass:${PASSWORD}"
 
-  # Convert PKCS12 to JKS using keytool in Docker
-  docker run --rm \
+  # Convert PKCS12 to JKS using keytool in container
+  ${CONTAINER_TOOL} run --rm \
     -v "${SECRETS_DIR}:/secrets:rw" \
     --entrypoint keytool \
     "${KAFKA_IMAGE}" \
@@ -82,7 +83,7 @@ END
 done
 
 echo "=== Creating Truststore (JKS) ==="
-docker run --rm \
+${CONTAINER_TOOL} run --rm \
   -v "${SECRETS_DIR}:/secrets:rw" \
   --entrypoint keytool \
   "${KAFKA_IMAGE}" \
