@@ -21,9 +21,9 @@ public class Connection : IConnection
     private readonly ILogger _logger;
     private Socket? _socket;
     private SslStream? _sslStream;
+    private Stream? _writeStream;
     private readonly ConnectionConfig _config;
 
-    private SocketWriterStream? _writerStream;
     private CancellationTokenSource? _stop;
 
     private Task _receiveBackgroundTask = default!;
@@ -100,18 +100,24 @@ public class Connection : IConnection
         var protocol = _config.Protocol;
         if (protocol != "SASL_SSL" && protocol != "SSL")
         {
-            _writerStream = SocketWriterStream.FromSocket(_socket!);
+            _writeStream = new NetworkStream(_socket!, false);
             return;
         }
 
         _logger.LogInformation("Starting TLS handshake.");
+
+        X509Certificate2? caCert = null;
+        if (_config.SslCaCertPath != null)
+        {
+            caCert = X509CertificateLoader.LoadCertificateFromFile(_config.SslCaCertPath);
+        }
 
         _sslStream = new SslStream(
             new NetworkStream(_socket!, false),
             false,
             (sender, certificate, chain, errors) =>
             {
-                if (_config.SslCaCertPath == null)
+                if (caCert == null)
                 {
                     return true;
                 }
@@ -122,8 +128,7 @@ public class Connection : IConnection
                 }
 
                 using var x509Chain = new X509Chain();
-                x509Chain.ChainPolicy.ExtraStore.Add(
-                    X509CertificateLoader.LoadCertificateFromFile(_config.SslCaCertPath));
+                x509Chain.ChainPolicy.ExtraStore.Add(caCert);
                 x509Chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
                 x509Chain.ChainPolicy.VerificationFlags =
                     X509VerificationFlags.AllowUnknownCertificateAuthority |
@@ -132,13 +137,19 @@ public class Connection : IConnection
                 return x509Chain.Build((X509Certificate2)certificate!);
             });
 
-        await _sslStream.AuthenticateAsClientAsync(
-            _config.Host,
-            null,
-            SslProtocols.Tls12 | SslProtocols.Tls13,
-            checkCertificateRevocation: false);
+        var sslOptions = new SslClientAuthenticationOptions
+        {
+            TargetHost = _config.Host,
+            EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+            CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+        };
 
-        _writerStream = new SocketWriterStream(_sslStream);
+        await _sslStream.AuthenticateAsClientAsync(sslOptions, cancellationToken);
+
+        _logger.LogInformation("TLS handshake complete. Protocol={Protocol}, Cipher={Cipher}",
+            _sslStream.SslProtocol, _sslStream.NegotiatedCipherSuite);
+
+        _writeStream = _sslStream;
     }
 
     private async ValueTask AuthenticateSaslAsync(CancellationToken cancellationToken)
@@ -591,7 +602,7 @@ public class Connection : IConnection
         IRequest<TResponse> request,
         CancellationToken cancellationToken)
     {
-        if (_writerStream == null)
+        if (_writeStream == null)
         {
             throw new InvalidOperationException("Socket connection is not open.");
         }
@@ -623,7 +634,8 @@ public class Connection : IConnection
                     pendingRequest.SerializeRequest(ref writer, _serializationContext);
 
                     _logger.LogDebug("Sending {@size} bytes.", writer.Position);
-                    await _writerStream.WriteAsync(writer.Memory.Slice(0, writer.Position),
+                    await _writeStream!.WriteAsync(
+                        writer.Memory.Slice(0, writer.Position),
                         pendingRequest.CancellationToken);
                     _logger.LogDebug("Sent.");
                 }
@@ -674,9 +686,9 @@ public class Connection : IConnection
             await _receiveBackgroundTask;
         }
 
-        if (_writerStream != null)
+        if (_writeStream != null)
         {
-            await _writerStream.DisposeAsync();
+            await _writeStream.DisposeAsync();
         }
 
         if (_sslStream != null)
