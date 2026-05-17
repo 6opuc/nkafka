@@ -68,7 +68,6 @@ END
   # Convert PKCS12 to JKS using keytool in container
   chmod a+rwX "${SECRETS_DIR}/${BROKER}.p12" "${SECRETS_DIR}/ca-cert.pem"
   ${CONTAINER_TOOL} run --rm \
-    -u "$(id -u):$(id -g)" \
     -v "${SECRETS_DIR}:/secrets:rw" \
     --entrypoint keytool \
     "${KAFKA_IMAGE}" \
@@ -88,7 +87,6 @@ done
 echo "=== Creating Truststore (JKS) ==="
 chmod a+rwX "${SECRETS_DIR}/ca-cert.pem"
 ${CONTAINER_TOOL} run --rm \
-  -u "$(id -u):$(id -g)" \
   -v "${SECRETS_DIR}:/secrets:rw" \
   --entrypoint keytool \
   "${KAFKA_IMAGE}" \
