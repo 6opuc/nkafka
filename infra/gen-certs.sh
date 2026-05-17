@@ -22,6 +22,7 @@ openssl req -new -x509 -keyout "${SECRETS_DIR}/ca-key.pem" \
   -out "${SECRETS_DIR}/ca-cert.pem" \
   -days "${DAYS}" -newkey rsa:${KEY_SIZE} -nodes \
   -subj "/CN=Kafka-CA/O=nKafka/C=US"
+chmod a+rwX "${SECRETS_DIR}/ca-key.pem" "${SECRETS_DIR}/ca-cert.pem"
 
 echo "=== Creating Per-Broker Certificates and JKS Keystores (via ${CONTAINER_TOOL}) ==="
 ${CONTAINER_TOOL} pull "${KAFKA_IMAGE}" --quiet
@@ -65,6 +66,7 @@ END
     -password "pass:${PASSWORD}"
 
   # Convert PKCS12 to JKS using keytool in container
+  chmod a+rwX "${SECRETS_DIR}/${BROKER}.p12" "${SECRETS_DIR}/ca-cert.pem"
   ${CONTAINER_TOOL} run --rm \
     -u "$(id -u):$(id -g)" \
     -v "${SECRETS_DIR}:/secrets:rw" \
@@ -84,6 +86,7 @@ END
 done
 
 echo "=== Creating Truststore (JKS) ==="
+chmod a+rwX "${SECRETS_DIR}/ca-cert.pem"
 ${CONTAINER_TOOL} run --rm \
   -u "$(id -u):$(id -g)" \
   -v "${SECRETS_DIR}:/secrets:rw" \
