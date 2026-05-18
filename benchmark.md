@@ -19,15 +19,30 @@ AMD Ryzen 7 5700X 1.74GHz, 1 CPU, 16 logical and 8 physical cores
 
 
 BenchmarkDotNet v0.15.8, Linux Fedora Linux 44 (Workstation Edition)
-AMD Ryzen 5 7530U with Radeon Graphics 3.51GHz, 1 CPU, 12 logical and 6 physical cores
+AMD Ryzen 5 7530U with Radeon Graphics 2.90GHz, 1 CPU, 12 logical and 6 physical cores
 .NET SDK 10.0.203
   [Host]     : .NET 10.0.7 (10.0.7, 10.0.726.21808), X64 RyuJIT x86-64-v3
   DefaultJob : .NET 10.0.7 (10.0.7, 10.0.726.21808), X64 RyuJIT x86-64-v3
 
 
-| Method                  | Scenario     | Mean     | Error    | StdDev   | Median   | Completed Work Items | Lock Contentions | Gen0     | Allocated |
-|------------------------ |------------- |---------:|---------:|---------:|---------:|---------------------:|-----------------:|---------:|----------:|
-| NKafkaConsumeBytes      | 12p 40Kx10KB | 326.4 ms | 23.95 ms | 70.60 ms | 346.6 ms |           36089.0000 |                - | 500.0000 |   6.82 MB |
-| NKafkaBatchConsumeBytes | 12p 40Kx10KB | 314.9 ms | 30.66 ms | 86.97 ms | 342.2 ms |           23434.0000 |                - |        - |    6.8 MB |
-
+| Method                    | Protocol  | Scenario     | Mean       | Error    | StdDev   | Gen0       | Completed Work Items | Lock Contentions | Gen1       | Allocated |
+|-------------------------- |---------- |------------- |-----------:|---------:|---------:|-----------:|---------------------:|-----------------:|-----------:|----------:|
+| ConfluentConsumeBytes     | PLAINTEXT | 12p 40Kx10KB |   751.7 ms | 26.69 ms | 77.44 ms | 50000.0000 |                    - |                - |          - | 403.79 MB |
+| ConfluentConsumeString    | PLAINTEXT | 12p 40Kx10KB |   756.8 ms | 18.91 ms | 55.45 ms | 99000.0000 |                    - |                - |  7000.0000 | 794.42 MB |
+| NKafkaFetchBytesSeq1Part  | PLAINTEXT | 12p 40Kx10KB |   657.7 ms | 11.32 ms | 10.03 ms |          - |            8128.0000 |                - |          - |   5.58 MB |
+| NKafkaFetchBytesSeqNPart  | PLAINTEXT | 12p 40Kx10KB |   663.9 ms | 13.22 ms | 15.22 ms |          - |            7731.0000 |                - |          - |   6.06 MB |
+| NKafkaFetchBytesParNPart  | PLAINTEXT | 12p 40Kx10KB |   165.3 ms |  3.24 ms |  5.24 ms |   500.0000 |            6176.0000 |                - |          - |   5.99 MB |
+| NKafkaFetchStringParNPart | PLAINTEXT | 12p 40Kx10KB |   250.5 ms |  4.05 ms |  3.38 ms | 99000.0000 |            5541.5000 |                - |  8500.0000 | 788.18 MB |
+| NKafkaConsumeString       | PLAINTEXT | 12p 40Kx10KB |   460.4 ms | 21.84 ms | 63.00 ms | 99000.0000 |           28353.5000 |                - | 18500.0000 | 788.77 MB |
+| NKafkaConsumeBytes        | PLAINTEXT | 12p 40Kx10KB |   457.5 ms | 31.32 ms | 91.85 ms |          - |            7353.0000 |                - |          - |   6.66 MB |
+| NKafkaBatchConsumeBytes   | PLAINTEXT | 12p 40Kx10KB |   430.5 ms | 33.88 ms | 98.83 ms |          - |           46059.0000 |                - |          - |   6.65 MB |
+| ConfluentConsumeBytes     | SASL_SSL  | 12p 40Kx10KB |   749.1 ms | 14.81 ms | 36.61 ms | 50000.0000 |                    - |                - |          - | 403.79 MB |
+| ConfluentConsumeString    | SASL_SSL  | 12p 40Kx10KB |   753.9 ms | 15.03 ms | 17.31 ms | 99000.0000 |                    - |                - |  7000.0000 | 794.42 MB |
+| NKafkaFetchBytesSeq1Part  | SASL_SSL  | 12p 40Kx10KB | 1,175.6 ms | 22.32 ms | 21.92 ms |          - |           45494.0000 |                - |          - |   5.65 MB |
+| NKafkaFetchBytesSeqNPart  | SASL_SSL  | 12p 40Kx10KB | 1,208.6 ms | 20.30 ms | 15.85 ms |          - |           47744.0000 |                - |          - |  10.13 MB |
+| NKafkaFetchBytesParNPart  | SASL_SSL  | 12p 40Kx10KB |   675.5 ms | 13.43 ms | 19.69 ms |          - |           28863.0000 |                - |          - |   6.07 MB |
+| NKafkaFetchStringParNPart | SASL_SSL  | 12p 40Kx10KB |   736.6 ms |  5.72 ms |  4.78 ms | 99000.0000 |           26387.0000 |           1.0000 |  8000.0000 | 788.25 MB |
+| NKafkaConsumeString       | SASL_SSL  | 12p 40Kx10KB |   767.0 ms | 14.96 ms | 26.20 ms | 99000.0000 |           28480.0000 |                - | 19000.0000 | 788.89 MB |
+| NKafkaConsumeBytes        | SASL_SSL  | 12p 40Kx10KB |   742.8 ms | 14.85 ms | 36.43 ms |          - |           33202.0000 |                - |          - |   6.76 MB |
+| NKafkaBatchConsumeBytes   | SASL_SSL  | 12p 40Kx10KB |   713.9 ms | 14.14 ms | 28.24 ms |          - |           23464.0000 |                - |          - |   6.74 MB |
 
