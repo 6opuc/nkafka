@@ -58,7 +58,10 @@ public class Connection : IConnection
         await OpenSocketAsync(cancellationToken);
         await AuthenticateTlsAsync(cancellationToken);
         await AuthenticateSaslAsync(cancellationToken);
-        StartReceiving();
+        if (_sslStream == null)
+        {
+            StartReceiving();
+        }
         await RequestApiVersionsAsync(cancellationToken);
     }
 
@@ -428,9 +431,9 @@ public class Connection : IConnection
             {
                 try
                 {
-                    var stream = GetReadStream();
                     while (!cancellationToken.IsCancellationRequested)
                     {
+                        var stream = GetReadStream();
                         var bytesRead = await stream.ReadAtLeastAsync(
                             sizeBuffer,
                             sizeBuffer.Length,
@@ -504,7 +507,6 @@ public class Connection : IConnection
                             _arrayPool.Return(payload);
                             throw;
                         }
-
                     }
                 }
                 catch when (cancellationToken.IsCancellationRequested)
@@ -607,13 +609,22 @@ public class Connection : IConnection
 
         using (BeginDefaultLoggingScope())
         {
+            if (_sslStream != null)
+            {
+                // TLS: full round-trip inline to avoid SslStream lock contention
+                return await SendAsyncSslInlineAsync<TResponse>(request, cancellationToken);
+            }
+
+            // PLAINTEXT: use background receive loop with correlation matching
+            var correlationId = IdGenerator.Next();
+            var apiVersion = _apiVersions.GetValueOrDefault(request.ApiKey, (short)0);
             var completionPromise = new TaskCompletionSource<MessageWithPooledPayload>();
             var pendingRequest = new PendingRequest(
                 request,
                 completionPromise,
                 cancellationToken,
-                IdGenerator.Next(),
-                _apiVersions.GetValueOrDefault(request.ApiKey, (short)0));
+                correlationId,
+                apiVersion);
             await using var cancellationRegistration = cancellationToken.Register(
                 () =>
                 {
@@ -623,13 +634,13 @@ public class Connection : IConnection
 
             using (BeginRequestLoggingScope(pendingRequest))
             {
+                _logger.LogDebug("Processing.");
+                _pendingRequests.TryAdd(pendingRequest.CorrelationId, pendingRequest);
+
+                _logger.LogDebug("Serializing.");
                 var payload = _arrayPool.Rent(_config.RequestBufferSize);
                 try
                 {
-                    _logger.LogDebug("Processing.");
-                    _pendingRequests.TryAdd(pendingRequest.CorrelationId, pendingRequest);
-
-                    _logger.LogDebug("Serializing.");
                     using var output = new MemoryStream(payload, 0, payload.Length, true, true);
                     pendingRequest.SerializeRequest(output, _serializationContext);
 
@@ -651,6 +662,88 @@ public class Connection : IConnection
 
             var response = await completionPromise.Task;
             return new DisposableMessage<TResponse>(response, pendingRequest.ApiVersion);
+        }
+    }
+
+    private async ValueTask<IDisposableMessage<TResponse>> SendAsyncSslInlineAsync<TResponse>(
+        IRequest<TResponse> request,
+        CancellationToken cancellationToken)
+    {
+        var correlationId = IdGenerator.Next();
+        var apiVersion = request.FixedVersion ?? _apiVersions.GetValueOrDefault(request.ApiKey, (short)0);
+
+        _logger.LogDebug("Serializing (SSL inline). apiVersion={ApiVersion}, correlationId={CorrelationId}",
+            apiVersion, correlationId);
+        var requestBuffer = _arrayPool.Rent(_config.RequestBufferSize);
+        try
+        {
+            using var output = new MemoryStream(requestBuffer, 0, requestBuffer.Length, true, true);
+            var requestHeaderVersion = request.ApiKey == ApiKey.ControlledShutdown && apiVersion == 0
+                ? (short)0
+                : (short)(request.FlexibleVersions.Includes(apiVersion) ? 2 : 1);
+            var requestHeader = new RequestHeader
+            {
+                RequestApiKey = (short)request.ApiKey,
+                RequestApiVersion = apiVersion,
+                CorrelationId = correlationId,
+                ClientId = _config.ClientId,
+            };
+
+            PrimitiveSerializer.SerializeInt(output, 0);
+            var payloadStart = output.Position;
+            RequestHeaderSerializer.Serialize(output, requestHeader, requestHeaderVersion, _serializationContext);
+            request.SerializeRequest(output, apiVersion, _serializationContext);
+            var payloadEnd = output.Position;
+            var payloadSize = (int)(payloadEnd - payloadStart);
+            output.Position = payloadStart - 4;
+            PrimitiveSerializer.SerializeInt(output, payloadSize);
+            output.Position = payloadEnd;
+
+            _logger.LogDebug("Sending {@size} bytes (SSL inline).", (int)payloadEnd);
+            await _writeStream.WriteAsync(
+                new ReadOnlyMemory<byte>(requestBuffer, 0, (int)payloadEnd),
+                cancellationToken);
+            _logger.LogDebug("Sent.");
+        }
+        finally
+        {
+            _arrayPool.Return(requestBuffer);
+        }
+
+        // Read response inline
+        _logger.LogDebug("Reading response (SSL inline).");
+        var stream = GetReadStream();
+        var sizeBuffer = new byte[4];
+        await stream.ReadAtLeastAsync(sizeBuffer, 4, true, cancellationToken);
+        var responseSize = (sizeBuffer[0] << 24) | (sizeBuffer[1] << 16) |
+                           (sizeBuffer[2] << 8) | sizeBuffer[3];
+
+        var responseBuffer = _arrayPool.Rent(responseSize);
+        try
+        {
+            await stream.ReadAtLeastAsync(responseBuffer, responseSize, true, cancellationToken);
+
+            using var input = new MemoryStream(responseBuffer, 0, responseSize, false, true);
+            var responseHeaderVersion = request.ApiKey == ApiKey.ApiVersions
+                ? (short)0
+                : (short)(request.FlexibleVersions.Includes(apiVersion) ? 1 : 0);
+            var responseHeader = ResponseHeaderSerializer.Deserialize(
+                input, responseHeaderVersion, _serializationContext);
+
+            if (responseHeader.CorrelationId != correlationId)
+            {
+                throw new Exception(
+                    $"Correlation ID mismatch: expected {correlationId}, got {responseHeader.CorrelationId}");
+            }
+
+            var message = request.DeserializeResponse(input, apiVersion, _serializationContext);
+            var pooledMessage = new MessageWithPooledPayload(message, _arrayPool, responseBuffer);
+            return new DisposableMessage<TResponse>(pooledMessage, apiVersion);
+        }
+        catch
+        {
+            _arrayPool.Return(responseBuffer);
+            throw;
         }
     }
 
