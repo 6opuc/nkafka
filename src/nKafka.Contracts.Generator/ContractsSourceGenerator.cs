@@ -163,17 +163,17 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                       {
                           public ApiKey ApiKey => ApiKey.{{Enum.GetName(typeof(ApiKey), pair.Request.ApiKey!)}};
                           public short? FixedVersion { get; set; }
-                          public VersionRange FlexibleVersions { get; } = {{pair.Request.FlexibleVersions.ToLiteral()}};
-                          
-                          public void SerializeRequest(MemoryStream output, short version, ISerializationContext context)
-                          {
-                              {{pair.Request.Name}}Serializer.Serialize(output, this, version, context);
-                          }
-                          
-                          public object DeserializeResponse(MemoryStream input, short version, ISerializationContext context)
-                          {
-                              return {{pair.Response!.Name}}Serializer.Deserialize(input, version, context);
-                          }
+                           public VersionRange FlexibleVersions { get; } = {{pair.Request.FlexibleVersions.ToLiteral()}};
+                           
+                           public void SerializeRequest(ref BufferWriter writer, short version, ISerializationContext context)
+                           {
+                               {{pair.Request.Name}}Serializer.Serialize(ref writer, this, version, context);
+                           }
+                           
+                           public object DeserializeResponse(ReadOnlyMemory<byte> buffer, short version, ISerializationContext context)
+                           {
+                               return {{pair.Response!.Name}}Serializer.Deserialize(buffer, version, context);
+                           }
                       }
                       """));
         }

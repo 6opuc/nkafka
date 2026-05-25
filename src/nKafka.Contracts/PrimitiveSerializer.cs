@@ -1,437 +1,423 @@
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace nKafka.Contracts;
 
-public static class PrimitiveSerializer
+public struct BufferReader
 {
-    private static readonly byte[] MinusOneShort = [0xff, 0xff];
-    private static readonly byte[] MinusOneVarInt = { 0x01 };
-    private const byte ZeroByte = 0x00;
-    private const byte OneByte = 0x01;
+    private readonly ReadOnlyMemory<byte> _buffer;
+    private int _pos;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeString(MemoryStream output, string? value)
+    public BufferReader(ReadOnlyMemory<byte> buffer)
     {
-        if (value == null)
-        {
-            output.Write(MinusOneShort, 0, MinusOneShort.Length);
-            return;
-        }
+        _buffer = buffer;
+        _pos = 0;
+    }
 
-        var length = Encoding.UTF8.GetByteCount(value);
-        if (length > short.MaxValue)
-        {
-            throw new InvalidOperationException(
-                $"value is too long. Max length: {short.MaxValue}. Current value length: {length}");
-        }
+    public ReadOnlyMemory<byte> Buffer => _buffer;
+    public int Position => _pos;
 
-        SerializeShort(output, (short)length);
+    public int Remaining => _buffer.Length - _pos;
 
-        var diff = output.Length - output.Position - length;
-        if (diff < 0)
-        {
-            output.SetLength(output.Length - diff);
-        }
-
-        Encoding.UTF8.GetBytes(value, 0, value.Length, output.GetBuffer(), (int)output.Position);
-        output.Position += length;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Advance(int count)
+    {
+        _pos += count;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static string? DeserializeString(MemoryStream input)
+    public BufferReader CreateChild(int length)
     {
-        var length = DeserializeShort(input);
-        if (length == -1)
-        {
-            return null;
-        }
-
-        if (length == 0)
-        {
-            return string.Empty;
-        }
-
-        if (input.Position + length > input.Length)
-        {
-            throw new InvalidOperationException(
-                $"DeserializeString needs {length} bytes but got only {input.Length - input.Position}");
-        }
-
-        var value = Encoding.UTF8.GetString(input.GetBuffer(), (int)input.Position, length);
-        input.Position += length;
-        return value;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeVarString(MemoryStream output, string? value)
-    {
-        var length = value == null
-            ? -1
-            : Encoding.UTF8.GetByteCount(value);
-        SerializeLengthLong(output, length);
-        if (value == null)
-        {
-            return;
-        }
-
-        var diff = output.Length - output.Position - length;
-        if (diff < 0)
-        {
-            output.SetLength(output.Length - diff);
-        }
-        Encoding.UTF8.GetBytes(value, 0, value.Length, output.GetBuffer(), (int)output.Position);
-        output.Position += length;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static string? DeserializeVarString(MemoryStream input)
-    {
-        var length = DeserializeLengthLong(input);
-        if (length == -1)
-        {
-            return null;
-        }
-
-        if (length == 0)
-        {
-            return string.Empty;
-        }
-
-        if (length > int.MaxValue)
-        {
-            throw new InvalidOperationException(
-                $"value is too long. Max length: {int.MaxValue}. Current value length: {length}");
-        }
-
-        if (input.Position + length > input.Length)
-        {
-            throw new InvalidOperationException(
-                $"DeserializeVarString needs {length} bytes but got only {input.Length - input.Position}");
-        }
-
-        var value = Encoding.UTF8.GetString(input.GetBuffer(), (int)input.Position, (int)length);
-        input.Position += length;
-        return value;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeShort(MemoryStream output, short? value)
-    {
-        SerializeIntAsByte(output, value!.Value >> 8);
-        SerializeIntAsByte(output, value!.Value);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void SerializeIntAsByte(MemoryStream output, int value)
-    {
-        output.WriteByte((byte)(value & 0xff));
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static short DeserializeShort(MemoryStream input)
-    {
-        if (input.Position + 2 > input.Length)
-        {
-            throw new InvalidOperationException(
-                $"DeserializeShort needs 2 bytes but got only {input.Length - input.Position}");
-        }
-
-        return (short)((input.ReadByte() << 8) | input.ReadByte());
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeUshort(MemoryStream output, ushort? value)
-    {
-        SerializeShort(output, (short)value!.Value);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ushort DeserializeUshort(MemoryStream input)
-    {
-        return (ushort)DeserializeShort(input);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeByte(MemoryStream output, byte? value)
-    {
-        output.WriteByte(value!.Value);
-    }
-
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static byte DeserializeByte(MemoryStream input)
-    {
-        var result = input.ReadByte();
-        if (result == -1)
-        {
-            throw new EndOfStreamException("Unable to read byte, end of stream reached.");
-        }
-        return unchecked((byte)result);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeInt(MemoryStream output, int? value)
-    {
-        SerializeIntAsByte(output, value!.Value >> 8 * 3);
-        SerializeIntAsByte(output, value!.Value >> 8 * 2);
-        SerializeIntAsByte(output, value!.Value >> 8);
-        SerializeIntAsByte(output, value!.Value);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeUint(MemoryStream output, uint? value)
-    {
-        SerializeInt(output, (int)value!.Value);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int DeserializeInt(MemoryStream input)
-    {
-        if (input.Position + 4 > input.Length)
-        {
-            throw new InvalidOperationException(
-                $"DeserializeInt needs 4 bytes but got only {input.Length - input.Position}");
-        }
-
-        return input.ReadByte() << 3 * 8 | input.ReadByte() << 2 * 8 | input.ReadByte() << 8 | input.ReadByte();
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static uint DeserializeUint(MemoryStream input)
-    {
-        return (uint)DeserializeInt(input);
-    }
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeLong(MemoryStream output, long? value)
-    {
-        ulong ui = (ulong)value!.Value;
-        for (int j = 7; j >= 0; j--)
-            output.WriteByte((byte)(ui >> j * 8 & 0xff));
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static long DeserializeLong(MemoryStream input)
-    {
-        if (input.Position + 8 > input.Length)
-        {
-            throw new Exception($"DeserializeLong needs 8 bytes but got only {input.Length - input.Position}");
-        }
-
-        var buffer = input.GetBuffer();
-        var position = (int)input.Position;
-        input.Position += 8;
-
-        return ((long)buffer[position] << 56) |
-               ((long)buffer[position + 1] << 48) |
-               ((long)buffer[position + 2] << 40) |
-               ((long)buffer[position + 3] << 32) |
-               ((long)buffer[position + 4] << 24) |
-               ((long)buffer[position + 5] << 16) |
-               ((long)buffer[position + 6] << 8) |
-               buffer[position + 7];
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeDouble(MemoryStream output, double? value)
-    {
-        var copy = value!.Value;
-        unsafe
-        {
-            var p = (byte*)&copy;
-            
-            if (BitConverter.IsLittleEndian)
-            {
-                for (var i = 7; i >= 0; i--)
-                {
-                    output.WriteByte(p[i]);
-                }
-            }
-            else
-            {
-                for (var i = 0; i < 8; i++)
-                {
-                    output.WriteByte(p[i]);
-                }
-            }
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static double DeserializeDouble(MemoryStream input)
-    {
-        if (input.Position + 8 > input.Length)
-        {
-            throw new Exception($"DeserializeDouble needs 8 bytes but got only {input.Length - input.Position}");
-        }
-        
-        var buffer = input.GetBuffer().AsSpan((int)input.Position, 8);
-           
-        var result = 0.0d; 
-        if (BitConverter.IsLittleEndian)
-        {
-            unsafe
-            {
-                var p = (byte*)&result;
-                for (var i = 0; i < 8; i++)
-                {
-                    p[7-i] = buffer[i];
-                }
-            }
-        }
-        else
-        {
-            result = BitConverter.ToDouble(buffer);
-        }
-        
-        input.Position += 8;
+        var result = new BufferReader(_buffer.Slice(_pos, length));
+        _pos += length;
         return result;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeBool(MemoryStream output, bool? value)
+    public ReadOnlySpan<byte> ReadSpan(int length)
     {
-        output.WriteByte(value == true ? OneByte : ZeroByte);
+        var span = _buffer.Span.Slice(_pos, length);
+        _pos += length;
+        return span;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool DeserializeBool(MemoryStream input)
+    public BufferReader CreateRemaining()
     {
-        return input.ReadByte() != ZeroByte;
+        var result = new BufferReader(_buffer.Slice(_pos));
+        _pos = _buffer.Length;
+        return result;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeVarLong(MemoryStream output, long? value)
+    public byte ReadByte()
     {
-        var asZigZag = ToZigZag(value!.Value);
-        SerializeUVarLong(output, asZigZag);
+        return _buffer.Span[_pos++];
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeUVarLong(MemoryStream output, ulong? value)
+    public bool ReadBool()
     {
-        do
-        {
-            // Take 7 bits
-            var byteValue = value & 0x7f;
-            // Remove 7 bits
-            value >>= 7;
-
-            // Value should be encoded to more than one byte?
-            if (value > 0)
-            {
-                // Add 1 to most significant bit to indicate more bytes will follow
-                byteValue |= 128;
-            }
-
-            output.WriteByte((byte)byteValue!);
-        } while (value > 0);
-    }
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeLengthLong(MemoryStream output, long value) =>
-        SerializeUVarLong(output, (ulong)(value + 1));
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static long DeserializeVarLong(MemoryStream input)
-    {
-        return FromZigZag(DeserializeUVarLong(input));
-    }
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static long FromZigZag(this ulong value)
-    {
-        return unchecked((long)((value >> 1) - (value & 1) * value));
+        return _buffer.Span[_pos++] != 0;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ulong DeserializeUVarLong(MemoryStream input)
+    public short ReadInt16BigEndian()
+    {
+        var value = BinaryPrimitives.ReadInt16BigEndian(_buffer.Span[_pos..]);
+        _pos += 2;
+        return value;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int ReadInt32BigEndian()
+    {
+        var value = BinaryPrimitives.ReadInt32BigEndian(_buffer.Span[_pos..]);
+        _pos += 4;
+        return value;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public uint ReadUInt32BigEndian()
+    {
+        var value = BinaryPrimitives.ReadUInt32BigEndian(_buffer.Span[_pos..]);
+        _pos += 4;
+        return value;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public long ReadInt64BigEndian()
+    {
+        var value = BinaryPrimitives.ReadInt64BigEndian(_buffer.Span[_pos..]);
+        _pos += 8;
+        return value;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public double ReadDoubleBigEndian()
+    {
+        var span = _buffer.Span.Slice(_pos, 8);
+        _pos += 8;
+        return BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64BigEndian(span));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ulong ReadUVarLong()
     {
         ulong value = 0;
         int shift = 0;
-        int lowerBits;
-
-        while (((lowerBits = DeserializeByte(input)) & 128) != 0)
+        while (_pos < _buffer.Length)
         {
-            value |= (ulong)(lowerBits & 0x7F) << shift;
+            var b = _buffer.Span[_pos++];
+            value |= (b & 0x7fUL) << shift;
             shift += 7;
+            if ((b & 0x80) == 0) break;
         }
-
-        value |= (ulong)(lowerBits & 0x7F) << shift;
         return value;
     }
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static long DeserializeLengthLong(MemoryStream input) =>
-        (long)DeserializeUVarLong(input) - 1;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ulong ToZigZag(long i)
+    public long ReadVarLong()
     {
-        return unchecked((ulong)((i << 1) ^ (i >> 63)));
+        var raw = ReadUVarLong();
+        return (long)((raw >> 1) ^ (0UL - (raw & 1UL)));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeVarInt(MemoryStream output, int? value)
-    {
-        SerializeVarLong(output, value);
-    }
-    
+    public int ReadVarInt() => checked((int)ReadVarLong());
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeUVarInt(MemoryStream output, uint? value)
-    {
-        SerializeUVarLong(output, value);
-    }
-    
+    public uint ReadUVarInt() => checked((uint)ReadUVarLong());
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeLength(MemoryStream output, int value)
+    public int ReadLength() => (int)ReadUVarLong() - 1;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public string ReadString()
     {
-        SerializeLengthLong(output, value);
+        var len = ReadInt16BigEndian();
+        if (len < 0) return null;
+        var s = Encoding.UTF8.GetString(_buffer.Span.Slice(_pos, len));
+        _pos += len;
+        return s;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int DeserializeVarInt(MemoryStream input)
+    public string ReadVarString()
     {
-        return checked((int)DeserializeVarLong(input));
+        var len = ReadLength();
+        if (len < 0) return null;
+        var s = Encoding.UTF8.GetString(_buffer.Span.Slice(_pos, len));
+        _pos += len;
+        return s;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static uint DeserializeUVarInt(MemoryStream input)
+    public Guid ReadGuid()
     {
-        return checked((uint)DeserializeUVarLong(input));
-    }
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int DeserializeLength(MemoryStream input)
-    {
-        return checked((int)DeserializeLengthLong(input));
+        var g = new Guid(_buffer.Span.Slice(_pos, 16));
+        _pos += 16;
+        return g;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SerializeGuid(MemoryStream output, Guid? value)
+    public Memory<byte> ReadMemory(int length)
     {
-        var availableSize = output.Length - output.Position;
-        var diff = 16 - availableSize;
-        if (diff > 0)
+        var result = _buffer.Slice(_pos, length);
+        _pos += length;
+        return Unsafe.As<ReadOnlyMemory<byte>, Memory<byte>>(ref result);
+    }
+}
+
+public struct BufferWriter
+{
+    private readonly Memory<byte> _buffer;
+    private int _pos;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public BufferWriter(Memory<byte> buffer)
+    {
+        _buffer = buffer;
+        _pos = 0;
+    }
+
+    public Memory<byte> Buffer => _buffer;
+    public Span<byte> Span => _buffer.Span;
+    public int Position { get => _pos; set => _pos = value; }
+    public int Remaining => _buffer.Length - _pos;
+    public int Capacity => _buffer.Length;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Advance(int count)
+    {
+        _pos += count;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteByte(byte value)
+    {
+        _buffer.Span[_pos++] = value;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteBool(bool value)
+    {
+        _buffer.Span[_pos++] = value ? (byte)1 : (byte)0;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteInt16BigEndian(short value)
+    {
+        BinaryPrimitives.WriteInt16BigEndian(_buffer.Span.Slice(_pos), value);
+        _pos += 2;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteInt32BigEndian(int value)
+    {
+        BinaryPrimitives.WriteInt32BigEndian(_buffer.Span.Slice(_pos), value);
+        _pos += 4;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteUInt32BigEndian(uint value)
+    {
+        BinaryPrimitives.WriteUInt32BigEndian(_buffer.Span.Slice(_pos), value);
+        _pos += 4;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteInt64BigEndian(long value)
+    {
+        BinaryPrimitives.WriteInt64BigEndian(_buffer.Span.Slice(_pos), value);
+        _pos += 8;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteDoubleBigEndian(double value)
+    {
+        WriteInt64BigEndian(BitConverter.DoubleToInt64Bits(value));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteDoubleBigEndian(double? value) => WriteDoubleBigEndian(value!.Value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteUVarLong(ulong value)
+    {
+        do
         {
-            output.SetLength(output.Length + diff);
+            var byteValue = value & 0x7fUL;
+            value >>= 7;
+            if (value > 0)
+            {
+                byteValue |= 128;
+            }
+            _buffer.Span[_pos++] = (byte)byteValue;
+        } while (value > 0);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteVarLong(long value)
+    {
+        WriteUVarLong(ZigZag.Encode(value));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteVarInt(int value) => WriteVarLong(value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteUVarInt(uint value) => WriteUVarLong(value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteLength(int value) => WriteUVarLong((ulong)(value + 1));
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteString(string? value)
+    {
+        if (value == null)
+        {
+            WriteByte(0xff);
+            WriteByte(0xff);
+            return;
         }
 
-        value!.Value.TryWriteBytes(output.GetBuffer().AsSpan()[(int)output.Position..]);
-        output.Position += 16;
+        var span = value.AsSpan();
+        var length = Encoding.UTF8.GetBytes(span, _buffer.Span.Slice(_pos));
+        WriteInt16BigEndian((short)length);
+        _pos += length;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Guid DeserializeGuid(MemoryStream input)
+    public void WriteVarString(string? value)
     {
-        if (input.Position + 16 > input.Length)
+        if (value == null)
         {
-            throw new Exception($"DeserializeGuid needs 16 bytes but got only {input.Length - input.Position}");
+            WriteLength(-1);
+            return;
         }
 
-        var bytes = input.GetBuffer().AsSpan()[(int)input.Position..((int)input.Position + 16)];
-        input.Position += 16;
-        return new Guid(bytes);
+        var span = value.AsSpan();
+        var length = Encoding.UTF8.GetBytes(span, _buffer.Span.Slice(_pos));
+        WriteLength(length);
+        _pos += length;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteShort(short value)
+    {
+        _buffer.Span[_pos++] = (byte)(value >> 8);
+        _buffer.Span[_pos++] = (byte)value;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteShort(short? value)
+    {
+        WriteShort(value!.Value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteUshort(ushort value) => WriteShort((short)value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteUshort(ushort? value) => WriteShort((short)value!.Value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteByte(byte? value) => WriteByte(value!.Value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteInt(int value)
+    {
+        _buffer.Span[_pos++] = (byte)(value >> 24);
+        _buffer.Span[_pos++] = (byte)(value >> 16);
+        _buffer.Span[_pos++] = (byte)(value >> 8);
+        _buffer.Span[_pos++] = (byte)value;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteInt(int? value) => WriteInt(value!.Value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteUint(uint value) => WriteInt((int)value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteUint(uint? value) => WriteInt((int)value!.Value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteLong(long value)
+    {
+        uint ui = (uint)value;
+        for (int j = 7; j >= 0; j--)
+            _buffer.Span[_pos++] = (byte)(ui >> j * 8 & 0xff);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteLong(long? value) => WriteLong(value!.Value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteBool(bool? value) => WriteBool(value!.Value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteVarLong(long? value) => WriteVarLong(value!.Value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteUVarLong(ulong? value) => WriteUVarLong(value!.Value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteVarInt(int? value) => WriteVarInt(value!.Value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteUVarInt(uint? value) => WriteUVarInt(value!.Value);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteLength(int? value) => WriteLength(value ?? 0);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteGuid(Guid? value)
+    {
+        if (value == null)
+        {
+            _buffer.Span.Slice(_pos, 16).Clear();
+            _pos += 16;
+            return;
+        }
+
+        value!.Value.TryWriteBytes(_buffer.Span.Slice(_pos));
+        _pos += 16;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Write(ReadOnlySpan<byte> buffer)
+    {
+        buffer.CopyTo(_buffer.Span.Slice(_pos));
+        _pos += buffer.Length;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Write(ReadOnlyMemory<byte> buffer) => Write(buffer.Span);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteMemory(ReadOnlyMemory<byte> value)
+    {
+        if (value.IsEmpty) return;
+        Write(value.Span);
+    }
+}
+
+public static class ZigZag
+{
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static ulong Encode(long value)
+    {
+        return unchecked((ulong)((value << 1) ^ (value >> 63)));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static long Decode(ulong value)
+    {
+        return (long)((value >> 1) ^ (0UL - (value & 1UL)));
     }
 }

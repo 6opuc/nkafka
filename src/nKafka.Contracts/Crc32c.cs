@@ -1,21 +1,32 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics.X86;
+using System.Runtime.InteropServices;
 
 namespace nKafka.Contracts;
 
 public static class Crc32c
 {
-    private static readonly Func<MemoryStream, long, long, uint> _calculate;
+    private static readonly Func<MemoryStream, long, long, uint> _calculateStream;
+    private static readonly Func<ReadOnlySpan<byte>, long, long, uint> _calculateSpan;
 
     static Crc32c()
     {
-        _calculate = Crc32cHardwareImplementation.IsSupported
-            ? Crc32cHardwareImplementation.Calculate
-            : Crc32cSoftwareImplementation.Calculate;
+        _calculateStream = Crc32cHardwareImplementation.IsSupported
+            ? Crc32cHardwareImplementation.CalculateStream
+            : Crc32cSoftwareImplementation.CalculateStream;
+        _calculateSpan = Crc32cHardwareImplementation.IsSupported
+            ? Crc32cHardwareImplementation.CalculateSpan
+            : Crc32cSoftwareImplementation.CalculateSpan;
     }
     
     public static uint Calculate(MemoryStream stream, long start, long size)
     {
-        return _calculate(stream, start, size);
+        return _calculateStream(stream, start, size);
+    }
+    
+    public static uint Calculate(ReadOnlySpan<byte> buffer, long start, long size)
+    {
+        return _calculateSpan(buffer, start, size);
     }
 
     private static class Crc32cHardwareImplementation
@@ -26,7 +37,7 @@ public static class Crc32c
 
         public static bool IsSupported => _sse42Available;
         
-        public static uint Calculate(MemoryStream stream, long start, long size)
+        public static uint CalculateStream(MemoryStream stream, long start, long size)
         {
             if (!_sse42Available)
             {
@@ -62,6 +73,40 @@ public static class Crc32c
 
             return ~crc;
         }
+        
+        public static uint CalculateSpan(ReadOnlySpan<byte> buffer, long start, long size)
+        {
+            if (!_sse42Available)
+            {
+                throw new PlatformNotSupportedException();
+            }
+            
+            var crc = _seed;
+            var span = buffer.Slice((int)start, (int)size);
+
+            if (_sse42x64Available)
+            {
+                while (span.Length >= 8)
+                {
+                    crc = (uint)Sse42.X64.Crc32(crc, MemoryMarshal.Read<uint>(span));
+                    span = span[4..];
+                }
+            }
+            
+            while (span.Length >= 4)
+            {
+                crc = Sse42.Crc32(crc, MemoryMarshal.Read<uint>(span));
+                span = span[4..];
+            }
+            
+            while (span.Length > 0)
+            {
+                crc = Sse42.Crc32(crc, span[0]);
+                span = span[1..];
+            }
+
+            return ~crc;
+        }
     }
     
     private static class Crc32cSoftwareImplementation
@@ -87,12 +132,21 @@ public static class Crc32c
             return table;
         }
         
-        public static uint Calculate(MemoryStream stream, long start, long size)
+        public static uint CalculateStream(MemoryStream stream, long start, long size)
         {
             var crc = _seed;
             var buffer = stream.GetBuffer();
             for (var i = start; i < start + size; ++i)
                 crc = (crc >> 8) ^ _table[buffer[i] ^ crc & 0xff];
+            return ~crc;
+        }
+        
+        public static uint CalculateSpan(ReadOnlySpan<byte> buffer, long start, long size)
+        {
+            var crc = _seed;
+            var span = buffer.Slice((int)start, (int)size);
+            for (var i = 0; i < size; i++)
+                crc = (crc >> 8) ^ _table[span[i] ^ crc & 0xff];
             return ~crc;
         }
     }

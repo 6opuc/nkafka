@@ -148,19 +148,11 @@ public class Connection : IConnection
                             {
                                 _logger.LogDebug("Deserializing response.");
 
-                                try
-                                {
-                                    using var input = new MemoryStream(payload, 0, payloadSize.Value, false, true);
-                                    var response = pendingRequest.DeserializeResponse(input, _serializationContext);
-                                    if (input.Length != input.Position)
+                                  try
                                     {
-                                        _logger.LogError(
-                                            "Received unexpected response length. Expected {@expectedLength}, but got {@actualLength}.",
-                                            input.Position,
-                                            input.Length);
-                                    }
-
-                                    _logger.LogDebug("Deserialized.");
+                                        var buffer = new Memory<byte>(payload, 0, payloadSize.Value);
+                                        var response = pendingRequest.DeserializeResponse(buffer, _serializationContext);
+                                        _logger.LogDebug("Deserialized.");
 
                                     var disposableResponse =
                                         new MessageWithPooledPayload(response, _arrayPool, payload);
@@ -306,11 +298,11 @@ public class Connection : IConnection
                         _pendingRequests.TryAdd(pendingRequest.CorrelationId, pendingRequest);
 
                         _logger.LogDebug("Serializing.");
-                        using var output = new MemoryStream(payload, 0, payload.Length, true, true);
-                        pendingRequest.SerializeRequest(output, _serializationContext);
+                        var writer = new BufferWriter(new Memory<byte>(payload, 0, payload.Length));
+                        pendingRequest.SerializeRequest(ref writer, _serializationContext);
 
-                        _logger.LogDebug("Sending {@size} bytes.", output.Position);
-                        await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position,
+                        _logger.LogDebug("Sending {@size} bytes.", writer.Position);
+                        await _writerStream.WriteAsync(payload, 0, (int)writer.Position,
                             pendingRequest.CancellationToken);
                         _logger.LogDebug("Sent.");
                     }
@@ -373,14 +365,13 @@ public class Connection : IConnection
         _socket = null;
     }
 
-    private class SerializationContext(ArrayPool<byte> arrayPool, int bufferSize) : ISerializationContext
+      private class SerializationContext(ArrayPool<byte> arrayPool, int bufferSize) : ISerializationContext
     {
         public required SerializationConfig Config { get; init; }
         
-        public MemoryStream CreateBuffer()
+        public PooledBuffer CreateBuffer()
         {
-            var buffer = arrayPool.Rent(bufferSize);
-            return new PooledMemoryStream(arrayPool, buffer);
+            return new PooledBuffer(arrayPool, bufferSize);
         }
     }
 }

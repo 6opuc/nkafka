@@ -7,37 +7,40 @@ public static class ConsumerProtocolSubscriptionSerializationHelper
 {
     private static readonly short _version = 3;
         
-    public static void Serialize(MemoryStream output, ConsumerProtocolSubscription? message, bool flexible, ISerializationContext context)
+    public static void Serialize(ref BufferWriter writer, ConsumerProtocolSubscription? message, bool flexible, ISerializationContext context)
     {
-        using var buffer = new MemoryStream();
+        using var buffer = context.CreateBuffer();
+        var tw = default(BufferWriter);
         if (message != null)
         {
-            PrimitiveSerializer.SerializeShort(buffer, _version);
-            ConsumerProtocolSubscriptionSerializer.Serialize(buffer, message, _version, context);
+            tw = default;
+            tw.WriteShort(_version);
+            ConsumerProtocolSubscriptionSerializer.Serialize(ref tw, message, _version, context);
+            buffer.Writer = tw;
         }
 
         if (flexible)
         {
-            PrimitiveSerializer.SerializeLengthLong(output, buffer.Position);
+            writer.WriteLength(buffer.Position);
         }
         else
         {
-            PrimitiveSerializer.SerializeInt(output, buffer.Position == 0 ? -1 : (int)buffer.Position);
+            writer.WriteInt(buffer.Position == 0 ? -1 : (int)buffer.Position);
         }
-        buffer.Position = 0;
-        buffer.CopyTo(output);
+        
+        writer.Write(buffer.Memory.Span.Slice(0, (int)buffer.Position));
     }
 
-    public static ConsumerProtocolSubscription? Deserialize(MemoryStream input, bool flexible, ISerializationContext context)
+    public static ConsumerProtocolSubscription? Deserialize(ref BufferReader reader, bool flexible, ISerializationContext context)
     {
         var length = flexible
-            ? PrimitiveSerializer.DeserializeLength(input)
-            : PrimitiveSerializer.DeserializeInt(input);
+            ? reader.ReadLength()
+            : reader.ReadInt32BigEndian();
         if (length <= 0)
         {
             return null;
         }
-        var version = PrimitiveSerializer.DeserializeShort(input);
-        return ConsumerProtocolSubscriptionSerializer.Deserialize(input, version, context);
+        var version = reader.ReadInt16BigEndian();
+        return ConsumerProtocolSubscriptionSerializer.Deserialize(ref reader, version, context);
     }
 }

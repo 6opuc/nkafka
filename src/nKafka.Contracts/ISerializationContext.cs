@@ -4,5 +4,5 @@ public interface ISerializationContext
 {
     SerializationConfig Config { get; }
     
-    MemoryStream CreateBuffer();
+    PooledBuffer CreateBuffer();
 }

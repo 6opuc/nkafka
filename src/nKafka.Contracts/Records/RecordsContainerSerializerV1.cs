@@ -2,24 +2,25 @@ namespace nKafka.Contracts.Records;
 
 public static class RecordsContainerSerializerV1
 {
-    public static void Serialize(MemoryStream output, RecordsContainer? message, ISerializationContext context)
+    public static void Serialize(ref BufferWriter writer, RecordsContainer? message, ISerializationContext context)
     {
         throw new NotImplementedException();
     }
 
-    public static RecordsContainer? Deserialize(MemoryStream input, ISerializationContext context)
+    public static RecordsContainer? Deserialize(ref BufferReader reader, ISerializationContext context)
     {
-        var size = PrimitiveSerializer.DeserializeInt(input);
+        var size = reader.ReadInt32BigEndian();
         if (size < 0)
         {
             throw new Exception($"Negative record container size: {size}.");
         }
 
-        var start = input.Position;
-        if (start + size > input.Length)
+        var start = reader.Position;
+        var remainingBefore = reader.Remaining;
+        if (size > remainingBefore)
         {
             throw new Exception(
-                $"Record container expected {size} bytes but got only {input.Length - input.Position}.");
+                $"Record container expected {size} bytes but got only {remainingBefore}.");
         }
 
         var container = new RecordsContainer
@@ -30,23 +31,17 @@ public static class RecordsContainerSerializerV1
         var endOfLastMessage = start;
         while (true)
         {
-            var message = MessageSerializerV1.Deserialize(input, start + size, context);
+            var message = MessageSerializerV1.Deserialize(ref reader, start + size, context);
             if (message == null)
             {
-                // incomplete message
                 break;
             }
 
-            endOfLastMessage = input.Position;
+            endOfLastMessage = reader.Position;
             container.Messages.Add(message);
         }
 
         container.RemainderInBytes = size - (int)(endOfLastMessage - start);
-        if (container.RemainderInBytes > 0)
-        {
-            input.Position = endOfLastMessage + container.RemainderInBytes;
-        }
-
         return container;
     }
 }

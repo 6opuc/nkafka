@@ -10,7 +10,7 @@ public interface IRequest
     short? FixedVersion { get; set; }
     VersionRange FlexibleVersions { get; }
 
-    void SerializeRequest(MemoryStream output, short version, ISerializationContext context);
+    void SerializeRequest(ref BufferWriter writer, short version, ISerializationContext context);
 
-    object DeserializeResponse(MemoryStream input, short version, ISerializationContext context);
+    object DeserializeResponse(ReadOnlyMemory<byte> buffer, short version, ISerializationContext context);
 }

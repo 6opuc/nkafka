@@ -27,7 +27,7 @@ public class PendingRequest
         ApiVersion = payload.FixedVersion ?? apiVersion;
     }
     
-    public void SerializeRequest(MemoryStream output, ISerializationContext context)
+    public void SerializeRequest(ref BufferWriter writer, ISerializationContext context)
     {
         var header = new RequestHeader
         {
@@ -36,26 +36,27 @@ public class PendingRequest
             CorrelationId = CorrelationId,
             ClientId = context.Config.ClientId,
         };
-        PrimitiveSerializer.SerializeInt(output, 0); // placeholder for header + payload
-        var start = output.Position;
+        var start = writer.Position;
+        writer.WriteInt(0); // placeholder for header + payload size
         var requestHeaderVersion = Payload.ApiKey == ApiKey.ControlledShutdown && ApiVersion == 0
             ? (short)0
             : (short)(Payload.FlexibleVersions.Includes(ApiVersion) ? 2 : 1);
-        RequestHeaderSerializer.Serialize(output, header, requestHeaderVersion, context);
-        Payload.SerializeRequest(output, ApiVersion, context);
-        var end = output.Position;
-        var size = (int)(end - start);
-        output.Position = start - 4;
-        PrimitiveSerializer.SerializeInt(output, size);
-        output.Position = end;
+        RequestHeaderSerializer.Serialize(ref writer, header, requestHeaderVersion, context);
+        Payload.SerializeRequest(ref writer, ApiVersion, context);
+        var end = writer.Position;
+        var size = (int)(end - start) - 4;
+        writer.Position = start;
+        writer.WriteInt(size);
+        writer.Position = end;
     }
     
-    public object DeserializeResponse(MemoryStream input, ISerializationContext context)
+    public object DeserializeResponse(Memory<byte> buffer, ISerializationContext context)
     {
         var responseHeaderVersion = Payload.ApiKey == ApiKey.ApiVersions
             ? (short)0
             : (short)(Payload.FlexibleVersions.Includes(ApiVersion) ? 1 : 0);
-        var header = ResponseHeaderSerializer.Deserialize(input, responseHeaderVersion, context);
+        var reader = new BufferReader(buffer);
+        var header = ResponseHeaderSerializer.Deserialize(ref reader, responseHeaderVersion, context);
         if (header.CorrelationId == null)
         {
             throw new InvalidOperationException("Received response with empty correlation id.");
@@ -67,6 +68,7 @@ public class PendingRequest
                 $"Received response with incorrect correlation id. Expected {CorrelationId}, but got {header.CorrelationId}.");
         }
 
-        return Payload.DeserializeResponse(input, ApiVersion, context);
+        var responseBody = buffer.Slice(reader.Position);
+        return Payload.DeserializeResponse(responseBody, ApiVersion, context);
     }
 }

@@ -2,23 +2,25 @@ namespace nKafka.Contracts.Records;
 
 public static class RecordsContainerSerializerV2
 {
-    public static void Serialize(MemoryStream output, RecordsContainer? message, ISerializationContext context)
+    public static void Serialize(ref BufferWriter writer, RecordsContainer? message, ISerializationContext context)
     {
         throw new NotImplementedException();
     }
 
-    public static RecordsContainer? Deserialize(MemoryStream input, ISerializationContext context)
+    public static RecordsContainer? Deserialize(ref BufferReader reader, ISerializationContext context)
     {
-        var size = PrimitiveSerializer.DeserializeInt(input);
+        var size = reader.ReadInt32BigEndian();
         if (size < 0)
         {
-            throw new Exception($"Negative record container size: {size}.");
+            return null;
         }
 
-        var start = input.Position;
-        if (start + size > input.Length)
+        var start = reader.Position;
+        var eof = start + size;
+        var remainingBefore = reader.Remaining;
+        if (size > remainingBefore)
         {
-            throw new Exception($"Record container expected {size} bytes but got only {input.Length - input.Position}.");
+            throw new Exception($"Record container expected {size} bytes but got only {remainingBefore}.");
         }
         
         var message = new RecordsContainer
@@ -26,24 +28,21 @@ public static class RecordsContainerSerializerV2
             SizeInBytes = size,
             RecordBatches = new List<RecordBatch>(),
         };
-        var endOfLastRecordBatch = start;
         while (true)
         {
-            var recordBatch = RecordBatchSerializerV2.Deserialize(input, start + size, context);
+            var recordBatch = RecordBatchSerializerV2.Deserialize(ref reader, eof, context);
             if (recordBatch == null)
             {
-                // incomplete batch
                 break;
             }
-
-            endOfLastRecordBatch = input.Position;
             message.RecordBatches.Add(recordBatch);
         }
-        message.RemainderInBytes = size - (int)(endOfLastRecordBatch-start);
-        if (message.RemainderInBytes > 0)
+        var remainder = eof - reader.Position;
+        if (remainder > 0)
         {
-            input.Position = endOfLastRecordBatch + message.RemainderInBytes;
+            reader.Advance((int)remainder);
         }
+        message.RemainderInBytes = (int)remainder;
         return message;
     }
 }

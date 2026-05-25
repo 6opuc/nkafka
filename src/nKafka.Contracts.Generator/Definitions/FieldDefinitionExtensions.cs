@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 
 namespace nKafka.Contracts.Generator.Definitions;
@@ -212,31 +213,33 @@ public static class FieldDefinitionExtensions
                 .ToList();
             if (!taggedFields.Any())
             {
-                source.AppendLine("PrimitiveSerializer.SerializeUVarInt(output, 0); // tag section length");
+                source.AppendLine("writer.WriteUVarInt(0); // tag section length");
             }
             else
             {
                 source.AppendLine($$"""
                                     var tagSectionLength = {{string.Join(" + ", taggedFields.Select(x => $"(message.{x.Name} == null ? 0 : 1)"))}};
                                     """);
-                source.AppendLine("PrimitiveSerializer.SerializeUVarInt(output, (uint)tagSectionLength); // tag section length");
+                source.AppendLine("writer.WriteUVarInt((uint)tagSectionLength); // tag section length");
                 
                 source.AppendLine("""
                                   if (tagSectionLength > 0)
                                   {
                                         using var buffer = context.CreateBuffer();
+                                        var tw = default(BufferWriter);
                                   """);
                 foreach (var taggedField in taggedFields)
                 {
                     source.AppendLine($$"""
                                         if (message.{{taggedField.Name}} != null)
                                         {
-                                            PrimitiveSerializer.SerializeUVarInt(output, {{taggedField.Tag}}); // tag number
-                                            buffer.Position = 0;
-                                            {{taggedField.ToSerializationStatements(apiKey, version, flexible, "buffer")}}
+                                            writer.WriteUVarInt((uint){{taggedField.Tag}}); // tag number
+                                            tw = default;
+                                            {{taggedField.ToSerializationStatements(apiKey, version, flexible, "tw")}}
+                                            buffer.Writer = tw;
                                             var size = (int)buffer.Position;
-                                            PrimitiveSerializer.SerializeUVarInt(output, (uint)size); // tag payload size
-                                            output.Write(buffer.GetBuffer(), 0, size); // tag payload
+                                            writer.WriteUVarInt((uint)size); // tag payload size
+                                            writer.Write(buffer.Memory.Span.Slice(0, size)); // tag payload
                                         }
                                         """);
                 }
@@ -253,7 +256,7 @@ public static class FieldDefinitionExtensions
         short? apiKey,
         short version,
         bool flexible,
-        string output = "output")
+        string output = "writer")
     {
         if (!field.Versions.Includes(version))
         {
@@ -278,8 +281,8 @@ public static class FieldDefinitionExtensions
         }
         
         var lengthSerialization = flexible
-            ? $"PrimitiveSerializer.SerializeLength({output}, message.{field.Name}?.Count ?? 0);"
-            : $"PrimitiveSerializer.SerializeInt({output}, message.{field.Name}?.Count ?? -1);";
+            ? $"writer.WriteLength(message.{field.Name}?.Count ?? 0);"
+            : $"writer.WriteInt(message.{field.Name}?.Count ?? -1);";
         if (!field.IsMap())
         {
             return $$"""
@@ -306,96 +309,90 @@ public static class FieldDefinitionExtensions
         short version,
         bool flexible,
         string? propertyType,
-        string output = "output")
+        string output = "writer")
     {
-        if (propertyType == "string")
+       if (propertyType == "string")
         {
             return flexible
-                ? $"PrimitiveSerializer.SerializeVarString({output}, {propertyPath});"
-                : $"PrimitiveSerializer.SerializeString({output}, {propertyPath});";
+                ? $"{output}.WriteVarString({propertyPath});"
+                : $"{output}.WriteString({propertyPath});";
         }
 
         if (propertyType == "short")
         {
-            return $"PrimitiveSerializer.SerializeShort({output}, {propertyPath});";
+            return $"{output}.WriteShort({propertyPath});";
         }
 
         if (propertyType == "ushort")
         {
-            return $"PrimitiveSerializer.SerializeUshort({output}, {propertyPath});";
+            return $"{output}.WriteUshort({propertyPath});";
         }
 
         if (propertyType == "byte")
         {
-            return $"PrimitiveSerializer.SerializeByte({output}, {propertyPath});";
+            return $"{output}.WriteByte({propertyPath});";
         }
 
         if (propertyType == "bool")
         {
-            return $"PrimitiveSerializer.SerializeBool({output}, {propertyPath});";
+            return $"{output}.WriteBool({propertyPath});";
         }
         
         if (propertyType == "int")
         {
-            return $"PrimitiveSerializer.SerializeInt({output}, {propertyPath});";
+            return $"{output}.WriteInt({propertyPath});";
         }
         
         if (propertyType == "long")
         {
-            return $"PrimitiveSerializer.SerializeLong({output}, {propertyPath});";
+            return $"{output}.WriteLong({propertyPath});";
         }
 
         if (propertyType == "double")
         {
-            return $"PrimitiveSerializer.SerializeDouble({output}, {propertyPath});";
+            return $"{output}.WriteDoubleBigEndian({propertyPath});";
         }
 
         if (propertyType == "Memory<byte>")
         {
             var lengthSerialization = flexible
-                ? $"PrimitiveSerializer.SerializeLength({output}, {propertyPath}?.Length ?? 0);"
-                : $"PrimitiveSerializer.SerializeInt({output}, {propertyPath}?.Length ?? -1);";
+                ? $"{output}.WriteLength({propertyPath}?.Length ?? 0);"
+                : $"{output}.WriteInt({propertyPath}?.Length ?? -1);";
             return $$"""
-                     {{lengthSerialization}}
-                     if ({{propertyPath}} != null)
-                     {
-                         {{output}}.Write({{propertyPath}}.Value.Span);
-                     }
-                     """;
+                      {{lengthSerialization}}
+                      if ({{propertyPath}} != null)
+                      {
+                          {{output}}.WriteMemory({{propertyPath}}.Value);
+                      }
+                      """;
         }
 
         if (propertyType == "Guid")
         {
-            return $"PrimitiveSerializer.SerializeGuid({output}, {propertyPath});";
+            return $"{output}.WriteGuid({propertyPath});";
         }
         
 
         if (propertyType == "RecordsContainer")
         {
             var recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
-            return $"RecordsContainerSerializer{recordsVersion}.Serialize({output}, {propertyPath}, context);";
+            return $"RecordsContainerSerializer{recordsVersion}.Serialize(ref {output}, {propertyPath}, context);";
         }
 
         if (propertyType == "ConsumerProtocolAssignment")
         {
-            return $"ConsumerProtocolAssignmentSerializationHelper.Serialize({output}, {propertyPath}, {flexible.ToString().ToLower()}, context);";
+            return $"ConsumerProtocolAssignmentSerializationHelper.Serialize(ref {output}, {propertyPath}, {flexible.ToString().ToLower()}, context);";
         }
 
         if (propertyType == "ConsumerProtocolSubscription")
         {
-            return $"ConsumerProtocolSubscriptionSerializationHelper.Serialize({output}, {propertyPath}, {flexible.ToString().ToLower()}, context);";
+            return $"ConsumerProtocolSubscriptionSerializationHelper.Serialize(ref {output}, {propertyPath}, {flexible.ToString().ToLower()}, context);";
         }
 
-        return $$"""
-                 if ({{propertyPath}} == null)
-                 {
-                    throw new InvalidOperationException("Property {{propertyPath}} has not been initialized.");
-                 }
-                 {{propertyType}}SerializerV{{version}}.Serialize({{output}}, {{propertyPath}}, context);
-                 """;
+        return $"if ({propertyPath} == null)\n                 {{\n                    throw new InvalidOperationException(\"Property {propertyPath} has not been initialized.\");\n                 }}\n                 {propertyType}SerializerV{version}.Serialize(ref {output}, {propertyPath}, context);";
     }
 
-    public static string ToNestedSerializerDeclarations(
+   public static string ToNestedSerializerDeclarations(
         this IList<FieldDefinition> fields,
         short? apiKey,
         short version,
@@ -408,23 +405,20 @@ public static class FieldDefinitionExtensions
         }
 
         var source = new StringBuilder();
-        source.AppendLine(
-            $$"""
-              public static class {{nestedTypeName}}SerializerV{{version}}
-              {
-                 public static void Serialize(MemoryStream output, {{nestedTypeName}} message, ISerializationContext context)
-                 {
-                    {{fields.ToSerializationStatements(apiKey, version, flexible)}}
-                 }
-                 
-                 public static {{nestedTypeName}} Deserialize(MemoryStream input, ISerializationContext context)
-                 {
-                    var message = new {{nestedTypeName}}();
-                    {{fields.ToDeserializationStatements(apiKey, version, flexible)}}
-                    return message;
-                 }
-              }
-              """);
+        source.AppendLine("            public static class " + nestedTypeName + "SerializerV" + version);
+        source.AppendLine("            {");
+        source.AppendLine("               public static void Serialize(ref BufferWriter writer, " + nestedTypeName + " message, ISerializationContext context)");
+        source.AppendLine("               {");
+        source.AppendLine("                  " + fields.ToSerializationStatements(apiKey, version, flexible));
+        source.AppendLine("               }");
+        source.AppendLine();
+        source.AppendLine("               public static " + nestedTypeName + " Deserialize(ref BufferReader reader, ISerializationContext context)");
+        source.AppendLine("               {");
+        source.AppendLine("                  var message = new " + nestedTypeName + "();");
+        source.AppendLine("                  " + fields.ToDeserializationStatements(apiKey, version, flexible, "reader"));
+        source.AppendLine("                  return message;");
+        source.AppendLine("               }");
+               source.AppendLine("            }");
 
         foreach (var child in fields)
         {
@@ -460,6 +454,16 @@ public static class FieldDefinitionExtensions
         short version,
         bool flexible)
     {
+        return ToDeserializationStatements(fields, apiKey, version, flexible, "reader");
+    }
+
+    public static string ToDeserializationStatements(
+        this IList<FieldDefinition> fields,
+        short? apiKey,
+        short version,
+        bool flexible,
+        string input)
+    {
         var source = new StringBuilder();
         foreach (var field in fields)
         {
@@ -468,7 +472,7 @@ public static class FieldDefinitionExtensions
                 continue;
             }
             
-            var fieldStatements = field.ToDeserializationStatements(apiKey, version, flexible);
+          var fieldStatements = field.ToDeserializationStatements(apiKey, version, flexible, input);
             if (!string.IsNullOrEmpty(fieldStatements))
             {
                 source.AppendLine(fieldStatements);
@@ -484,57 +488,57 @@ public static class FieldDefinitionExtensions
             
             if (!taggedFields.Any())
             {
-                source.AppendLine("PrimitiveSerializer.DeserializeUVarInt(input); // tag section length");
+                source.AppendLine("reader.ReadUVarInt(); // tag section length");
             }
             else
             {
                 source.AppendLine("""
-                                    var tagSectionLength = PrimitiveSerializer.DeserializeUVarInt(input);
-                                    for (var tagIndex = 0; tagIndex < tagSectionLength; tagIndex++)
+                                var tagSectionLength = reader.ReadUVarInt();
+                                for (var tagIndex = 0; tagIndex < tagSectionLength; tagIndex++)
+                                {
+                                    var tagNumber = reader.ReadUVarInt();
+                                    var tagSize = reader.ReadUVarInt();
+                                    if (tagSize == 0)
                                     {
-                                        var tagNumber = PrimitiveSerializer.DeserializeUVarInt(input);
-                                        var tagSize = PrimitiveSerializer.DeserializeUVarInt(input);
-                                        if (tagSize == 0)
-                                        {
-                                            continue;
-                                        }
-                                        var position = (int)input.Position;
-                                        switch (tagNumber)
-                                        {
-                                    """);
+                                        continue;
+                                    }
+                                    var position = reader.Position;
+                                    switch (tagNumber)
+                                    {
+                                """);
                 
                 foreach (var taggedField in taggedFields)
                 {
                     source.AppendLine($$"""
                                         case {{taggedField.Tag}}:
-                                            {{taggedField.ToDeserializationStatements(apiKey, version, flexible)}}
+                                            {{taggedField.ToDeserializationStatements(apiKey, version, flexible, "reader")}}
                                             break;
                                         """);
                 }
 
                 source.AppendLine("""
-                                            default:
-                                                throw new InvalidOperationException($"Tag number {tagNumber} is not supported.");
-                                        }
-                                        var actualTagSize = (int)input.Position - position;
-                                        if (actualTagSize != tagSize)
-                                        {
-                                            throw new InvalidOperationException($"Tag {tagNumber} has incorrect size. Expected {tagSize} but got {actualTagSize}.");
-                                        }
-                                  }
-                                  """);
+                                        default:
+                                            throw new InvalidOperationException($"Tag number {tagNumber} is not supported.");
+                                    }
+                                    var actualTagSize = reader.Position - position;
+                                    if (actualTagSize != tagSize)
+                                    {
+                                        throw new InvalidOperationException($"Tag {tagNumber} has incorrect size. Expected {tagSize} but got {actualTagSize}.");
+                                    }
+                                }
+                              """);
             }
         }
         
         return source.ToString();
     }
     
-    public static string ToDeserializationStatements(
+  public static string ToDeserializationStatements(
         this FieldDefinition field,
         short? apiKey,
         short version,
         bool flexible,
-        string input = "input")
+        string input = "reader")
     {
         if (!field.Versions.Includes(version))
         {
@@ -559,23 +563,23 @@ public static class FieldDefinitionExtensions
         }
 
 
-        var itemsCount = $"{field.Name.FirstCharToLowerCase()}Count";
+      var itemsCount = $"{field.Name.FirstCharToLowerCase()}Count";
         var lengthDeserialization = flexible
-            ? $"var {itemsCount} = PrimitiveSerializer.DeserializeLength({input});"
-            : $"var {itemsCount} = PrimitiveSerializer.DeserializeInt({input});";
+            ? $"var {itemsCount} = reader.ReadLength();"
+            : $"var {itemsCount} = reader.ReadInt32BigEndian();";
         if (!field.IsMap())
         {
             return $$"""
-                     {{lengthDeserialization}}
-                     if ({{itemsCount}} >= 0)
-                     {    
-                         message.{{field.Name}} = new {{propertyType}}[{{itemsCount}}];
-                         for (var i = 0; i < {{itemsCount}}; i++)
-                         {
-                            {{GetDeserializationStatements($"message.{field.Name}[i]", apiKey, version, flexible, propertyType, input)}}
-                         }
-                     }
-                     """;
+                      {{lengthDeserialization}}
+                      if ({{itemsCount}} >= 0)
+                      {    
+                          message.{{field.Name}} = new {{propertyType}}[{{itemsCount}}];
+                          for (var i = 0; i < {{itemsCount}}; i++)
+                          {
+                             {{GetDeserializationStatements($"message.{field.Name}[i]", apiKey, version, flexible, propertyType, "reader")}}
+                          }
+                      }
+                      """;
         }
 
         var keyType = field.GetMapKeyPropertyType();
@@ -584,23 +588,23 @@ public static class FieldDefinitionExtensions
             ? "key"
             : "key.Value";
         return $$"""
-                 {{lengthDeserialization}}
-                 if ({{itemsCount}} >= 0)
-                 {
-                     message.{{field.Name}} = new Dictionary<{{keyType}}, {{propertyType}}>({{itemsCount}});
-                     for (var i = 0; i < {{itemsCount}}; i++)
-                     {
-                        {{propertyType}} item;
-                        {{GetDeserializationStatements("item", apiKey, version, flexible, propertyType, input)}}
-                        var key = item.{{keyName}};
-                        if (key == null)
-                        {
-                            throw new InvalidOperationException("{{keyName}} is used as a key, but value is null.");
-                        }
-                        message.{{field.Name}}[{{mapIndex}}] = item;
-                     }
-                 }
-                 """;
+                  {{lengthDeserialization}}
+                  if ({{itemsCount}} >= 0)
+                  {
+                      message.{{field.Name}} = new Dictionary<{{keyType}}, {{propertyType}}>({{itemsCount}});
+                      for (var i = 0; i < {{itemsCount}}; i++)
+                      {
+                         {{propertyType}} item;
+                         {{GetDeserializationStatements("item", apiKey, version, flexible, propertyType, "reader")}}
+                         var key = item.{{keyName}};
+                         if (key == null)
+                         {
+                             throw new InvalidOperationException("{{keyName}} is used as a key, but value is null.");
+                         }
+                         message.{{field.Name}}[{{mapIndex}}] = item;
+                      }
+                  }
+                  """;
     }
 
     private static string GetDeserializationStatements(
@@ -609,69 +613,56 @@ public static class FieldDefinitionExtensions
         short version,
         bool flexible,
         string? propertyType,
-        string input = "input")
+        string input = "reader")
     {
         if (propertyType == "string")
         {
             return flexible
-                ? $"{propertyPath} = PrimitiveSerializer.DeserializeVarString({input});"
-                : $"{propertyPath} = PrimitiveSerializer.DeserializeString({input});";
+                ? $"{propertyPath} = reader.ReadVarString();"
+                : $"{propertyPath} = reader.ReadString();";
         }
 
         if (propertyType == "short")
         {
-            var propertyDeserialization = $"{propertyPath} = PrimitiveSerializer.DeserializeShort({input});";
-            /*
-            if (propertyPath.EndsWith("ErrorCode"))
-            {
-                return $$"""
-                         {{propertyDeserialization}}
-                         if ({{propertyPath}} != 0)
-                         {
-                             throw new InvalidOperationException($"Error code {{{propertyPath}}} was received in response.");
-                         }
-                         """;
-            }
-            */
-            return propertyDeserialization;
+            return $"{propertyPath} = reader.ReadInt16BigEndian();";
         }
 
         if (propertyType == "ushort")
         {
-            return $"{propertyPath} = PrimitiveSerializer.DeserializeUshort({input});";
+            return $"{propertyPath} = (ushort)reader.ReadInt16BigEndian();";
         }
 
         if (propertyType == "byte")
         {
-            return $"{propertyPath} = PrimitiveSerializer.DeserializeByte({input});";
+            return $"{propertyPath} = reader.ReadByte();";
         }
 
         if (propertyType == "bool")
         {
-            return $"{propertyPath} = PrimitiveSerializer.DeserializeBool({input});";
+            return $"{propertyPath} = reader.ReadBool();";
         }
         
-        if (propertyType == "int")
+       if (propertyType == "int")
         {
-            return $"{propertyPath} = PrimitiveSerializer.DeserializeInt({input});";
+            return $"{propertyPath} = reader.ReadInt32BigEndian();";
         }
         
-        if (propertyType == "long")
+      if (propertyType == "long")
         {
-            return $"{propertyPath} = PrimitiveSerializer.DeserializeLong({input});";
+            return $"{propertyPath} = reader.ReadInt64BigEndian();";
         }
         
-        if (propertyType == "double")
+         if (propertyType == "double")
         {
-            return $"{propertyPath} = PrimitiveSerializer.DeserializeDouble({input});";
+            return $"{propertyPath} = reader.ReadDoubleBigEndian();";
         }
 
         if (propertyType == "Memory<byte>")
         {
             var lengthVariableName = $"{propertyPath.Replace(".", "")}Length";
             var lengthDeserialization = flexible
-                ? $"var {lengthVariableName} = PrimitiveSerializer.DeserializeLength({input});"
-                : $"var {lengthVariableName} = PrimitiveSerializer.DeserializeInt({input});";
+                ? $"var {lengthVariableName} = reader.ReadLength();"
+                : $"var {lengthVariableName} = reader.ReadInt32BigEndian();";
             return $$"""
                      {{lengthDeserialization}}
                      if ({{lengthVariableName}} == 0)
@@ -680,33 +671,33 @@ public static class FieldDefinitionExtensions
                      }
                      else if ({{lengthVariableName}} > 0)
                      {
-                         {{propertyPath}} = {{input}}.GetBuffer().AsMemory((int)input.Position, {{lengthVariableName}});
+                         {{propertyPath}} = reader.ReadMemory({{lengthVariableName}});
                      }
                      """;
         }
 
         if (propertyType == "Guid")
         {
-            return $"{propertyPath} = PrimitiveSerializer.DeserializeGuid({input});";
+            return $"{propertyPath} = reader.ReadGuid();";
         }
 
-        if (propertyType == "RecordsContainer")
+      if (propertyType == "RecordsContainer")
         {
             var recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
-            return $"{propertyPath} = RecordsContainerSerializer{recordsVersion}.Deserialize({input}, context);";
+            return $"{propertyPath} = RecordsContainerSerializer{recordsVersion}.Deserialize(ref reader, context);";
         }
 
         if (propertyType == "ConsumerProtocolAssignment")
         {
-            return $"{propertyPath} = ConsumerProtocolAssignmentSerializationHelper.Deserialize({input}, {flexible.ToString().ToLower()}, context);";
+            return $"{propertyPath} = ConsumerProtocolAssignmentSerializationHelper.Deserialize(ref reader, {flexible.ToString().ToLower()}, context);";
         }
 
         if (propertyType == "ConsumerProtocolSubscription")
         {
-            return $"{propertyPath} = ConsumerProtocolSubscriptionSerializationHelper.Deserialize({input}, {flexible.ToString().ToLower()}, context);";
+            return $"{propertyPath} = ConsumerProtocolSubscriptionSerializationHelper.Deserialize(ref reader, {flexible.ToString().ToLower()}, context);";
         }
 
-        return $"{propertyPath} = {propertyType}SerializerV{version}.Deserialize({input}, context);";
+        return $"{propertyPath} = {propertyType}SerializerV{version}.Deserialize(ref reader, context);";
     }
 
 }
