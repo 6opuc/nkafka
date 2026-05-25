@@ -24,6 +24,11 @@ public static class Crc32c
         return _calculateStream(stream, start, size);
     }
     
+    public static uint Calculate(ReadOnlyMemory<byte> buffer, long start, long size)
+    {
+        return _calculateSpan(buffer.Span, start, size);
+    }
+    
     public static uint Calculate(ReadOnlySpan<byte> buffer, long start, long size)
     {
         return _calculateSpan(buffer, start, size);

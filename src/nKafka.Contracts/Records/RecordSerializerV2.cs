@@ -11,13 +11,13 @@ public class RecordSerializerV2
         var size = reader.ReadVarInt();
         if (size <= 0)
         {
-            reader.Advance(-(int)(reader.Position - start));
+            reader.Position = start;
             return null;
         }
 
         if (start + size > eof)
         {
-            reader.Advance(-(int)(reader.Position - start));
+            reader.Position = start;
             return null;
         }
         

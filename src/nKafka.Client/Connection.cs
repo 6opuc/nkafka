@@ -290,11 +290,8 @@ public class Connection : IConnection
             using (BeginRequestLoggingScope(pendingRequest))
             {
                 var payload = _arrayPool.Rent(_config.RequestBufferSize);
-                try
-                {
-                    using (BeginRequestLoggingScope(pendingRequest))
+                   try
                     {
-                        _logger.LogDebug("Processing.");
                         _pendingRequests.TryAdd(pendingRequest.CorrelationId, pendingRequest);
 
                         _logger.LogDebug("Serializing.");

@@ -18,7 +18,7 @@ public struct BufferReader
     }
 
     public ReadOnlyMemory<byte> Buffer => _buffer;
-    public int Position => _pos;
+    public int Position { get => _pos; internal set => _pos = value; }
 
     public int Remaining => _buffer.Length - _pos;
 
@@ -136,7 +136,7 @@ public struct BufferReader
     public int ReadLength() => (int)ReadUVarLong() - 1;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public string ReadString()
+    public string? ReadString()
     {
         var len = ReadInt16BigEndian();
         if (len < 0) return null;
@@ -146,7 +146,7 @@ public struct BufferReader
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public string ReadVarString()
+    public string? ReadVarString()
     {
         var len = ReadLength();
         if (len < 0) return null;

@@ -15,7 +15,7 @@ public sealed class PooledBuffer : IDisposable
         _writer = new BufferWriter(_rentedBuffer);
     }
 
-    public BufferWriter Writer { get => _writer; set => _writer = value; }
+    public BufferWriter Writer { get => _writer; internal set => _writer = value; }
     public int Position => _writer.Position;
     public Memory<byte> Memory => _rentedBuffer;
 
