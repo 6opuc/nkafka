@@ -88,8 +88,8 @@ public static class Crc32c
             {
                 while (span.Length >= 8)
                 {
-                    crc = (uint)Sse42.X64.Crc32(crc, MemoryMarshal.Read<uint>(span));
-                    span = span[4..];
+                    crc = (uint)Sse42.X64.Crc32(crc, MemoryMarshal.Read<ulong>(span));
+                    span = span[8..];
                 }
             }
             
