@@ -10,10 +10,9 @@ public static class ConsumerProtocolAssignmentSerializationHelper
     public static void Serialize(ref BufferWriter writer, ConsumerProtocolAssignment? message, bool flexible, ISerializationContext context)
     {
         using var buffer = context.CreateBuffer();
-        var tw = default(BufferWriter);
+        var tw = new BufferWriter(buffer.Memory);
         if (message != null)
         {
-            tw = default;
             tw.WriteShort(_version);
             ConsumerProtocolAssignmentSerializer.Serialize(ref tw, message, _version, context);
             buffer.Writer = tw;

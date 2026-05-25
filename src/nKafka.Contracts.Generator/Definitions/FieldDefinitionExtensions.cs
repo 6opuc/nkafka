@@ -226,7 +226,7 @@ public static class FieldDefinitionExtensions
                                   if (tagSectionLength > 0)
                                   {
                                         using var buffer = context.CreateBuffer();
-                                        var tw = default(BufferWriter);
+                                        var tw = new BufferWriter(buffer.Memory);
                                   """);
                 foreach (var taggedField in taggedFields)
                 {
@@ -234,12 +234,12 @@ public static class FieldDefinitionExtensions
                                         if (message.{{taggedField.Name}} != null)
                                         {
                                             writer.WriteUVarInt((uint){{taggedField.Tag}}); // tag number
-                                            tw = default;
+                                            tw = new BufferWriter(buffer.Memory);
                                             {{taggedField.ToSerializationStatements(apiKey, version, flexible, "tw")}}
                                             buffer.Writer = tw;
-                                            var size = (int)buffer.Position;
-                                            writer.WriteUVarInt((uint)size); // tag payload size
-                                            writer.Write(buffer.Memory.Span.Slice(0, size)); // tag payload
+                                             var size = (int)buffer.Position;
+                                             writer.WriteUVarInt((uint)size); // tag payload size
+                                             writer.Write(buffer.Memory.Span.Slice(0, size)); // tag payload
                                         }
                                         """);
                 }

@@ -285,9 +285,10 @@ public struct BufferWriter
             return;
         }
 
-        var span = value.AsSpan();
-        var length = Encoding.UTF8.GetBytes(span, _buffer.Span.Slice(_pos));
+        var length = Encoding.UTF8.GetByteCount(value);
         WriteInt16BigEndian((short)length);
+        var span = value.AsSpan();
+        Encoding.UTF8.GetBytes(span, _buffer.Span.Slice(_pos));
         _pos += length;
     }
 
@@ -300,9 +301,10 @@ public struct BufferWriter
             return;
         }
 
-        var span = value.AsSpan();
-        var length = Encoding.UTF8.GetBytes(span, _buffer.Span.Slice(_pos));
+        var length = Encoding.UTF8.GetByteCount(value);
         WriteLength(length);
+        var span = value.AsSpan();
+        Encoding.UTF8.GetBytes(span, _buffer.Span.Slice(_pos));
         _pos += length;
     }
 
@@ -349,7 +351,7 @@ public struct BufferWriter
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void WriteLong(long value)
     {
-        uint ui = (uint)value;
+        ulong ui = (ulong)value;
         for (int j = 7; j >= 0; j--)
             _buffer.Span[_pos++] = (byte)(ui >> j * 8 & 0xff);
     }
@@ -358,7 +360,7 @@ public struct BufferWriter
     public void WriteLong(long? value) => WriteLong(value!.Value);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void WriteBool(bool? value) => WriteBool(value!.Value);
+    public void WriteBool(bool? value) => WriteBool(value ?? false);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void WriteVarLong(long? value) => WriteVarLong(value!.Value);
