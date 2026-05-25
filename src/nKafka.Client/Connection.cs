@@ -154,10 +154,10 @@ public class Connection : IConnection
                                         var response = pendingRequest.DeserializeResponse(buffer, _serializationContext);
                                         _logger.LogDebug("Deserialized.");
 
-                                    var disposableResponse =
-                                        new MessageWithPooledPayload(response, _arrayPool, payload);
-                                    pendingRequest.Response.TrySetResult(disposableResponse);
-                                }
+                                        var disposableResponse =
+                                            new MessageWithPooledPayload(response, _arrayPool, payload);
+                                        pendingRequest.Response.TrySetResult(disposableResponse);
+                                    }
                                 catch (Exception exception)
                                 {
                                     _arrayPool.Return(payload);
@@ -290,29 +290,28 @@ public class Connection : IConnection
             using (BeginRequestLoggingScope(pendingRequest))
             {
                 var payload = _arrayPool.Rent(_config.RequestBufferSize);
-                   try
+                  try
+                     {
+                         _pendingRequests.TryAdd(pendingRequest.CorrelationId, pendingRequest);
+
+                         _logger.LogDebug("Serializing.");
+                         var writer = new BufferWriter(new Memory<byte>(payload, 0, payload.Length));
+                         pendingRequest.SerializeRequest(ref writer, _serializationContext);
+
+                         _logger.LogDebug("Sending {@size} bytes.", writer.Position);
+                         await _writerStream.WriteAsync(payload, 0, (int)writer.Position,
+                             pendingRequest.CancellationToken);
+                         _logger.LogDebug("Sent.");
+                    }
+                    catch (Exception exception)
                     {
-                        _pendingRequests.TryAdd(pendingRequest.CorrelationId, pendingRequest);
-
-                        _logger.LogDebug("Serializing.");
-                        var writer = new BufferWriter(new Memory<byte>(payload, 0, payload.Length));
-                        pendingRequest.SerializeRequest(ref writer, _serializationContext);
-
-                        _logger.LogDebug("Sending {@size} bytes.", writer.Position);
-                        await _writerStream.WriteAsync(payload, 0, (int)writer.Position,
-                            pendingRequest.CancellationToken);
-                        _logger.LogDebug("Sent.");
+                        pendingRequest.Response.TrySetException(exception);
+                    }
+                    finally
+                    {
+                        _arrayPool.Return(payload);
                     }
                 }
-                catch (Exception exception)
-                {
-                    pendingRequest.Response.TrySetException(exception);
-                }
-                finally
-                {
-                    _arrayPool.Return(payload);
-                }
-            }
 
             var response = await completionPromise.Task;
             return new DisposableMessage<TResponse>(response, pendingRequest.ApiVersion);

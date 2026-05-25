@@ -82,6 +82,10 @@ public static class MessageDefinitionExtensions
                 source.AppendLine("      var reader = new BufferReader(input);");
                 source.AppendLine($"      var message = new {messageDefinition.Name}();");
                 source.AppendLine("      " + messageDefinition.Fields.ToDeserializationStatements(messageDefinition.ApiKey, version, flexible, "reader"));
+                source.AppendLine("      if (reader.Position != input.Length)");
+                source.AppendLine("      {");
+                source.AppendLine("          throw new InvalidOperationException($\"Message consumed {reader.Position} bytes but expected {input.Length}.\");");
+                source.AppendLine("      }");
                 source.AppendLine("      return message;");
                 source.AppendLine("   }");
                 source.AppendLine();

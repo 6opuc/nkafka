@@ -49,8 +49,18 @@ public static class Crc32c
                 throw new PlatformNotSupportedException();
             }
             
+            if (start < 0 || start > int.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException(nameof(start), "Start position must be between 0 and int.MaxValue.");
+            }
+            
             var crc = _seed;
             var buffer = stream.GetBuffer();
+            var end = start + size;
+            if (end > int.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException(nameof(size), "End position exceeds buffer bounds.");
+            }
 
             if (_sse42x64Available)
             {
@@ -86,28 +96,34 @@ public static class Crc32c
                 throw new PlatformNotSupportedException();
             }
             
+            if (start < 0 || start > int.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException(nameof(start), "Start position must be between 0 and int.MaxValue.");
+            }
+            
             var crc = _seed;
             var span = buffer.Slice((int)start, (int)size);
+            var pos = 0;
 
             if (_sse42x64Available)
             {
-                while (span.Length >= 8)
+                while (pos + 8 <= span.Length)
                 {
-                    crc = (uint)Sse42.X64.Crc32(crc, MemoryMarshal.Read<ulong>(span));
-                    span = span[8..];
+                    crc = (uint)Sse42.X64.Crc32(crc, MemoryMarshal.Read<ulong>(span.Slice(pos)));
+                    pos += 8;
                 }
             }
             
-            while (span.Length >= 4)
+            while (pos + 4 <= span.Length)
             {
-                crc = Sse42.Crc32(crc, MemoryMarshal.Read<uint>(span));
-                span = span[4..];
+                crc = Sse42.Crc32(crc, MemoryMarshal.Read<uint>(span.Slice(pos)));
+                pos += 4;
             }
             
-            while (span.Length > 0)
+            while (pos < span.Length)
             {
-                crc = Sse42.Crc32(crc, span[0]);
-                span = span[1..];
+                crc = Sse42.Crc32(crc, span[pos]);
+                pos++;
             }
 
             return ~crc;
@@ -139,18 +155,35 @@ public static class Crc32c
         
         public static uint CalculateStream(MemoryStream stream, long start, long size)
         {
+            if (start < 0 || start > int.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException(nameof(start), "Start position must be between 0 and int.MaxValue.");
+            }
+            
             var crc = _seed;
             var buffer = stream.GetBuffer();
-            for (var i = start; i < start + size; ++i)
+            var end = start + size;
+            if (end > int.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException(nameof(size), "End position exceeds buffer bounds.");
+            }
+            
+            for (var i = start; i < end; ++i)
                 crc = (crc >> 8) ^ _table[buffer[i] ^ crc & 0xff];
             return ~crc;
         }
         
         public static uint CalculateSpan(ReadOnlySpan<byte> buffer, long start, long size)
         {
+            if (start < 0 || start > int.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException(nameof(start), "Start position must be between 0 and int.MaxValue.");
+            }
+            
             var crc = _seed;
             var span = buffer.Slice((int)start, (int)size);
-            for (var i = 0; i < size; i++)
+            var end = (int)size;
+            for (var i = 0; i < end; i++)
                 crc = (crc >> 8) ^ _table[span[i] ^ crc & 0xff];
             return ~crc;
         }

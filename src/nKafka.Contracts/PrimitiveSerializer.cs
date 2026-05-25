@@ -309,11 +309,7 @@ public struct BufferWriter
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void WriteShort(short value)
-    {
-        _buffer.Span[_pos++] = (byte)(value >> 8);
-        _buffer.Span[_pos++] = (byte)value;
-    }
+    public void WriteShort(short value) => WriteInt16BigEndian(value);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void WriteShort(short? value)
@@ -343,10 +339,10 @@ public struct BufferWriter
     public void WriteInt(int? value) => WriteInt(value!.Value);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void WriteUint(uint value) => WriteInt((int)value);
+    public void WriteUint(uint value) => WriteUInt32BigEndian(value);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void WriteUint(uint? value) => WriteInt((int)value!.Value);
+    public void WriteUint(uint? value) => WriteUInt32BigEndian(value!.Value);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void WriteLong(long value)
