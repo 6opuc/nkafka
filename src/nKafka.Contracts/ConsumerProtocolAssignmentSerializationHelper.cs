@@ -7,27 +7,34 @@ public static class ConsumerProtocolAssignmentSerializationHelper
 {
     private static readonly short _version = 3;
         
+    /// <summary>
+    /// Serializes a ConsumerProtocolAssignment message.
+    /// Uses a temporary BufferWriter (writerTemp) to build the message, then writes it to the output writer.
+    /// This pattern allows us to calculate the message size before writing to the final destination.
+    /// </summary>
     public static void Serialize(ref BufferWriter writer, ConsumerProtocolAssignment? message, bool flexible, ISerializationContext context)
     {
-        using var buffer = context.CreateBuffer();
-        var tw = new BufferWriter(buffer.Memory);
-        if (message != null)
+        var writerTemp = context.CreateWriter();
+        try
         {
-            tw.WriteShort(_version);
-            ConsumerProtocolAssignmentSerializer.Serialize(ref tw, message, _version, context);
-            buffer.Writer = tw;
-        }
+            if (message != null)
+            {
+                writerTemp.WriteShort(_version);
+                ConsumerProtocolAssignmentSerializer.Serialize(ref writerTemp, message, _version, context);
+            }
 
-        if (flexible)
-        {
-            writer.WriteLength(buffer.Position);
+            if (flexible)
+            {
+                writer.WriteLength(writerTemp.Position);
+            }
+            else
+            {
+                writer.WriteInt(writerTemp.Position == 0 ? -1 : (int)writerTemp.Position);
+            }
+            
+            writer.Write(writerTemp.Memory.Span.Slice(0, (int)writerTemp.Position));
         }
-        else
-        {
-            writer.WriteInt(buffer.Position == 0 ? -1 : (int)buffer.Position);
-        }
-        
-        writer.Write(buffer.Memory.Span.Slice(0, (int)buffer.Position));
+        finally { writerTemp.Dispose(); }
     }
 
     public static ConsumerProtocolAssignment? Deserialize(ref BufferReader reader, bool flexible, ISerializationContext context)

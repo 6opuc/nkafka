@@ -12,5 +12,5 @@ public interface IRequest
 
     void SerializeRequest(ref BufferWriter writer, short version, ISerializationContext context);
 
-    object DeserializeResponse(ReadOnlyMemory<byte> buffer, short version, ISerializationContext context);
+    object DeserializeResponse(ref BufferReader reader, short version, ISerializationContext context);
 }

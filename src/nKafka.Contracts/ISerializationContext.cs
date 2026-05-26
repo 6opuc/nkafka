@@ -4,5 +4,5 @@ public interface ISerializationContext
 {
     SerializationConfig Config { get; }
     
-    PooledBuffer CreateBuffer();
+    BufferWriter CreateWriter(int size = 4096);
 }

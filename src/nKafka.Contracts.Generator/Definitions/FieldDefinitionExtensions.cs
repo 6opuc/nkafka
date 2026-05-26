@@ -225,30 +225,32 @@ public static class FieldDefinitionExtensions
                 source.AppendLine("""
                                   if (tagSectionLength > 0)
                                   {
-                                        using var buffer = context.CreateBuffer();
-                                        var tw = new BufferWriter(buffer.Memory);
+                                        var tw = context.CreateWriter();
+                                        try
+                                        {
                                   """);
                 foreach (var taggedField in taggedFields)
                 {
 source.AppendLine($$"""
                                         if (message.{{taggedField.Name}} != null)
                                         {
-                                            tw = new BufferWriter(buffer.Memory);
+                                            tw.Reset();
                                             {{taggedField.ToSerializationStatements(apiKey, version, flexible, "tw")}}
-                                            buffer.Writer = tw;
-                                            var size = (int)buffer.Position;
+                                            var size = (int)tw.Position;
                                             var tagNumber = (uint){{taggedField.Tag}};
-                                            var tagOverhead = (uint)VarIntSize(tagNumber) + (uint)VarIntSize((uint)size);
+                                            var tagOverhead = (uint)BufferWriter.VarIntSize(tagNumber) + (uint)BufferWriter.VarIntSize((uint)size);
                                             if (writer.Remaining < tagOverhead + (uint)size)
                                             {
                                                 throw new InvalidOperationException($"Insufficient buffer space for tagged field {{taggedField.Name}}. Need {tagOverhead + size} bytes but only {writer.Remaining} available.");
                                             }
                                             writer.WriteUVarInt(tagNumber); // tag number
                                             writer.WriteUVarInt((uint)size); // tag payload size
-                                            writer.Write(buffer.Memory.Span.Slice(0, size)); // tag payload
+                                            writer.Write(tw.Memory.Span.Slice(0, size)); // tag payload
                                         }
                                         """);
                 }
+                source.AppendLine("}");
+                source.AppendLine("finally { tw.Dispose(); }");
                 source.AppendLine("}");
             }
         }
@@ -413,28 +415,18 @@ source.AppendLine($$"""
         var source = new StringBuilder();
         source.AppendLine("            public static class " + nestedTypeName + "SerializerV" + version);
         source.AppendLine("            {");
-        source.AppendLine("               [MethodImpl(MethodImplOptions.AggressiveInlining)]");
-        source.AppendLine("               private static int VarIntSize(uint value)");
-        source.AppendLine("               {");
-        source.AppendLine("                   if (value < (1 << 7)) return 1;");
-        source.AppendLine("                   if (value < (1 << 14)) return 2;");
-        source.AppendLine("                   if (value < (1 << 21)) return 3;");
-        source.AppendLine("                   if (value < (1 << 28)) return 4;");
-        source.AppendLine("                   return 5;");
-        source.AppendLine("               }");
-        source.AppendLine();
         source.AppendLine("               public static void Serialize(ref BufferWriter writer, " + nestedTypeName + " message, ISerializationContext context)");
         source.AppendLine("               {");
         source.AppendLine("                  " + fields.ToSerializationStatements(apiKey, version, flexible));
         source.AppendLine("               }");
         source.AppendLine();
-        source.AppendLine("               public static " + nestedTypeName + " Deserialize(ref BufferReader reader, ISerializationContext context)");
+source.AppendLine("               public static " + nestedTypeName + " Deserialize(ref BufferReader reader, ISerializationContext context)");
         source.AppendLine("               {");
         source.AppendLine("                  var message = new " + nestedTypeName + "();");
         source.AppendLine("                  " + fields.ToDeserializationStatements(apiKey, version, flexible, "reader"));
         source.AppendLine("                  return message;");
         source.AppendLine("               }");
-               source.AppendLine("            }");
+        source.AppendLine("            }");
 
         foreach (var child in fields)
         {
@@ -478,7 +470,7 @@ source.AppendLine($$"""
         short? apiKey,
         short version,
         bool flexible,
-        string input)
+        string reader)
     {
         var source = new StringBuilder();
         foreach (var field in fields)
@@ -488,7 +480,7 @@ source.AppendLine($$"""
                 continue;
             }
             
-          var fieldStatements = field.ToDeserializationStatements(apiKey, version, flexible, input);
+          var fieldStatements = field.ToDeserializationStatements(apiKey, version, flexible, reader);
             if (!string.IsNullOrEmpty(fieldStatements))
             {
                 source.AppendLine(fieldStatements);
@@ -556,7 +548,7 @@ source.AppendLine($$"""
         short? apiKey,
         short version,
         bool flexible,
-        string input = "reader")
+        string reader = "reader")
     {
         if (!field.Versions.Includes(version))
         {
@@ -577,7 +569,7 @@ source.AppendLine($$"""
                 version,
                 flexible,
                 propertyType,
-                input);
+                reader);
         }
 
 
@@ -625,13 +617,13 @@ source.AppendLine($$"""
                   """;
     }
 
-    private static string GetDeserializationStatements(
+private static string GetDeserializationStatements(
         string propertyPath,
         short? apiKey,
         short version,
         bool flexible,
         string? propertyType,
-        string input = "reader")
+        string reader = "reader")
     {
         if (propertyType == "string")
         {
@@ -682,16 +674,16 @@ source.AppendLine($$"""
                 ? $"var {lengthVariableName} = reader.ReadLength();"
                 : $"var {lengthVariableName} = reader.ReadInt32BigEndian();";
             return $$"""
-                     {{lengthDeserialization}}
-                     if ({{lengthVariableName}} == 0)
-                     {
-                        {{propertyPath}} = Memory<byte>.Empty;
-                     }
-                     else if ({{lengthVariableName}} > 0)
-                     {
-                         {{propertyPath}} = reader.ReadMemory({{lengthVariableName}});
-                     }
-                     """;
+                      {{lengthDeserialization}}
+                      if ({{lengthVariableName}} == 0)
+                      {
+                         {{propertyPath}} = Memory<byte>.Empty;
+                      }
+                      else if ({{lengthVariableName}} > 0)
+                      {
+                          {{propertyPath}} = reader.ReadMemory({{lengthVariableName}});
+                      }
+                      """;
         }
 
         if (propertyType == "Guid")

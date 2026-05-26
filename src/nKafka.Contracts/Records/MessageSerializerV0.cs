@@ -35,15 +35,11 @@ public static class MessageSerializerV0
         var keyLength = reader.ReadInt32BigEndian();
         message.Key = keyLength == -1
             ? null
-            : keyLength == 0
-                ? Array.Empty<byte>()
-                : reader.ReadSpan(keyLength).ToArray();
+            : reader.ReadMemory(keyLength);
         var valueLength = reader.ReadInt32BigEndian();
         message.Value = valueLength == -1
             ? null
-            : valueLength == 0
-                ? Array.Empty<byte>()
-                : reader.ReadSpan(valueLength).ToArray();
+            : reader.ReadMemory(valueLength);
 
         if (context.Config.CheckCrcs)
         {

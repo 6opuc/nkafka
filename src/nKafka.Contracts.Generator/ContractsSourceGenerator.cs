@@ -171,10 +171,10 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                                {{pair.Request.Name}}Serializer.Serialize(ref writer, this, version, context);
                            }
                            
-                           public object DeserializeResponse(ReadOnlyMemory<byte> buffer, short version, ISerializationContext context)
-                           {
-                               return {{pair.Response!.Name}}Serializer.Deserialize(buffer, version, context);
-                           }
+                          public object DeserializeResponse(ref BufferReader reader, short version, ISerializationContext context)
+                            {
+                                return {{pair.Response!.Name}}Serializer.Deserialize(ref reader, version, context);
+                            }
                       }
                       """));
         }

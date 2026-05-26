@@ -50,12 +50,11 @@ public class PendingRequest
         writer.Position = end;
     }
     
-    public object DeserializeResponse(Memory<byte> buffer, ISerializationContext context)
+    public object DeserializeResponse(ref BufferReader reader, ISerializationContext context)
     {
         var responseHeaderVersion = Payload.ApiKey == ApiKey.ApiVersions
             ? (short)0
             : (short)(Payload.FlexibleVersions.Includes(ApiVersion) ? 1 : 0);
-        var reader = new BufferReader(buffer);
         var header = ResponseHeaderSerializer.Deserialize(ref reader, responseHeaderVersion, context);
         if (header.CorrelationId == null)
         {
@@ -68,7 +67,6 @@ public class PendingRequest
                 $"Received response with incorrect correlation id. Expected {CorrelationId}, but got {header.CorrelationId}.");
         }
 
-        var responseBody = buffer.Slice(reader.Position);
-        return Payload.DeserializeResponse(responseBody, ApiVersion, context);
+        return Payload.DeserializeResponse(ref reader, ApiVersion, context);
     }
 }

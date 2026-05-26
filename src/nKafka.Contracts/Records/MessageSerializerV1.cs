@@ -2,6 +2,12 @@ namespace nKafka.Contracts.Records;
 
 public static class MessageSerializerV1
 {
+    /// <summary>
+    /// Deserializes a Kafka message from the reader.
+    /// Note: No position reset is needed after deserialization because BufferReader is a ref struct.
+    /// The ref struct semantics ensure the reader is passed by reference and its state is naturally
+    /// preserved across the call without requiring explicit position management.
+    /// </summary>
     public static Message? Deserialize(ref BufferReader reader, long eof, ISerializationContext context)
     {
         if (reader.Position + 8 + 4 > eof)
@@ -36,15 +42,11 @@ public static class MessageSerializerV1
         var keyLength = reader.ReadInt32BigEndian();
         message.Key = keyLength == -1
             ? null
-            : keyLength == 0
-                ? Array.Empty<byte>()
-                : reader.ReadSpan(keyLength).ToArray();
+            : reader.ReadMemory(keyLength);
         var valueLength = reader.ReadInt32BigEndian();
         message.Value = valueLength == -1
             ? null
-            : valueLength == 0
-                ? Array.Empty<byte>()
-                : reader.ReadSpan(valueLength).ToArray();
+            : reader.ReadMemory(valueLength);
 
         if (context.Config.CheckCrcs)
         {

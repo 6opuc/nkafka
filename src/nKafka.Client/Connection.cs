@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using nKafka.Contracts;
+using nKafka.Contracts.Exceptions;
 using nKafka.Contracts.MessageDefinitions;
 
 namespace nKafka.Client;
@@ -34,8 +35,7 @@ public class Connection : IConnection
         ArgumentNullException.ThrowIfNull(loggerFactory);
         _config = config;
         _logger = loggerFactory.CreateLogger<Connection>();
-        var bufferSize = Math.Max(_config.RequestBufferSize, _config.ResponseBufferSize);
-        _serializationContext = new SerializationContext(_arrayPool, bufferSize)
+               _serializationContext = new SerializationContext(_arrayPool)
         {
             Config = new SerializationConfig
             {
@@ -148,10 +148,18 @@ public class Connection : IConnection
                             {
                                 _logger.LogDebug("Deserializing response.");
 
-                                  try
+                                   try
                                     {
                                         var buffer = new Memory<byte>(payload, 0, payloadSize.Value);
-                                        var response = pendingRequest.DeserializeResponse(buffer, _serializationContext);
+                                        var reader = new BufferReader(buffer);
+                                        var response = pendingRequest.DeserializeResponse(ref reader, _serializationContext);
+                                        
+                                        if (reader.Remaining != 0)
+                                        {
+                                            throw new IncompleteMessageException(
+                                                $"Response has unconsumed data: {reader.Remaining} bytes remaining after deserialization.");
+                                        }
+                                        
                                         _logger.LogDebug("Deserialized.");
 
                                         var disposableResponse =
@@ -361,13 +369,13 @@ public class Connection : IConnection
         _socket = null;
     }
 
-      private class SerializationContext(ArrayPool<byte> arrayPool, int bufferSize) : ISerializationContext
+      private class SerializationContext(ArrayPool<byte> arrayPool) : ISerializationContext
     {
         public required SerializationConfig Config { get; init; }
         
-        public PooledBuffer CreateBuffer()
+        public BufferWriter CreateWriter(int size = 4096)
         {
-            return new PooledBuffer(arrayPool, bufferSize);
+            return new BufferWriter(arrayPool, size);
         }
     }
 }

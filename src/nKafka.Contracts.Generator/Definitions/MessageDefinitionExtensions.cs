@@ -27,23 +27,6 @@ public static class MessageDefinitionExtensions
         source.AppendLine("      }");
         source.AppendLine("   }");
         source.AppendLine();
-        source.AppendLine($"   public static {messageDefinition.Name} Deserialize(ReadOnlyMemory<byte> input, short version, ISerializationContext context)");
-        source.AppendLine("   {");
-        source.AppendLine("      switch (version)");
-        source.AppendLine("      {");
-        if (messageDefinition.ValidVersions.HasValue)
-        {
-            foreach (var version in messageDefinition.ValidVersions.Value)
-            {
-                source.AppendLine($"          case {version}:");
-                source.AppendLine($"              return {messageDefinition.Name}SerializerV{version}.Deserialize(input, context);");
-            }
-        }
-        source.AppendLine("          default:");
-        source.AppendLine("              throw new InvalidOperationException($\"Version {version} is not supported.\");");
-        source.AppendLine("      }");
-        source.AppendLine("   }");
-        source.AppendLine();
         source.AppendLine($"   public static {messageDefinition.Name} Deserialize(ref BufferReader reader, short version, ISerializationContext context)");
         source.AppendLine("   {");
         source.AppendLine("      switch (version)");
@@ -72,34 +55,12 @@ public static class MessageDefinitionExtensions
 
                 source.AppendLine($"public static class {messageDefinition.Name}SerializerV{version}");
                 source.AppendLine("{");
-                source.AppendLine("   [MethodImpl(MethodImplOptions.AggressiveInlining)]");
-                source.AppendLine("   private static int VarIntSize(uint value)");
-                source.AppendLine("   {");
-                source.AppendLine("       if (value < (1 << 7)) return 1;");
-                source.AppendLine("       if (value < (1 << 14)) return 2;");
-                source.AppendLine("       if (value < (1 << 21)) return 3;");
-                source.AppendLine("       if (value < (1 << 28)) return 4;");
-                source.AppendLine("       return 5;");
-                source.AppendLine("   }");
-                source.AppendLine();
                 source.AppendLine($"   public static void Serialize(ref BufferWriter writer, {messageDefinition.Name} message, ISerializationContext context)");
                 source.AppendLine("   {");
                 source.AppendLine("      " + messageDefinition.Fields.ToSerializationStatements(messageDefinition.ApiKey, version, flexible));
                 source.AppendLine("   }");
                 source.AppendLine();
-                source.AppendLine($"   public static {messageDefinition.Name} Deserialize(ReadOnlyMemory<byte> input, ISerializationContext context)");
-                source.AppendLine("   {");
-                source.AppendLine("      var reader = new BufferReader(input);");
-                source.AppendLine($"      var message = new {messageDefinition.Name}();");
-                source.AppendLine("      " + messageDefinition.Fields.ToDeserializationStatements(messageDefinition.ApiKey, version, flexible, "reader"));
-                source.AppendLine("      if (reader.Position != input.Length)");
-                source.AppendLine("      {");
-                source.AppendLine("          throw new InvalidOperationException($\"Message consumed {reader.Position} bytes but expected {input.Length}.\");");
-                source.AppendLine("      }");
-                source.AppendLine("      return message;");
-                source.AppendLine("   }");
-                source.AppendLine();
-                source.AppendLine($"   public static {messageDefinition.Name} Deserialize(ref BufferReader reader, ISerializationContext context)");
+source.AppendLine($"   public static {messageDefinition.Name} Deserialize(ref BufferReader reader, ISerializationContext context)");
                 source.AppendLine("   {");
                 source.AppendLine($"      var message = new {messageDefinition.Name}();");
                 source.AppendLine("      " + messageDefinition.Fields.ToDeserializationStatements(messageDefinition.ApiKey, version, flexible, "reader"));

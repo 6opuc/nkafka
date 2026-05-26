@@ -53,7 +53,7 @@ public static class RecordBatchSerializerV2
             }
         }
 
-        if (context.Config.CheckCrcs && reader.Position == recordBatchStart + recordBatch.BatchLength)
+        if (context.Config.CheckCrcs)
         {
             long crcDataLength = reader.Position - crcStart;
             ChecksumValidator.ValidateCrc32c(recordBatch.Crc, reader.Buffer, (int)crcStart, (int)crcDataLength);
