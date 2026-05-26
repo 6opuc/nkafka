@@ -35,9 +35,13 @@ public static class ConsumerProtocolSubscriptionSerializationHelper
         var length = flexible
             ? reader.ReadLength()
             : reader.ReadInt32BigEndian();
-        if (length <= 0)
+        if (length == -1)
         {
             return null;
+        }
+        if (length == 0)
+        {
+            return new ConsumerProtocolSubscription();
         }
         var version = reader.ReadInt16BigEndian();
         return ConsumerProtocolSubscriptionSerializer.Deserialize(ref reader, version, context);
