@@ -230,16 +230,23 @@ public static class FieldDefinitionExtensions
                                   """);
                 foreach (var taggedField in taggedFields)
                 {
-                    source.AppendLine($$"""
+source.AppendLine($$"""
                                         if (message.{{taggedField.Name}} != null)
                                         {
-                                            writer.WriteUVarInt((uint){{taggedField.Tag}}); // tag number
                                             tw = new BufferWriter(buffer.Memory);
                                             {{taggedField.ToSerializationStatements(apiKey, version, flexible, "tw")}}
                                             buffer.Writer = tw;
-                                             var size = (int)buffer.Position;
-                                             writer.WriteUVarInt((uint)size); // tag payload size
-                                             writer.Write(buffer.Memory.Span.Slice(0, size)); // tag payload
+                                            var size = (int)buffer.Position;
+                                            // Calculate total tag overhead: tag number (1-5 bytes) + size (1-5 bytes) + payload
+                                            // Using conservative estimate: 10 bytes max overhead for varints
+                                            var tagOverhead = 10U;
+                                            if (writer.Remaining < tagOverhead + (uint)size)
+                                            {
+                                                throw new InvalidOperationException($"Insufficient buffer space for tagged field {{taggedField.Name}}. Need {tagOverhead + size} bytes but only {writer.Remaining} available.");
+                                            }
+                                            writer.WriteUVarInt((uint){{taggedField.Tag}}); // tag number
+                                            writer.WriteUVarInt((uint)size); // tag payload size
+                                            writer.Write(buffer.Memory.Span.Slice(0, size)); // tag payload
                                         }
                                         """);
                 }
@@ -518,7 +525,9 @@ public static class FieldDefinitionExtensions
 
                 source.AppendLine("""
                                         default:
-                                            throw new InvalidOperationException($"Tag number {tagNumber} is not supported.");
+                                            // Skip unknown tags for forward compatibility
+                                            reader.Advance((int)tagSize);
+                                            break;
                                     }
                                     var actualTagSize = reader.Position - position;
                                     if (actualTagSize != tagSize)
