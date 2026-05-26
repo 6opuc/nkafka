@@ -237,14 +237,13 @@ source.AppendLine($$"""
                                             {{taggedField.ToSerializationStatements(apiKey, version, flexible, "tw")}}
                                             buffer.Writer = tw;
                                             var size = (int)buffer.Position;
-                                            // Calculate total tag overhead: tag number (1-5 bytes) + size (1-5 bytes) + payload
-                                            // Using conservative estimate: 10 bytes max overhead for varints
-                                            var tagOverhead = 10U;
+                                            var tagNumber = (uint){{taggedField.Tag}};
+                                            var tagOverhead = (uint)VarIntSize(tagNumber) + (uint)VarIntSize((uint)size);
                                             if (writer.Remaining < tagOverhead + (uint)size)
                                             {
                                                 throw new InvalidOperationException($"Insufficient buffer space for tagged field {{taggedField.Name}}. Need {tagOverhead + size} bytes but only {writer.Remaining} available.");
                                             }
-                                            writer.WriteUVarInt((uint){{taggedField.Tag}}); // tag number
+                                            writer.WriteUVarInt(tagNumber); // tag number
                                             writer.WriteUVarInt((uint)size); // tag payload size
                                             writer.Write(buffer.Memory.Span.Slice(0, size)); // tag payload
                                         }
@@ -414,6 +413,16 @@ source.AppendLine($$"""
         var source = new StringBuilder();
         source.AppendLine("            public static class " + nestedTypeName + "SerializerV" + version);
         source.AppendLine("            {");
+        source.AppendLine("               [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+        source.AppendLine("               private static int VarIntSize(uint value)");
+        source.AppendLine("               {");
+        source.AppendLine("                   if (value < (1 << 7)) return 1;");
+        source.AppendLine("                   if (value < (1 << 14)) return 2;");
+        source.AppendLine("                   if (value < (1 << 21)) return 3;");
+        source.AppendLine("                   if (value < (1 << 28)) return 4;");
+        source.AppendLine("                   return 5;");
+        source.AppendLine("               }");
+        source.AppendLine();
         source.AppendLine("               public static void Serialize(ref BufferWriter writer, " + nestedTypeName + " message, ISerializationContext context)");
         source.AppendLine("               {");
         source.AppendLine("                  " + fields.ToSerializationStatements(apiKey, version, flexible));

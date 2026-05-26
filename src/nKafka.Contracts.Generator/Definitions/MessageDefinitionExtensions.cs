@@ -72,6 +72,16 @@ public static class MessageDefinitionExtensions
 
                 source.AppendLine($"public static class {messageDefinition.Name}SerializerV{version}");
                 source.AppendLine("{");
+                source.AppendLine("   [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+                source.AppendLine("   private static int VarIntSize(uint value)");
+                source.AppendLine("   {");
+                source.AppendLine("       if (value < (1 << 7)) return 1;");
+                source.AppendLine("       if (value < (1 << 14)) return 2;");
+                source.AppendLine("       if (value < (1 << 21)) return 3;");
+                source.AppendLine("       if (value < (1 << 28)) return 4;");
+                source.AppendLine("       return 5;");
+                source.AppendLine("   }");
+                source.AppendLine();
                 source.AppendLine($"   public static void Serialize(ref BufferWriter writer, {messageDefinition.Name} message, ISerializationContext context)");
                 source.AppendLine("   {");
                 source.AppendLine("      " + messageDefinition.Fields.ToSerializationStatements(messageDefinition.ApiKey, version, flexible));
