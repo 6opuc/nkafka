@@ -10,7 +10,7 @@ public class ConnectionConfig
     public string ClientId { get; }
     public int ResponseBufferSize { get; }
     public int RequestBufferSize { get; }
-    
+
     public bool CheckCrcs { get; init; } = false;
     public bool RequestApiVersionsOnOpen { get; init; } = true;
 
@@ -30,7 +30,7 @@ public class ConnectionConfig
         RequestBufferSize = requestBufferSize;
     }
 
-    private static readonly Regex _connectionStringRegex = new (
+    private static readonly Regex _connectionStringRegex = new(
         @"^(?<proto>\S+)\:\/\/(?<host>\S+)\:(?<port>\S+)$", RegexOptions.Compiled);
     public ConnectionConfig(
         string connectionString,

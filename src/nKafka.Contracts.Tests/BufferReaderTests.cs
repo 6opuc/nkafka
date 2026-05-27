@@ -1,7 +1,7 @@
+using System.Text;
 using FluentAssertions;
 using nKafka.Contracts;
 using NUnit.Framework;
-using System.Text;
 
 namespace nKafka.Contracts.Tests;
 
@@ -226,13 +226,13 @@ public class BufferReaderTests
     [Test]
     public void ReadFloat_ReadsPositiveValue()
     {
-        var intBits = BitConverter.SingleToInt32Bits(3.14f);
+        int intBits = BitConverter.SingleToInt32Bits(3.14f);
         _buffer[0] = (byte)(intBits >> 24);
         _buffer[1] = (byte)(intBits >> 16);
         _buffer[2] = (byte)(intBits >> 8);
         _buffer[3] = (byte)intBits;
         _reader = new BufferReader(_buffer);
-        var result = BitConverter.Int32BitsToSingle(_reader.ReadInt32BigEndian());
+        float result = BitConverter.Int32BitsToSingle(_reader.ReadInt32BigEndian());
         result.Should().BeApproximately(3.14f, 0.0001f);
     }
 
@@ -242,20 +242,20 @@ public class BufferReaderTests
         for (int i = 0; i < 4; i++)
             _buffer[i] = 0;
         _reader = new BufferReader(_buffer);
-        var result = BitConverter.Int32BitsToSingle(_reader.ReadInt32BigEndian());
+        float result = BitConverter.Int32BitsToSingle(_reader.ReadInt32BigEndian());
         result.Should().Be(0.0f);
     }
 
     [Test]
     public void ReadFloat_ReadsNegativeValue()
     {
-        var intBits = BitConverter.SingleToInt32Bits(-1.5f);
+        int intBits = BitConverter.SingleToInt32Bits(-1.5f);
         _buffer[0] = (byte)(intBits >> 24);
         _buffer[1] = (byte)(intBits >> 16);
         _buffer[2] = (byte)(intBits >> 8);
         _buffer[3] = (byte)intBits;
         _reader = new BufferReader(_buffer);
-        var result = BitConverter.Int32BitsToSingle(_reader.ReadInt32BigEndian());
+        float result = BitConverter.Int32BitsToSingle(_reader.ReadInt32BigEndian());
         result.Should().BeApproximately(-1.5f, 0.0001f);
     }
 
@@ -508,7 +508,7 @@ public class BufferReaderTests
     [Test]
     public void ReadString_ReadsSimpleString()
     {
-        var bytes = Encoding.UTF8.GetBytes("Hello");
+        byte[] bytes = Encoding.UTF8.GetBytes("Hello");
         _buffer[0] = 0;
         _buffer[1] = (byte)bytes.Length;
         bytes.CopyTo(_buffer, 2);
@@ -541,7 +541,7 @@ public class BufferReaderTests
     [Test]
     public void ReadVarString_ReadsSimpleString()
     {
-        var bytes = Encoding.UTF8.GetBytes("Hello");
+        byte[] bytes = Encoding.UTF8.GetBytes("Hello");
         _buffer[0] = (byte)(bytes.Length | 0x80);
         _buffer[1] = (byte)bytes.Length;
         bytes.CopyTo(_buffer, 2);
@@ -611,7 +611,7 @@ public class BufferReaderTests
     public void Remaining_ReturnsCorrectValue()
     {
         _reader = new BufferReader(_buffer);
-        var initialRemaining = _reader.Remaining;
+        int initialRemaining = _reader.Remaining;
         _reader.ReadByte();
         _reader.Remaining.Should().Be(initialRemaining - 1);
     }

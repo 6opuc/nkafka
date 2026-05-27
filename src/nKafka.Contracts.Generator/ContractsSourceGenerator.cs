@@ -95,7 +95,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                           {{messageDefinition.CommonStructs.ToNestedTypeDeclarations()}}  
                       }
                       """));
-            
+
             context.AddSource(
                 $"MessageSerializers/{messageDefinition.Name}Serializer.g.cs",
                 Format(
@@ -178,7 +178,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                       }
                       """));
         }
-        
+
         context.AddSource(
             "ApiVersions.g.cs",
             Format(
@@ -206,7 +206,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
     {
         var tree = CSharpSyntaxTree.ParseText(source);
         var root = tree.GetRoot().NormalizeWhitespace();
-        var formatted = root.ToFullString();
+        string formatted = root.ToFullString();
         return formatted;
     }
 }

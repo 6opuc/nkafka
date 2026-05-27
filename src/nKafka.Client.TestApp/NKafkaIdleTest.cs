@@ -14,7 +14,7 @@ public static class NKafkaIdleTest
     private static ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder
         .SetMinimumLevel(LogLevel.Debug)
         .AddSimpleConsole(o => o.IncludeScopes = true));
-    
+
     public static async Task Test(FetchScenario scenario)
     {
         var consumerConfig = new ConsumerConfig(
@@ -69,7 +69,7 @@ public static class NKafkaIdleTest
             int partition,
             CancellationToken cancellationToken)
         {
-            if (!_offsets.TryGetValue((topic, partition), out var offset))
+            if (!_offsets.TryGetValue((topic, partition), out long offset))
             {
                 var fetchResponse = await connection.SendAsync(
                     new ListOffsetsRequest

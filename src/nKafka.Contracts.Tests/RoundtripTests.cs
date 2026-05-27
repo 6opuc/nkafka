@@ -1,7 +1,7 @@
+using System.Text;
 using FluentAssertions;
 using nKafka.Contracts;
 using NUnit.Framework;
-using System.Text;
 
 namespace nKafka.Contracts.Tests;
 
@@ -294,10 +294,10 @@ public class RoundtripTests
     public void Roundtrip_Float_Zero()
     {
         var writer = new BufferWriter(_buffer);
-        var intBits = BitConverter.SingleToInt32Bits(0.0f);
+        int intBits = BitConverter.SingleToInt32Bits(0.0f);
         writer.WriteInt(intBits);
         var reader = new BufferReader(_buffer);
-        var result = BitConverter.Int32BitsToSingle(reader.ReadInt32BigEndian());
+        float result = BitConverter.Int32BitsToSingle(reader.ReadInt32BigEndian());
         result.Should().Be(0.0f);
     }
 
@@ -305,10 +305,10 @@ public class RoundtripTests
     public void Roundtrip_Float_PositiveValue()
     {
         var writer = new BufferWriter(_buffer);
-        var intBits = BitConverter.SingleToInt32Bits(3.14159f);
+        int intBits = BitConverter.SingleToInt32Bits(3.14159f);
         writer.WriteInt(intBits);
         var reader = new BufferReader(_buffer);
-        var result = BitConverter.Int32BitsToSingle(reader.ReadInt32BigEndian());
+        float result = BitConverter.Int32BitsToSingle(reader.ReadInt32BigEndian());
         result.Should().BeApproximately(3.14159f, 0.00001f);
     }
 
@@ -316,10 +316,10 @@ public class RoundtripTests
     public void Roundtrip_Float_NegativeValue()
     {
         var writer = new BufferWriter(_buffer);
-        var intBits = BitConverter.SingleToInt32Bits(-2.71828f);
+        int intBits = BitConverter.SingleToInt32Bits(-2.71828f);
         writer.WriteInt(intBits);
         var reader = new BufferReader(_buffer);
-        var result = BitConverter.Int32BitsToSingle(reader.ReadInt32BigEndian());
+        float result = BitConverter.Int32BitsToSingle(reader.ReadInt32BigEndian());
         result.Should().BeApproximately(-2.71828f, 0.00001f);
     }
 
@@ -687,7 +687,7 @@ public class RoundtripTests
     public void Roundtrip_ComplexMessage()
     {
         var writer = new BufferWriter(_buffer);
-        
+
         writer.WriteByte(42);
         writer.WriteShort(1000);
         writer.WriteInt(0x12345678);
@@ -696,7 +696,7 @@ public class RoundtripTests
         writer.WriteVarLong(10000000000L);
         writer.WriteString("Hello");
         writer.WriteGuid(Guid.NewGuid());
-        
+
         var reader = new BufferReader(_buffer);
         reader.ReadByte().Should().Be(42);
         reader.ReadInt16BigEndian().Should().Be(1000);
@@ -711,13 +711,13 @@ public class RoundtripTests
     public void Roundtrip_MultipleSequences()
     {
         var writer = new BufferWriter(_buffer);
-        
+
         writer.WriteInt(1);
         writer.WriteInt(2);
         writer.WriteInt(3);
         writer.WriteLong(4);
         writer.WriteLong(5);
-        
+
         var reader = new BufferReader(_buffer);
         reader.ReadInt32BigEndian().Should().Be(1);
         reader.ReadInt32BigEndian().Should().Be(2);

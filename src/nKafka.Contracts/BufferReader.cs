@@ -83,7 +83,7 @@ public struct BufferReader
     public short ReadInt16BigEndian()
     {
         EnsureAvailable(2);
-        var value = BinaryPrimitives.ReadInt16BigEndian(_buffer.Span[_pos..]);
+        short value = BinaryPrimitives.ReadInt16BigEndian(_buffer.Span[_pos..]);
         _pos += 2;
         return value;
     }
@@ -92,7 +92,7 @@ public struct BufferReader
     public int ReadInt32BigEndian()
     {
         EnsureAvailable(4);
-        var value = BinaryPrimitives.ReadInt32BigEndian(_buffer.Span[_pos..]);
+        int value = BinaryPrimitives.ReadInt32BigEndian(_buffer.Span[_pos..]);
         _pos += 4;
         return value;
     }
@@ -101,7 +101,7 @@ public struct BufferReader
     public uint ReadUInt32BigEndian()
     {
         EnsureAvailable(4);
-        var value = BinaryPrimitives.ReadUInt32BigEndian(_buffer.Span[_pos..]);
+        uint value = BinaryPrimitives.ReadUInt32BigEndian(_buffer.Span[_pos..]);
         _pos += 4;
         return value;
     }
@@ -110,7 +110,7 @@ public struct BufferReader
     public long ReadInt64BigEndian()
     {
         EnsureAvailable(8);
-        var value = BinaryPrimitives.ReadInt64BigEndian(_buffer.Span[_pos..]);
+        long value = BinaryPrimitives.ReadInt64BigEndian(_buffer.Span[_pos..]);
         _pos += 8;
         return value;
     }
@@ -131,7 +131,7 @@ public struct BufferReader
         int shift = 0;
         while (_pos < _buffer.Length)
         {
-            var b = _buffer.Span[_pos++];
+            byte b = _buffer.Span[_pos++];
             value |= (b & 0x7fUL) << shift;
             shift += 7;
             if ((b & 0x80) == 0) return value;
@@ -142,7 +142,7 @@ public struct BufferReader
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public long ReadVarLong()
     {
-        var raw = ReadUVarLong();
+        ulong raw = ReadUVarLong();
         return (long)((raw >> 1) ^ (0UL - (raw & 1UL)));
     }
 
@@ -155,7 +155,7 @@ public struct BufferReader
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int ReadLength()
     {
-        var value = ReadUVarLong();
+        ulong value = ReadUVarLong();
         if (value == 0) return -1;
         if (value > int.MaxValue + 1UL)
         {
@@ -167,10 +167,10 @@ public struct BufferReader
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public string? ReadString()
     {
-        var len = ReadInt16BigEndian();
+        short len = ReadInt16BigEndian();
         if (len < 0) return null;
         EnsureAvailable(len);
-        var s = Encoding.UTF8.GetString(_buffer.Span.Slice(_pos, len));
+        string s = Encoding.UTF8.GetString(_buffer.Span.Slice(_pos, len));
         _pos += len;
         return s;
     }
@@ -178,10 +178,10 @@ public struct BufferReader
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public string? ReadVarString()
     {
-        var len = ReadLength();
+        int len = ReadLength();
         if (len < 0) return null;
         EnsureAvailable(len);
-        var s = Encoding.UTF8.GetString(_buffer.Span.Slice(_pos, len));
+        string s = Encoding.UTF8.GetString(_buffer.Span.Slice(_pos, len));
         _pos += len;
         return s;
     }

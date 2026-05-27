@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using nKafka.Client.Benchmarks;
 using nKafka.Client.TestApp;
 
@@ -14,18 +14,18 @@ var scenario = benchmarks.Scenarios
 
 var stopwatch = Stopwatch.StartNew();
 
-var threads = 1;
-var iterationsPerThread = 3;
+int threads = 1;
+int iterationsPerThread = 3;
 var tasks = new List<Task>(threads);
-for (var t = 0; t < tasks.Capacity; t++)
+for (int t = 0; t < tasks.Capacity; t++)
 {
-    var t1 = t;
+    int t1 = t;
     tasks.Add(Task.Run(
         async () =>
         {
             for (int i = 0; i < iterationsPerThread; i++)
             {
-                var id = $"[{t1}:{i}]";
+                string id = $"[{t1}:{i}]";
                 var stopwatchInner = Stopwatch.StartNew();
                 //await ConfluentConsumeBytesTest.Test(scenario);
                 //await NKafkaFetchBytesSeqSinglePartTest.Test(scenario);
@@ -33,10 +33,10 @@ for (var t = 0; t < tasks.Capacity; t++)
                 //await NKafkaFetchBytesParallelMultiPartTest.Test(scenario);
                 //await NKafkaConsumeBytesTest.Test(scenario);
                 await NKafkaBatchConsumeBytesTest.Test(scenario);
-                
+
                 //await ConfluentIdleTest.Test(scenario);
                 //await NKafkaIdleTest.Test(scenario);
-                
+
                 //await ConfluentConsumeStringTest.Test(scenario);
                 //await NKafkaFetchStringParallelMultiPartTest.Test(scenario);
                 //await NKafkaConsumeStringTest.Test(scenario);

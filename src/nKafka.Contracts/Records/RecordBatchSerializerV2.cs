@@ -2,7 +2,7 @@ namespace nKafka.Contracts.Records;
 
 public static class RecordBatchSerializerV2
 {
-   public static RecordBatch? Deserialize(ref BufferReader reader, long eof, ISerializationContext context)
+    public static RecordBatch? Deserialize(ref BufferReader reader, long eof, ISerializationContext context)
     {
         if (reader.Position + 8 + 4 > eof)
         {
@@ -14,8 +14,8 @@ public static class RecordBatchSerializerV2
             BaseOffset = reader.ReadInt64BigEndian(),
             BatchLength = reader.ReadInt32BigEndian(),
         };
-        
-        var recordBatchStart = reader.Position;
+
+        int recordBatchStart = reader.Position;
 
         if (recordBatchStart + recordBatch.BatchLength > eof)
         {
@@ -30,7 +30,7 @@ public static class RecordBatchSerializerV2
         }
         recordBatch.Crc = reader.ReadUInt32BigEndian();
 
-        var crcStart = reader.Position;
+        int crcStart = reader.Position;
         recordBatch.Attributes = reader.ReadInt16BigEndian();
         recordBatch.LastOffsetDelta = reader.ReadInt32BigEndian();
         recordBatch.FirstTimestamp = reader.ReadInt64BigEndian();
@@ -38,7 +38,7 @@ public static class RecordBatchSerializerV2
         recordBatch.ProducerId = reader.ReadInt64BigEndian();
         recordBatch.ProducerEpoch = reader.ReadInt16BigEndian();
         recordBatch.BaseSequence = reader.ReadInt32BigEndian();
-        var recordsCount = reader.ReadInt32BigEndian();
+        int recordsCount = reader.ReadInt32BigEndian();
         if (recordsCount >= 0)
         {
             recordBatch.Records = new List<Record>(recordsCount);
@@ -59,7 +59,7 @@ public static class RecordBatchSerializerV2
             ChecksumValidator.ValidateCrc32c(recordBatch.Crc, reader.Buffer, (int)crcStart, (int)crcDataLength);
         }
 
-        var actualBatchLength = reader.Position - recordBatchStart;
+        int actualBatchLength = reader.Position - recordBatchStart;
         if (actualBatchLength != recordBatch.BatchLength)
         {
             throw new Exception($"Expected batch length was {recordBatch.BatchLength}, but got {actualBatchLength}.");

@@ -1,7 +1,7 @@
+using System.Text;
 using FluentAssertions;
 using nKafka.Contracts;
 using NUnit.Framework;
-using System.Text;
 
 namespace nKafka.Contracts.Tests;
 
@@ -261,7 +261,7 @@ public class BufferWriterTests
     [Test]
     public void WriteFloat_WritesPositiveValue()
     {
-        var floatBytes = BitConverter.GetBytes(3.14f);
+        byte[] floatBytes = BitConverter.GetBytes(3.14f);
         _writer.WriteInt(BitConverter.SingleToInt32Bits(3.14f));
         _writer.Position.Should().Be(4);
     }
@@ -628,7 +628,7 @@ public class BufferWriterTests
     [Test]
     public void Remaining_ReturnsCorrectValue()
     {
-        var initialRemaining = _writer.Remaining;
+        int initialRemaining = _writer.Remaining;
         _writer.WriteInt(42);
         _writer.Remaining.Should().Be(initialRemaining - 4);
     }
@@ -652,7 +652,7 @@ public class BufferWriterTests
     [Test]
     public void WriteAtNearCapacity()
     {
-        var smallBuffer = new byte[10];
+        byte[] smallBuffer = new byte[10];
         var smallWriter = new BufferWriter(smallBuffer);
         smallWriter.WriteInt(42);
         smallWriter.WriteLong(99);

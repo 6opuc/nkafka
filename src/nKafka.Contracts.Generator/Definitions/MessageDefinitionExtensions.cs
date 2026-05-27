@@ -15,7 +15,7 @@ public static class MessageDefinitionExtensions
         source.AppendLine("      {");
         if (messageDefinition.ValidVersions.HasValue)
         {
-            foreach (var version in messageDefinition.ValidVersions.Value)
+            foreach (short version in messageDefinition.ValidVersions.Value)
             {
                 source.AppendLine($"          case {version}:");
                 source.AppendLine($"              {messageDefinition.Name}SerializerV{version}.Serialize(ref writer, message, context);");
@@ -33,7 +33,7 @@ public static class MessageDefinitionExtensions
         source.AppendLine("      {");
         if (messageDefinition.ValidVersions.HasValue)
         {
-            foreach (var version in messageDefinition.ValidVersions.Value)
+            foreach (short version in messageDefinition.ValidVersions.Value)
             {
                 source.AppendLine($"          case {version}:");
                 source.AppendLine($"              return {messageDefinition.Name}SerializerV{version}.Deserialize(ref reader, context);");
@@ -49,9 +49,9 @@ public static class MessageDefinitionExtensions
 
         if (messageDefinition.ValidVersions.HasValue)
         {
-            foreach (var version in messageDefinition.ValidVersions.Value)
+            foreach (short version in messageDefinition.ValidVersions.Value)
             {
-                var flexible = messageDefinition.FlexibleVersions.Includes(version);
+                bool flexible = messageDefinition.FlexibleVersions.Includes(version);
 
                 source.AppendLine($"public static class {messageDefinition.Name}SerializerV{version}");
                 source.AppendLine("{");
@@ -60,7 +60,7 @@ public static class MessageDefinitionExtensions
                 source.AppendLine("      " + messageDefinition.Fields.ToSerializationStatements(messageDefinition.ApiKey, version, flexible));
                 source.AppendLine("   }");
                 source.AppendLine();
-source.AppendLine($"   public static {messageDefinition.Name} Deserialize(ref BufferReader reader, ISerializationContext context)");
+                source.AppendLine($"   public static {messageDefinition.Name} Deserialize(ref BufferReader reader, ISerializationContext context)");
                 source.AppendLine("   {");
                 source.AppendLine($"      var message = new {messageDefinition.Name}();");
                 source.AppendLine("      " + messageDefinition.Fields.ToDeserializationStatements(messageDefinition.ApiKey, version, flexible, "reader"));
@@ -79,13 +79,13 @@ source.AppendLine($"   public static {messageDefinition.Name} Deserialize(ref Bu
         var source = new StringBuilder();
         if (messageDefinition.ValidVersions.HasValue)
         {
-            foreach (var version in messageDefinition.ValidVersions.Value)
+            foreach (short version in messageDefinition.ValidVersions.Value)
             {
-                var flexible = messageDefinition.FlexibleVersions.Includes(version);
+                bool flexible = messageDefinition.FlexibleVersions.Includes(version);
 
                 foreach (var fieldDefinition in messageDefinition.Fields)
                 {
-                    var nestedSerializer = fieldDefinition.ToNestedSerializerDeclaration(messageDefinition.ApiKey, version, flexible);
+                    string nestedSerializer = fieldDefinition.ToNestedSerializerDeclaration(messageDefinition.ApiKey, version, flexible);
                     if (!string.IsNullOrEmpty(nestedSerializer))
                     {
                         source.AppendLine(nestedSerializer);
@@ -94,7 +94,7 @@ source.AppendLine($"   public static {messageDefinition.Name} Deserialize(ref Bu
 
                 foreach (var commonStruct in messageDefinition.CommonStructs)
                 {
-                    var nestedSerializer = commonStruct.ToNestedSerializerDeclaration(messageDefinition.ApiKey, version, flexible);
+                    string nestedSerializer = commonStruct.ToNestedSerializerDeclaration(messageDefinition.ApiKey, version, flexible);
                     if (!string.IsNullOrEmpty(nestedSerializer))
                     {
                         source.AppendLine(nestedSerializer);

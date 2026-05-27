@@ -6,7 +6,7 @@ namespace nKafka.Contracts;
 public static class ConsumerProtocolAssignmentSerializationHelper
 {
     private static readonly short _version = 3;
-        
+
     /// <summary>
     /// Serializes a ConsumerProtocolAssignment message.
     /// Uses a temporary BufferWriter (writerTemp) to build the message, then writes it to the output writer.
@@ -31,7 +31,7 @@ public static class ConsumerProtocolAssignmentSerializationHelper
             {
                 writer.WriteInt(writerTemp.Position == 0 ? -1 : (int)writerTemp.Position);
             }
-            
+
             writer.Write(writerTemp.Memory.Span.Slice(0, (int)writerTemp.Position));
         }
         finally { writerTemp.Dispose(); }
@@ -39,7 +39,7 @@ public static class ConsumerProtocolAssignmentSerializationHelper
 
     public static ConsumerProtocolAssignment? Deserialize(ref BufferReader reader, bool flexible, ISerializationContext context)
     {
-        var length = flexible
+        int length = flexible
             ? reader.ReadLength()
             : reader.ReadInt32BigEndian();
         if (length == -1)
@@ -50,7 +50,7 @@ public static class ConsumerProtocolAssignmentSerializationHelper
         {
             return new ConsumerProtocolAssignment();
         }
-        var version = reader.ReadInt16BigEndian();
+        short version = reader.ReadInt16BigEndian();
         return ConsumerProtocolAssignmentSerializer.Deserialize(ref reader, version, context);
     }
 }

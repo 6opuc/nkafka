@@ -7,14 +7,14 @@ public static class FieldDefinitionExtensions
 {
     public static string ToPropertyDeclarations(this IList<FieldDefinition> fields)
     {
-        var propertyDeclarations = string.Join("\n", fields.Select(x => x.ToPropertyDeclaration()));
+        string propertyDeclarations = string.Join("\n", fields.Select(x => x.ToPropertyDeclaration()));
         return propertyDeclarations;
     }
 
     public static string ToPropertyDeclaration(this FieldDefinition field)
     {
-        var comment = GetPropertyComment(field);
-        var type = GetFieldPropertyType(field);
+        string comment = GetPropertyComment(field);
+        string type = GetFieldPropertyType(field);
         return $"{comment}\npublic {type} {field.Name} {{ get; set; }}";
     }
 
@@ -70,7 +70,7 @@ public static class FieldDefinitionExtensions
 
     public static string GetFieldPropertyType(this FieldDefinition field)
     {
-        var type = GetFieldItemPropertyType(field); 
+        string? type = GetFieldItemPropertyType(field);
 
         if (field.IsCollection())
         {
@@ -78,7 +78,7 @@ public static class FieldDefinitionExtensions
             {
                 type = "string?";
             }
-            var mapKeyPropertyType = field.GetMapKeyPropertyType();
+            string? mapKeyPropertyType = field.GetMapKeyPropertyType();
             type = mapKeyPropertyType == null
                 ? $"IList<{type}>"
                 : $"IDictionary<{mapKeyPropertyType}, {type}>";
@@ -135,7 +135,7 @@ public static class FieldDefinitionExtensions
 
     private static string GetPropertyType(FieldDefinition field)
     {
-        var type = field.GetFieldItemType();
+        string? type = field.GetFieldItemType();
         if (type == "bytes")
         {
             if (field.Name == "Assignment")
@@ -166,13 +166,13 @@ public static class FieldDefinitionExtensions
     public static string ToNestedTypeDeclarations(this IList<FieldDefinition> fields)
     {
         var nestedTypes = fields.Where(x => x.Fields.Any());
-        var nestedTypeDeclarations = string.Join("\n", nestedTypes.Select(x => x.ToNestedTypeDeclaration()));
+        string nestedTypeDeclarations = string.Join("\n", nestedTypes.Select(x => x.ToNestedTypeDeclaration()));
         return nestedTypeDeclarations;
     }
 
     public static string ToNestedTypeDeclaration(this FieldDefinition field)
     {
-        var nestedTypeName = field.GetFieldItemType();
+        string? nestedTypeName = field.GetFieldItemType();
 
         return $$"""
                  public class {{nestedTypeName}}
@@ -197,8 +197,8 @@ public static class FieldDefinitionExtensions
             {
                 continue;
             }
-            
-            var fieldStatements = field.ToSerializationStatements(apiKey, version, flexible);
+
+            string fieldStatements = field.ToSerializationStatements(apiKey, version, flexible);
             if (!string.IsNullOrEmpty(fieldStatements))
             {
                 source.AppendLine(fieldStatements);
@@ -221,7 +221,7 @@ public static class FieldDefinitionExtensions
                                     var tagSectionLength = {{string.Join(" + ", taggedFields.Select(x => $"(message.{x.Name} == null ? 0 : 1)"))}};
                                     """);
                 source.AppendLine("writer.WriteUVarInt((uint)tagSectionLength); // tag section length");
-                
+
                 source.AppendLine("""
                                   if (tagSectionLength > 0)
                                   {
@@ -231,7 +231,7 @@ public static class FieldDefinitionExtensions
                                   """);
                 foreach (var taggedField in taggedFields)
                 {
-source.AppendLine($$"""
+                    source.AppendLine($$"""
                                         if (message.{{taggedField.Name}} != null)
                                         {
                                             tw.Reset();
@@ -254,7 +254,7 @@ source.AppendLine($$"""
                 source.AppendLine("}");
             }
         }
-        
+
         return source.ToString();
     }
 
@@ -270,13 +270,13 @@ source.AppendLine($$"""
         {
             return string.Empty;
         }
-        
+
         if (field.FlexibleVersions.HasValue && flexible)
         {
             flexible = field.FlexibleVersions.Includes(version);
         }
 
-        var propertyType = field.GetFieldItemPropertyType();
+        string? propertyType = field.GetFieldItemPropertyType();
         if (!field.IsCollection())
         {
             return GetSerializationStatements(
@@ -284,11 +284,11 @@ source.AppendLine($$"""
                 apiKey,
                 version,
                 flexible,
-                propertyType, 
+                propertyType,
                 output);
         }
-        
-        var lengthSerialization = flexible
+
+        string lengthSerialization = flexible
             ? $"writer.WriteLength(message.{field.Name}?.Count ?? 0);"
             : $"writer.WriteInt(message.{field.Name}?.Count ?? -1);";
         if (!field.IsMap())
@@ -301,7 +301,7 @@ source.AppendLine($$"""
                      }
                      """;
         }
-        
+
         return $$"""
                  {{lengthSerialization}}
                  foreach (var item in message.{{field.Name}}?.Values ?? [])
@@ -319,7 +319,7 @@ source.AppendLine($$"""
         string? propertyType,
         string output = "writer")
     {
-       if (propertyType == "string")
+        if (propertyType == "string")
         {
             return flexible
                 ? $"{output}.WriteVarString({propertyPath});"
@@ -345,12 +345,12 @@ source.AppendLine($$"""
         {
             return $"{output}.WriteBool({propertyPath});";
         }
-        
+
         if (propertyType == "int")
         {
             return $"{output}.WriteInt({propertyPath});";
         }
-        
+
         if (propertyType == "long")
         {
             return $"{output}.WriteLong({propertyPath});";
@@ -363,7 +363,7 @@ source.AppendLine($$"""
 
         if (propertyType == "Memory<byte>")
         {
-            var lengthSerialization = flexible
+            string lengthSerialization = flexible
                 ? $"{output}.WriteLength({propertyPath}?.Length ?? 0);"
                 : $"{output}.WriteInt({propertyPath}?.Length ?? -1);";
             return $$"""
@@ -379,11 +379,11 @@ source.AppendLine($$"""
         {
             return $"{output}.WriteGuid({propertyPath});";
         }
-        
+
 
         if (propertyType == "RecordsContainer")
         {
-            var recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
+            string recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
             return $"RecordsContainerSerializer{recordsVersion}.Serialize(ref {output}, {propertyPath}, context);";
         }
 
@@ -400,12 +400,12 @@ source.AppendLine($$"""
         return $"if ({propertyPath} == null)\n                 {{\n                    throw new InvalidOperationException(\"Property {propertyPath} has not been initialized.\");\n                 }}\n                 {propertyType}SerializerV{version}.Serialize(ref {output}, {propertyPath}, context);";
     }
 
-   public static string ToNestedSerializerDeclarations(
-        this IList<FieldDefinition> fields,
-        short? apiKey,
-        short version,
-        bool flexible,
-        string nestedTypeName)
+    public static string ToNestedSerializerDeclarations(
+         this IList<FieldDefinition> fields,
+         short? apiKey,
+         short version,
+         bool flexible,
+         string nestedTypeName)
     {
         if (!fields.Any())
         {
@@ -420,7 +420,7 @@ source.AppendLine($$"""
         source.AppendLine("                  " + fields.ToSerializationStatements(apiKey, version, flexible));
         source.AppendLine("               }");
         source.AppendLine();
-source.AppendLine("               public static " + nestedTypeName + " Deserialize(ref BufferReader reader, ISerializationContext context)");
+        source.AppendLine("               public static " + nestedTypeName + " Deserialize(ref BufferReader reader, ISerializationContext context)");
         source.AppendLine("               {");
         source.AppendLine("                  var message = new " + nestedTypeName + "();");
         source.AppendLine("                  " + fields.ToDeserializationStatements(apiKey, version, flexible, "reader"));
@@ -430,7 +430,7 @@ source.AppendLine("               public static " + nestedTypeName + " Deseriali
 
         foreach (var child in fields)
         {
-            var childSerializer = child.ToNestedSerializerDeclaration(apiKey, version, flexible);
+            string childSerializer = child.ToNestedSerializerDeclaration(apiKey, version, flexible);
             if (!string.IsNullOrWhiteSpace(childSerializer))
             {
                 source.AppendLine(childSerializer);
@@ -443,7 +443,7 @@ source.AppendLine("               public static " + nestedTypeName + " Deseriali
     public static string ToNestedSerializerDeclaration(
         this FieldDefinition field,
         short? apiKey,
-        short version, 
+        short version,
         bool flexible)
     {
         if (!field.Versions.Includes(version))
@@ -451,11 +451,11 @@ source.AppendLine("               public static " + nestedTypeName + " Deseriali
             return String.Empty;
         }
 
-        var nestedTypeName = field.GetFieldItemType();
+        string? nestedTypeName = field.GetFieldItemType();
         return field.Fields.ToNestedSerializerDeclarations(apiKey, version, flexible, nestedTypeName!);
     }
-    
-    
+
+
     public static string ToDeserializationStatements(
         this IList<FieldDefinition> fields,
         short? apiKey,
@@ -479,8 +479,8 @@ source.AppendLine("               public static " + nestedTypeName + " Deseriali
             {
                 continue;
             }
-            
-          var fieldStatements = field.ToDeserializationStatements(apiKey, version, flexible, reader);
+
+            string fieldStatements = field.ToDeserializationStatements(apiKey, version, flexible, reader);
             if (!string.IsNullOrEmpty(fieldStatements))
             {
                 source.AppendLine(fieldStatements);
@@ -493,7 +493,7 @@ source.AppendLine("               public static " + nestedTypeName + " Deseriali
                 .Where(x => x.TaggedVersions.Includes(version))
                 .OrderBy(x => x.Tag)
                 .ToList();
-            
+
             if (!taggedFields.Any())
             {
                 source.AppendLine("reader.ReadUVarInt(); // tag section length");
@@ -514,7 +514,7 @@ source.AppendLine("               public static " + nestedTypeName + " Deseriali
                                     switch (tagNumber)
                                     {
                                 """);
-                
+
                 foreach (var taggedField in taggedFields)
                 {
                     source.AppendLine($$"""
@@ -539,16 +539,16 @@ source.AppendLine("               public static " + nestedTypeName + " Deseriali
                               """);
             }
         }
-        
+
         return source.ToString();
     }
-    
-  public static string ToDeserializationStatements(
-        this FieldDefinition field,
-        short? apiKey,
-        short version,
-        bool flexible,
-        string reader = "reader")
+
+    public static string ToDeserializationStatements(
+          this FieldDefinition field,
+          short? apiKey,
+          short version,
+          bool flexible,
+          string reader = "reader")
     {
         if (!field.Versions.Includes(version))
         {
@@ -560,7 +560,7 @@ source.AppendLine("               public static " + nestedTypeName + " Deseriali
             flexible = field.FlexibleVersions.Includes(version);
         }
 
-        var propertyType = field.GetFieldItemPropertyType();
+        string? propertyType = field.GetFieldItemPropertyType();
         if (!field.IsCollection())
         {
             return GetDeserializationStatements(
@@ -573,8 +573,8 @@ source.AppendLine("               public static " + nestedTypeName + " Deseriali
         }
 
 
-      var itemsCount = $"{field.Name.FirstCharToLowerCase()}Count";
-        var lengthDeserialization = flexible
+        string itemsCount = $"{field.Name.FirstCharToLowerCase()}Count";
+        string lengthDeserialization = flexible
             ? $"var {itemsCount} = reader.ReadLength();"
             : $"var {itemsCount} = reader.ReadInt32BigEndian();";
         if (!field.IsMap())
@@ -592,9 +592,9 @@ source.AppendLine("               public static " + nestedTypeName + " Deseriali
                       """;
         }
 
-        var keyType = field.GetMapKeyPropertyType();
-        var keyName = field.GetMapKeyPropertyName();
-        var mapIndex = keyType == "string"
+        string? keyType = field.GetMapKeyPropertyType();
+        string? keyName = field.GetMapKeyPropertyName();
+        string mapIndex = keyType == "string"
             ? "key"
             : "key.Value";
         return $$"""
@@ -617,13 +617,13 @@ source.AppendLine("               public static " + nestedTypeName + " Deseriali
                   """;
     }
 
-private static string GetDeserializationStatements(
-        string propertyPath,
-        short? apiKey,
-        short version,
-        bool flexible,
-        string? propertyType,
-        string reader = "reader")
+    private static string GetDeserializationStatements(
+            string propertyPath,
+            short? apiKey,
+            short version,
+            bool flexible,
+            string? propertyType,
+            string reader = "reader")
     {
         if (propertyType == "string")
         {
@@ -651,26 +651,26 @@ private static string GetDeserializationStatements(
         {
             return $"{propertyPath} = reader.ReadBool();";
         }
-        
-       if (propertyType == "int")
+
+        if (propertyType == "int")
         {
             return $"{propertyPath} = reader.ReadInt32BigEndian();";
         }
-        
-      if (propertyType == "long")
+
+        if (propertyType == "long")
         {
             return $"{propertyPath} = reader.ReadInt64BigEndian();";
         }
-        
-         if (propertyType == "double")
+
+        if (propertyType == "double")
         {
             return $"{propertyPath} = reader.ReadDoubleBigEndian();";
         }
 
         if (propertyType == "Memory<byte>")
         {
-            var lengthVariableName = $"{propertyPath.Replace(".", "")}Length";
-            var lengthDeserialization = flexible
+            string lengthVariableName = $"{propertyPath.Replace(".", "")}Length";
+            string lengthDeserialization = flexible
                 ? $"var {lengthVariableName} = reader.ReadLength();"
                 : $"var {lengthVariableName} = reader.ReadInt32BigEndian();";
             return $$"""
@@ -691,9 +691,9 @@ private static string GetDeserializationStatements(
             return $"{propertyPath} = reader.ReadGuid();";
         }
 
-      if (propertyType == "RecordsContainer")
+        if (propertyType == "RecordsContainer")
         {
-            var recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
+            string recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
             return $"{propertyPath} = RecordsContainerSerializer{recordsVersion}.Deserialize(ref reader, context);";
         }
 

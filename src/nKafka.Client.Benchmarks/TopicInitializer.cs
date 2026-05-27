@@ -8,16 +8,16 @@ public class TopicInitializer
 {
     public static async Task InitializeTestTopic(FetchScenario scenario)
     {
-        var bootstrapServers = "PLAINTEXT://localhost:9192, PLAINTEXT://localhost:9292, PLAINTEXT://localhost:9392";
+        string bootstrapServers = "PLAINTEXT://localhost:9192, PLAINTEXT://localhost:9292, PLAINTEXT://localhost:9392";
         var adminClientConfig = new AdminClientConfig { BootstrapServers = bootstrapServers };
         using var adminClient = new AdminClientBuilder(adminClientConfig).Build();
-        
+
         var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(5));
         if (metadata.Topics.Any(x => x.Topic == scenario.TopicName))
         {
             return;
         }
-        
+
         await adminClient.CreateTopicsAsync(new[]
         {
             new TopicSpecification
@@ -33,7 +33,7 @@ public class TopicInitializer
                 ReplicationFactor = 2
             }
         });
-        
+
         var config = new ProducerConfig
         {
             BootstrapServers = bootstrapServers,
@@ -47,11 +47,11 @@ public class TopicInitializer
         var messages = Enumerable.Range(1, scenario.MessageCount)
             .Select(_ =>
             {
-                var value = string.Join(
+                string value = string.Join(
                     "",
                     Enumerable
                         .Repeat(0, scenario.MessageSize)
-                        .Select(n => (char)random.Next(32,127)));;
+                        .Select(n => (char)random.Next(32, 127))); ;
                 return new Message<Null, string>
                 {
                     Value = value,

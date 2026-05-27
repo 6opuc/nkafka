@@ -9,7 +9,7 @@ public static class NKafkaConsumeStringTest
     private static ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder
         .SetMinimumLevel(LogLevel.Debug)
         .AddSimpleConsole(o => o.IncludeScopes = true));
-    
+
     public static async Task Test(FetchScenario scenario)
     {
         var consumerConfig = new ConsumerConfig(
@@ -19,7 +19,7 @@ public static class NKafkaConsumeStringTest
             $"testapp-{DateTime.UtcNow.Date:yyyyMMdd}-{Guid.NewGuid():N}",
             "PLAINTEXT",
             "nKafka.Client.Benchmarks");
-        
+
         await using var consumer = new Consumer<string>(
             consumerConfig,
             new DummyStringMessageDeserializer(),
@@ -27,7 +27,7 @@ public static class NKafkaConsumeStringTest
             NullLoggerFactory.Instance/*loggerFactory*/);
         await consumer.JoinGroupAsync(CancellationToken.None);
 
-        var counter = 0;
+        int counter = 0;
         while (counter < scenario.MessageCount)
         {
             var consumeResult = await consumer.ConsumeAsync(CancellationToken.None);

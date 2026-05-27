@@ -128,7 +128,7 @@ public struct BufferWriter : IDisposable
         do
         {
             EnsureSpace(1);
-            var byteValue = value & 0x7fUL;
+            ulong byteValue = value & 0x7fUL;
             value >>= 7;
             if (value > 0)
             {
@@ -163,7 +163,7 @@ public struct BufferWriter : IDisposable
             return;
         }
 
-        var length = Encoding.UTF8.GetByteCount(value);
+        int length = Encoding.UTF8.GetByteCount(value);
         if (length > short.MaxValue)
         {
             throw new InvalidOperationException($"String is too long: {length} bytes exceeds maximum of {short.MaxValue}.");
@@ -183,7 +183,7 @@ public struct BufferWriter : IDisposable
             return;
         }
 
-        var length = Encoding.UTF8.GetByteCount(value);
+        int length = Encoding.UTF8.GetByteCount(value);
         WriteLength(length);
         var span = value.AsSpan();
         Encoding.UTF8.GetBytes(span, _buffer.Span.Slice(_pos));

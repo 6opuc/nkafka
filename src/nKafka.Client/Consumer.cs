@@ -111,7 +111,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             return;
         }
-        
+
         await using (var bootstrapConnection = await OpenBootstrapConnectionAsync(cancellationToken))
         {
             _coordinatorConnection = await OpenCoordinatorConnectionAsync(bootstrapConnection, cancellationToken);
@@ -155,10 +155,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         _logger.LogInformation("Opening bootstrap connection.");
 
-        var connectionStrings = _config.BootstrapServers.Split(
+        string[] connectionStrings = _config.BootstrapServers.Split(
             ",",
             StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        foreach (var connectionString in connectionStrings)
+        foreach (string connectionString in connectionStrings)
         {
             var connectionConfig = new ConnectionConfig(
                 connectionString,
@@ -268,7 +268,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         var response = await connection.SendAsync(request, cancellationToken);
 
-        foreach (var topicName in _topics)
+        foreach (string topicName in _topics)
         {
             if (!response.Message.Topics!.TryGetValue(topicName, out var topic))
             {
@@ -372,22 +372,22 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
             })
             .ToDictionary(x => x.MemberId!);
-        foreach (var topicName in _topics)
+        foreach (string topicName in _topics)
         {
             if (!_topicsMetadata!.TryGetValue(topicName, out var topic))
             {
                 continue;
             }
-            
+
             var members = _groupMembership!.Members.Where(x => x.Topics.Contains(topicName)).ToList();
             if (members.Count == 0)
             {
                 continue;
             }
-            
+
             foreach (var partition in topic.Partitions!)
             {
-                var memberIndex = partition.PartitionIndex!.Value % members.Count;
+                int memberIndex = partition.PartitionIndex!.Value % members.Count;
                 var member = members[memberIndex];
                 var assignment = assignments[member.MemberId];
                 if (!assignment.Assignment!.AssignedPartitions!.TryGetValue(topicName, out var topicPartition))
@@ -437,7 +437,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             context.Append(topic.Value.Topic);
             context.Append("[");
-            foreach (var partition in topic.Value.Partitions!)
+            foreach (int partition in topic.Value.Partitions!)
             {
                 context.Append(partition);
                 context.Append(",");
@@ -485,7 +485,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             await JoinGroupAsync(CancellationToken.None);
                             break;
                         }
-                        #warning error 25(UnknownMemberId) in non-leader consumer after leader left the group.
+#warning error 25(UnknownMemberId) in non-leader consumer after leader left the group.
                         else
                         {
                             _logger.LogError(
@@ -519,7 +519,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 continue;
             }
 
-            foreach (var partition in topicAssignment.Value.Partitions!)
+            foreach (int partition in topicAssignment.Value.Partitions!)
             {
                 var partitionMetadata = topicMetadata!.Partitions?.FirstOrDefault(x => x.PartitionIndex == partition);
                 if (partitionMetadata == null)
@@ -528,7 +528,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
 
                 var connection = _connections[partitionMetadata.LeaderId!.Value];
-                var offset = await _offsetStorage.GetAsync(
+                long offset = await _offsetStorage.GetAsync(
                     connection,
                     _config.GroupId,
                     topicAssignment.Key,
@@ -576,7 +576,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
                 else
                 {
-                    var fetchRequestTopic = fetchRequest.Topics!.FirstOrDefault(x => 
+                    var fetchRequestTopic = fetchRequest.Topics!.FirstOrDefault(x =>
                         x.Topic == topicMetadata.Name ||
                         x.TopicId == topicMetadata.TopicId);
                     if (fetchRequestTopic == null)
@@ -661,7 +661,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                                     continue;
                                 }
 
-                                var lastOffset = partitionResponse.Records?.LastOffset;
+                                long? lastOffset = partitionResponse.Records?.LastOffset;
                                 if (lastOffset.HasValue)
                                 {
                                     partitionRequest.FetchOffset = lastOffset.Value + 1;
@@ -717,9 +717,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             return consumerResult;
         }
-        
+
         _fetchResult = await _consumeChannel.Reader.ReadAsync(cancellationToken);
-        
+
         if (!_fetchResult.IsSuccess)
         {
             var ex = _fetchResult.Exception;
@@ -727,9 +727,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _fetchResult = null;
             throw new InvalidOperationException("Fetch loop failed.", ex);
         }
-        
+
         _messageDeserializeEnumerator = GetMessageEnumerator();
-        
+
         return ConsumeFromBuffer();
     }
 
@@ -739,7 +739,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             return null;
         }
-        
+
         if (_messageDeserializeEnumerator.MoveNext())
         {
             var deserializationContext = _messageDeserializeEnumerator.Current;
@@ -753,7 +753,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 Message = message,
             };
         }
-        
+
         _messageDeserializeEnumerator.Dispose();
         _messageDeserializeEnumerator = null;
         _fetchResult?.Dispose();
@@ -767,7 +767,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         if (_messageDeserializeEnumerator == null)
         {
             _fetchResult = await _consumeChannel.Reader.ReadAsync(cancellationToken);
-            
+
             if (!_fetchResult.IsSuccess)
             {
                 var ex = _fetchResult.Exception;
@@ -775,20 +775,20 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 _fetchResult = null;
                 throw new InvalidOperationException("Fetch loop failed.", ex);
             }
-            
+
             _messageDeserializeEnumerator = GetMessageEnumerator();
         }
 
         return ConsumeBatchFromBuffer();
     }
-    
+
     private IEnumerable<ConsumeResult<TMessage>> ConsumeBatchFromBuffer()
     {
         if (_messageDeserializeEnumerator == null)
         {
             yield break;
         }
-        
+
         while (_messageDeserializeEnumerator.MoveNext())
         {
             var deserializationContext = _messageDeserializeEnumerator.Current;
@@ -802,13 +802,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 Message = message,
             };
         }
-        
+
         _messageDeserializeEnumerator.Dispose();
         _messageDeserializeEnumerator = null;
         _fetchResult?.Dispose();
         _fetchResult = null;
     }
-    
+
     private IEnumerator<MessageDeserializationContext> GetMessageEnumerator()
     {
         if (_fetchResponse == null ||
@@ -820,7 +820,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         foreach (var response in _fetchResponse.Message.Responses!)
         {
-            var topic = response.Topic;
+            string? topic = response.Topic;
             if (string.IsNullOrEmpty(topic) && response.TopicId != null)
             {
                 if (_topicsMetadataById!.TryGetValue(response.TopicId.Value, out var topicMetadata))
@@ -890,7 +890,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         using var _ = BeginDefaultLoggingScope();
 
         await StopFetchingAsync();
-        
+
         if (_heartbeatsBackgroundTask != null)
         {
             await _heartbeatsBackgroundTask;
@@ -908,9 +908,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             return;
         }
-        
+
         _consumeChannel.Writer.TryComplete();
-        
+
         await _stop.CancelAsync();
 
         if (_fetchTasks != null)
@@ -931,7 +931,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _messageDeserializeEnumerator = null;
         }
 
-        #warning cleanup the consume channel
+#warning cleanup the consume channel
     }
 
     private async ValueTask LeaveGroupAsync(CancellationToken cancellationToken)
@@ -968,7 +968,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         _groupMembership = null;
     }
-    
+
     private async ValueTask CloseConnectionsAsync()
     {
         if (_connections.Count > 0)
@@ -979,7 +979,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
             _connections.Clear();
         }
-        
+
         if (_coordinatorConnection != null)
         {
             await _coordinatorConnection.DisposeAsync();

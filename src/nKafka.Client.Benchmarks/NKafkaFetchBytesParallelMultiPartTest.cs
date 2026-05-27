@@ -14,7 +14,7 @@ public static class NKafkaFetchBytesParallelMultiPartTest
         var topicMetadata = metadata.Message.Topics![scenario.TopicName];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
-        var recordCount = 0;
+        int recordCount = 0;
         var tasks = new List<Task>();
         foreach (var group in partitions)
         {
@@ -74,7 +74,7 @@ public static class NKafkaFetchBytesParallelMultiPartTest
                 while (true)
                 {
                     using var response = await connection.SendAsync(request, CancellationToken.None);
-                    var responseRecordCount = 0;
+                    int responseRecordCount = 0;
                     foreach (var topicResponse in response.Message.Responses!)
                     {
                         var topicRequest = request.Topics.FirstOrDefault(x =>
@@ -94,12 +94,12 @@ public static class NKafkaFetchBytesParallelMultiPartTest
                                 continue;
                             }
 
-                            var lastOffset = partitionResponse.Records?.LastOffset;
+                            long? lastOffset = partitionResponse.Records?.LastOffset;
                             if (lastOffset != null)
                             {
                                 partitionRequest.FetchOffset = lastOffset + 1;
                             }
-                            
+
                             foreach (var recordBatch in partitionResponse.Records!.RecordBatches!)
                             {
                                 foreach (var record in recordBatch.Records!)

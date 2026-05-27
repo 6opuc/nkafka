@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
-using System.Runtime.Intrinsics.X86;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics.X86;
 
 namespace nKafka.Contracts;
 
@@ -18,17 +18,17 @@ public static class Crc32c
             ? Crc32cHardwareImplementation.CalculateSpan
             : Crc32cSoftwareImplementation.CalculateSpan;
     }
-    
+
     public static uint Calculate(MemoryStream stream, long start, long size)
     {
         return _calculateStream(stream, start, size);
     }
-    
+
     public static uint Calculate(ReadOnlyMemory<byte> buffer, long start, long size)
     {
         return _calculateSpan(buffer.Span, start, size);
     }
-    
+
     public static uint Calculate(ReadOnlySpan<byte> buffer, long start, long size)
     {
         return _calculateSpan(buffer, start, size);
@@ -41,22 +41,22 @@ public static class Crc32c
         private static readonly bool _sse42Available = Sse42.IsSupported;
 
         public static bool IsSupported => _sse42Available;
-        
+
         public static uint CalculateStream(MemoryStream stream, long start, long size)
         {
             if (!_sse42Available)
             {
                 throw new PlatformNotSupportedException();
             }
-            
+
             if (start < 0 || start > int.MaxValue)
             {
                 throw new ArgumentOutOfRangeException(nameof(start), "Start position must be between 0 and int.MaxValue.");
             }
-            
-            var crc = _seed;
-            var buffer = stream.GetBuffer();
-            var end = start + size;
+
+            uint crc = _seed;
+            byte[] buffer = stream.GetBuffer();
+            long end = start + size;
             if (end > int.MaxValue)
             {
                 throw new ArgumentOutOfRangeException(nameof(size), "End position exceeds buffer bounds.");
@@ -71,14 +71,14 @@ public static class Crc32c
                     size -= 8;
                 }
             }
-            
+
             while (size >= 4)
             {
                 crc = Sse42.Crc32(crc, BitConverter.ToUInt32(buffer, (int)start));
                 start += 4;
                 size -= 4;
             }
-            
+
             while (size > 0)
             {
                 crc = Sse42.Crc32(crc, buffer[start]);
@@ -88,22 +88,22 @@ public static class Crc32c
 
             return ~crc;
         }
-        
+
         public static uint CalculateSpan(ReadOnlySpan<byte> buffer, long start, long size)
         {
             if (!_sse42Available)
             {
                 throw new PlatformNotSupportedException();
             }
-            
+
             if (start < 0 || start > int.MaxValue)
             {
                 throw new ArgumentOutOfRangeException(nameof(start), "Start position must be between 0 and int.MaxValue.");
             }
-            
-            var crc = _seed;
+
+            uint crc = _seed;
             var span = buffer.Slice((int)start, (int)size);
-            var pos = 0;
+            int pos = 0;
 
             if (_sse42x64Available)
             {
@@ -113,13 +113,13 @@ public static class Crc32c
                     pos += 8;
                 }
             }
-            
+
             while (pos + 4 <= span.Length)
             {
                 crc = Sse42.Crc32(crc, MemoryMarshal.Read<uint>(span.Slice(pos)));
                 pos += 4;
             }
-            
+
             while (pos < span.Length)
             {
                 crc = Sse42.Crc32(crc, span[pos]);
@@ -129,7 +129,7 @@ public static class Crc32c
             return ~crc;
         }
     }
-    
+
     private static class Crc32cSoftwareImplementation
     {
         private static readonly uint _polynomial = 0x82F63B78u;
@@ -138,11 +138,11 @@ public static class Crc32c
 
         private static uint[] InitializeTable()
         {
-            var table = new uint[256];
-            for (var i = 0; i < 256; i++)
+            uint[] table = new uint[256];
+            for (int i = 0; i < 256; i++)
             {
-                var entry = (uint)i;
-                for (var j = 0; j < 8; j++)
+                uint entry = (uint)i;
+                for (int j = 0; j < 8; j++)
                     if ((entry & 1) == 1)
                         entry = (entry >> 1) ^ _polynomial;
                     else
@@ -152,38 +152,38 @@ public static class Crc32c
 
             return table;
         }
-        
+
         public static uint CalculateStream(MemoryStream stream, long start, long size)
         {
             if (start < 0 || start > int.MaxValue)
             {
                 throw new ArgumentOutOfRangeException(nameof(start), "Start position must be between 0 and int.MaxValue.");
             }
-            
-            var crc = _seed;
-            var buffer = stream.GetBuffer();
-            var end = start + size;
+
+            uint crc = _seed;
+            byte[] buffer = stream.GetBuffer();
+            long end = start + size;
             if (end > int.MaxValue)
             {
                 throw new ArgumentOutOfRangeException(nameof(size), "End position exceeds buffer bounds.");
             }
-            
-            for (var i = start; i < end; ++i)
+
+            for (long i = start; i < end; ++i)
                 crc = (crc >> 8) ^ _table[buffer[i] ^ crc & 0xff];
             return ~crc;
         }
-        
+
         public static uint CalculateSpan(ReadOnlySpan<byte> buffer, long start, long size)
         {
             if (start < 0 || start > int.MaxValue)
             {
                 throw new ArgumentOutOfRangeException(nameof(start), "Start position must be between 0 and int.MaxValue.");
             }
-            
-            var crc = _seed;
+
+            uint crc = _seed;
             var span = buffer.Slice((int)start, (int)size);
-            var end = (int)size;
-            for (var i = 0; i < end; i++)
+            int end = (int)size;
+            for (int i = 0; i < end; i++)
                 crc = (crc >> 8) ^ _table[span[i] ^ crc & 0xff];
             return ~crc;
         }

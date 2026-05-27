@@ -11,10 +11,10 @@ public class PendingRequest
     public CancellationToken CancellationToken { get; init; }
     public int CorrelationId { get; init; }
     public short ApiVersion { get; init; }
-        
+
 
     public PendingRequest(
-        IRequest payload, 
+        IRequest payload,
         TaskCompletionSource<MessageWithPooledPayload> response,
         CancellationToken cancellationToken,
         int correlationId,
@@ -26,7 +26,7 @@ public class PendingRequest
         CorrelationId = correlationId;
         ApiVersion = payload.FixedVersion ?? apiVersion;
     }
-    
+
     public void SerializeRequest(ref BufferWriter writer, ISerializationContext context)
     {
         var header = new RequestHeader
@@ -36,23 +36,23 @@ public class PendingRequest
             CorrelationId = CorrelationId,
             ClientId = context.Config.ClientId,
         };
-        var start = writer.Position;
+        int start = writer.Position;
         writer.WriteInt(0); // placeholder for header + payload size
-        var requestHeaderVersion = Payload.ApiKey == ApiKey.ControlledShutdown && ApiVersion == 0
+        short requestHeaderVersion = Payload.ApiKey == ApiKey.ControlledShutdown && ApiVersion == 0
             ? (short)0
             : (short)(Payload.FlexibleVersions.Includes(ApiVersion) ? 2 : 1);
         RequestHeaderSerializer.Serialize(ref writer, header, requestHeaderVersion, context);
         Payload.SerializeRequest(ref writer, ApiVersion, context);
-        var end = writer.Position;
-        var size = (int)(end - start) - 4;
+        int end = writer.Position;
+        int size = (int)(end - start) - 4;
         writer.Position = start;
         writer.WriteInt(size);
         writer.Position = end;
     }
-    
+
     public object DeserializeResponse(ref BufferReader reader, ISerializationContext context)
     {
-        var responseHeaderVersion = Payload.ApiKey == ApiKey.ApiVersions
+        short responseHeaderVersion = Payload.ApiKey == ApiKey.ApiVersions
             ? (short)0
             : (short)(Payload.FlexibleVersions.Includes(ApiVersion) ? 1 : 0);
         var header = ResponseHeaderSerializer.Deserialize(ref reader, responseHeaderVersion, context);

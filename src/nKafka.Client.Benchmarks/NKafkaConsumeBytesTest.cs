@@ -13,7 +13,7 @@ public static class NKafkaConsumeBytesTest
             $"testapp-{DateTime.UtcNow.Date:yyyyMMdd}-{Guid.NewGuid():N}",
             "PLAINTEXT",
             "nKafka.Client.Benchmarks");
-        
+
         await using var consumer = new Consumer<Memory<byte>?>(
             consumerConfig,
             new DummyBytesMessageDeserializer(),
@@ -21,7 +21,7 @@ public static class NKafkaConsumeBytesTest
             NullLoggerFactory.Instance);
         await consumer.JoinGroupAsync(CancellationToken.None);
 
-        var counter = 0;
+        int counter = 0;
         while (counter < scenario.MessageCount)
         {
             var consumeResult = await consumer.ConsumeAsync(CancellationToken.None);

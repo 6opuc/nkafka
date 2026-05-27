@@ -9,20 +9,20 @@ public static class RecordsContainerSerializerV3
 
     public static RecordsContainer? Deserialize(ref BufferReader reader, ISerializationContext context)
     {
-        var size = reader.ReadLength();
+        int size = reader.ReadLength();
         if (size < 0)
         {
             return null;
         }
 
-        var start = reader.Position;
-        var eof = start + size;
-        var remainingBefore = reader.Remaining;
+        int start = reader.Position;
+        int eof = start + size;
+        int remainingBefore = reader.Remaining;
         if (size > remainingBefore)
         {
             throw new Exception($"Record container expected {size} bytes but got only {remainingBefore}.");
         }
-        
+
         var message = new RecordsContainer
         {
             SizeInBytes = size,
@@ -37,7 +37,7 @@ public static class RecordsContainerSerializerV3
             }
             message.RecordBatches.Add(recordBatch);
         }
-        var remainder = eof - reader.Position;
+        int remainder = eof - reader.Position;
         if (remainder > 0)
         {
             reader.Advance((int)remainder);

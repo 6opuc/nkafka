@@ -5,15 +5,15 @@ public class FetchScenario
     public int PartitionCount { get; set; }
     public int MessageSize { get; set; }
     public int MessageCount { get; set; }
-    
+
     public string TopicName => $"test_p{PartitionCount}_m{CountToString(MessageCount)}_s{BytesToString(MessageSize)}";
 
     public override string ToString()
     {
         return $"{PartitionCount}p {CountToString(MessageCount)}x{BytesToString(MessageSize)}";
     }
-    
-    static string BytesToString(int byteCount)
+
+    private static string BytesToString(int byteCount)
     {
         string[] suf = { "B", "KB", "MB", "GB" };
         if (byteCount == 0)
@@ -23,8 +23,8 @@ public class FetchScenario
         double num = Math.Round(bytes / Math.Pow(1024, place), 1);
         return (Math.Sign(byteCount) * num) + suf[place];
     }
-    
-    static string CountToString(int count)
+
+    private static string CountToString(int count)
     {
         string[] suf = { "K", "M", "G" };
         if (count < 1000)
@@ -35,6 +35,6 @@ public class FetchScenario
         long bytes = Math.Abs(count);
         int place = Convert.ToInt32(Math.Floor(Math.Log(bytes, 1000)));
         double num = Math.Round(bytes / Math.Pow(1000, place), 1);
-        return (Math.Sign(count) * num) + suf[place-1];
+        return (Math.Sign(count) * num) + suf[place - 1];
     }
 }

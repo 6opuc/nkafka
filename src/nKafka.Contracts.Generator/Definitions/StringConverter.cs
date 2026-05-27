@@ -9,7 +9,7 @@ public class StringConverter : JsonConverter<string>
     public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
         reader.TokenType switch
         {
-            JsonTokenType.Number => reader.TryGetInt64(out var value)
+            JsonTokenType.Number => reader.TryGetInt64(out long value)
                 ? value.ToString()
                 : reader.GetDecimal().ToString(CultureInfo.InvariantCulture),
             JsonTokenType.String => reader.GetString(),

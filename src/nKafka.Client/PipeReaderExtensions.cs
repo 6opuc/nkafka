@@ -12,7 +12,7 @@ public static class PipeReaderExtensions
         do
         {
             cancellationToken.ThrowIfCancellationRequested();
-            
+
             var readResult = await reader.ReadAtLeastAsync(4, cancellationToken);
             if (readResult.Buffer.Length == 0)
             {
@@ -35,7 +35,7 @@ public static class PipeReaderExtensions
             }
         } while (true);
     }
-    
+
     public static async ValueTask<int> ReadAsync(
         this PipeReader reader,
         byte[] output,
@@ -50,13 +50,13 @@ public static class PipeReaderExtensions
         do
         {
             cancellationToken.ThrowIfCancellationRequested();
-            
+
             var readResult = await reader.ReadAtLeastAsync(length, cancellationToken);
             if (readResult.Buffer.Length == 0)
             {
                 continue;
             }
-            
+
             var buffer = readResult.Buffer.Slice(0, length);
             buffer.CopyTo(output.AsSpan());
             reader.AdvanceTo(buffer.GetPosition(length));

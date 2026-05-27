@@ -10,7 +10,7 @@ public static class ChecksumValidator
     {
         Validate(Crc32.Calculate, expectedCrc, buffer.Span, start, size);
     }
-    
+
     public static void ValidateCrc32c(
         uint expectedCrc,
         ReadOnlyMemory<byte> buffer,
@@ -19,7 +19,7 @@ public static class ChecksumValidator
     {
         Validate(Crc32c.Calculate, expectedCrc, buffer.Span, start, size);
     }
-    
+
     private static void Validate(
         Func<ReadOnlySpan<byte>, long, long, uint> calculateChecksumSpan,
         uint expectedChecksum,
@@ -27,7 +27,7 @@ public static class ChecksumValidator
         long start,
         long size)
     {
-        var calculatedChecksum = calculateChecksumSpan(buffer, start, size);
+        uint calculatedChecksum = calculateChecksumSpan(buffer, start, size);
         if (calculatedChecksum != expectedChecksum)
         {
             throw new Exception($"Corrupt message: checksum does not match. Calculated {calculatedChecksum} but got {expectedChecksum}.");
