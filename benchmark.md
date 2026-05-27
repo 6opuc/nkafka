@@ -30,4 +30,42 @@ AMD Ryzen 5 7530U with Radeon Graphics 3.51GHz, 1 CPU, 12 logical and 6 physical
 | NKafkaConsumeBytes      | 12p 40Kx10KB | 326.4 ms | 23.95 ms | 70.60 ms | 346.6 ms |           36089.0000 |                - | 500.0000 |   6.82 MB |
 | NKafkaBatchConsumeBytes | 12p 40Kx10KB | 314.9 ms | 30.66 ms | 86.97 ms | 342.2 ms |           23434.0000 |                - |        - |    6.8 MB |
 
+---
+
+## BufferReader/BufferWriter Optimization (PR #2 Fixes)
+
+**Date:** 2026-05-27  
+**Hardware:** AMD RYZEN AI MAX+ 395 w/ Radeon 8060S 1.68GHz, 32 logical / 16 physical cores  
+**.NET SDK:** 10.0.300  
+**.NET Runtime:** 10.0.8
+
+### NKafkaFetchBytesSeq1Part (12 partitions, 40K messages × 10KB)
+
+| Metric | Main (Baseline) | Optimized | Change |
+|--------|----------------|-----------|--------|
+| **Mean** | 82.64 ms | 81.98 ms | **-0.8%** |
+| **StdDev** | 3.762 ms | 1.286 ms | **-66%** (more stable) |
+| **Allocated** | 5.72 MB | 5.58 MB | **-2.4%** |
+| **Gen0** | 200.00 | 200.00 | No change |
+
+### Summary
+
+- **~0.8% faster** serialization/deserialization
+- **2.4% less memory allocation** (5.72MB → 5.58MB per operation)
+- **66% more consistent** performance (StdDev reduced from 3.76ms to 1.29ms)
+
+**Notes:**
+- Improvements are modest at this scale because network I/O is the bottleneck
+- Benefits would be more pronounced with:
+  - Higher throughput scenarios
+  - CPU-bound workloads
+  - Smaller messages where serialization overhead is proportionally larger
+
+**Optimizations applied:**
+- `ref BufferReader` / `ref BufferWriter` for zero-allocation serialization
+- Removed PooledBuffer abstraction
+- Standardized API consistency across all serializers
+- Consolidated VarIntSize to BufferWriter static method
+- Changed Message.Key/Value from `byte[]?` to `Memory<byte>?`
+
 
