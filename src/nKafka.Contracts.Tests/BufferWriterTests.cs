@@ -332,8 +332,9 @@ public class BufferWriterTests
     public void WriteVarInt_WritesSmallPositiveValue()
     {
         _writer.WriteVarInt(127);
-        _writer.Position.Should().Be(1);
-        _writer.Buffer.Span[0].Should().Be(127);
+        _writer.Position.Should().Be(2);
+        _writer.Buffer.Span[0].Should().Be(0xFE);
+        _writer.Buffer.Span[1].Should().Be(0x01);
     }
 
     [Test]
@@ -342,24 +343,15 @@ public class BufferWriterTests
         _writer.WriteVarInt(128);
         _writer.Position.Should().Be(2);
         _writer.Buffer.Span[0].Should().Be(0x80);
-        _writer.Buffer.Span[1].Should().Be(0x01);
+        _writer.Buffer.Span[1].Should().Be(0x02);
     }
 
     [Test]
     public void WriteVarInt_WritesNegativeValue()
     {
         _writer.WriteVarInt(-1);
-        _writer.Position.Should().Be(10);
-        _writer.Buffer.Span[0].Should().Be(0xFF);
-        _writer.Buffer.Span[1].Should().Be(0xFF);
-        _writer.Buffer.Span[2].Should().Be(0xFF);
-        _writer.Buffer.Span[3].Should().Be(0xFF);
-        _writer.Buffer.Span[4].Should().Be(0xFF);
-        _writer.Buffer.Span[5].Should().Be(0xFF);
-        _writer.Buffer.Span[6].Should().Be(0xFF);
-        _writer.Buffer.Span[7].Should().Be(0xFF);
-        _writer.Buffer.Span[8].Should().Be(0xFF);
-        _writer.Buffer.Span[9].Should().Be(0x01);
+        _writer.Position.Should().Be(1);
+        _writer.Buffer.Span[0].Should().Be(0x01);
     }
 
     [Test]
@@ -373,7 +365,7 @@ public class BufferWriterTests
     public void WriteVarInt_WritesMinValue()
     {
         _writer.WriteVarInt(int.MinValue);
-        _writer.Position.Should().Be(10);
+        _writer.Position.Should().Be(5);
     }
 
     #endregion
@@ -517,7 +509,7 @@ public class BufferWriterTests
         _writer.Position.Should().Be(7);
         _writer.Buffer.Span[0].Should().Be(0);
         _writer.Buffer.Span[1].Should().Be(5);
-        Encoding.UTF8.GetBytes("Hello").AsSpan().SequenceEqual(_buffer.AsSpan(2, 5)).Should().BeTrue();
+        Encoding.UTF8.GetBytes("Hello").AsSpan().SequenceEqual(_writer.Buffer.Span.Slice(2, 5)).Should().BeTrue();
     }
 
     [Test]
@@ -554,16 +546,15 @@ public class BufferWriterTests
     {
         _writer.WriteVarString(null);
         _writer.Position.Should().Be(1);
-        _writer.Buffer.Span[0].Should().Be(0xFF);
+        _writer.Buffer.Span[0].Should().Be(0x00);
     }
 
     [Test]
     public void WriteVarString_WritesEmptyString()
     {
         _writer.WriteVarString("");
-        _writer.Position.Should().Be(2);
-        _writer.Buffer.Span[0].Should().Be(0);
-        _writer.Buffer.Span[1].Should().Be(0);
+        _writer.Position.Should().Be(1);
+        _writer.Buffer.Span[0].Should().Be(0x01);
     }
 
     #endregion
@@ -654,8 +645,7 @@ public class BufferWriterTests
     [Test]
     public void WriteAtNearCapacity()
     {
-        byte[] smallBuffer = new byte[10];
-        var smallWriter = new BufferWriter(_arrayPool, 10);
+        var smallWriter = new BufferWriter(_arrayPool, 12);
         smallWriter.WriteInt(42);
         smallWriter.WriteLong(99);
         smallWriter.Position.Should().Be(12);

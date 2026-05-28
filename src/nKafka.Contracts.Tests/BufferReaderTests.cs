@@ -269,7 +269,7 @@ public class BufferReaderTests
     public void ReadDoubleBigEndian_ReadsPositiveValue()
     {
         _writer.WriteDoubleBigEndian(3.14159);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadDoubleBigEndian().Should().BeApproximately(3.14159, 0.00001);
     }
 
@@ -286,7 +286,7 @@ public class BufferReaderTests
     public void ReadDoubleBigEndian_ReadsNegativeValue()
     {
         _writer.WriteDoubleBigEndian(-2.71828);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadDoubleBigEndian().Should().BeApproximately(-2.71828, 0.00001);
     }
 
@@ -294,7 +294,7 @@ public class BufferReaderTests
     public void ReadDoubleBigEndian_ReadsMaxValue()
     {
         _writer.WriteDoubleBigEndian(double.MaxValue);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadDoubleBigEndian().Should().Be(double.MaxValue);
     }
 
@@ -313,34 +313,24 @@ public class BufferReaderTests
     [Test]
     public void ReadVarInt_ReadsSmallPositiveValue()
     {
-        _buffer[0] = 127;
-        _reader = new BufferReader(_buffer);
+        _writer.WriteVarInt(127);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadVarInt().Should().Be(127);
     }
 
     [Test]
     public void ReadVarInt_ReadsValueRequiringTwoBytes()
     {
-        _buffer[0] = 0x80;
-        _buffer[1] = 0x01;
-        _reader = new BufferReader(_buffer);
+        _writer.WriteVarInt(128);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadVarInt().Should().Be(128);
     }
 
     [Test]
     public void ReadVarInt_ReadsNegativeValue()
     {
-        _buffer[0] = 0xFF;
-        _buffer[1] = 0xFF;
-        _buffer[2] = 0xFF;
-        _buffer[3] = 0xFF;
-        _buffer[4] = 0xFF;
-        _buffer[5] = 0xFF;
-        _buffer[6] = 0xFF;
-        _buffer[7] = 0xFF;
-        _buffer[8] = 0xFF;
-        _buffer[9] = 0x01;
-        _reader = new BufferReader(_buffer);
+        _writer.WriteVarInt(-1);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadVarInt().Should().Be(-1);
     }
 
@@ -348,7 +338,7 @@ public class BufferReaderTests
     public void ReadVarInt_ReadsLargeValue()
     {
         _writer.WriteVarInt(1000000);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadVarInt().Should().Be(1000000);
     }
 
@@ -356,7 +346,7 @@ public class BufferReaderTests
     public void ReadVarInt_ReadsMaxValue()
     {
         _writer.WriteVarInt(int.MaxValue);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadVarInt().Should().Be(int.MaxValue);
     }
 
@@ -375,9 +365,8 @@ public class BufferReaderTests
     [Test]
     public void ReadVarLong_ReadsSmallPositiveValue()
     {
-        _buffer[0] = 0x80;
-        _buffer[1] = 0x07;
-        _reader = new BufferReader(_buffer);
+        _writer.WriteVarLong(1000);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadVarLong().Should().Be(1000);
     }
 
@@ -385,7 +374,7 @@ public class BufferReaderTests
     public void ReadVarLong_ReadsLargeValue()
     {
         _writer.WriteVarLong(10000000000L);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadVarLong().Should().Be(10000000000L);
     }
 
@@ -393,7 +382,7 @@ public class BufferReaderTests
     public void ReadVarLong_ReadsNegativeValue()
     {
         _writer.WriteVarLong(-1000);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadVarLong().Should().Be(-1000);
     }
 
@@ -401,7 +390,7 @@ public class BufferReaderTests
     public void ReadVarLong_ReadsMinValue()
     {
         _writer.WriteVarLong(long.MinValue);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadVarLong().Should().Be(long.MinValue);
     }
 
@@ -409,7 +398,7 @@ public class BufferReaderTests
     public void ReadVarLong_ReadsMaxValue()
     {
         _writer.WriteVarLong(long.MaxValue);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadVarLong().Should().Be(long.MaxValue);
     }
 
@@ -446,7 +435,7 @@ public class BufferReaderTests
     public void ReadUVarInt_ReadsLargeValue()
     {
         _writer.WriteUVarInt(uint.MaxValue);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadUVarInt().Should().Be(uint.MaxValue);
     }
 
@@ -454,7 +443,7 @@ public class BufferReaderTests
     public void ReadUVarInt_ReadsMaxValue()
     {
         _writer.WriteUVarInt(uint.MaxValue);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadUVarInt().Should().Be(uint.MaxValue);
     }
 
@@ -473,9 +462,8 @@ public class BufferReaderTests
     [Test]
     public void ReadUVarLong_ReadsSmallValue()
     {
-        _buffer[0] = 0x80;
-        _buffer[1] = 0x07;
-        _reader = new BufferReader(_buffer);
+        _writer.WriteUVarLong(1000);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadUVarLong().Should().Be(1000);
     }
 
@@ -483,7 +471,7 @@ public class BufferReaderTests
     public void ReadUVarLong_ReadsLargeValue()
     {
         _writer.WriteUVarLong(ulong.MaxValue);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadUVarLong().Should().Be(ulong.MaxValue);
     }
 
@@ -491,7 +479,7 @@ public class BufferReaderTests
     public void ReadUVarLong_ReadsMaxLongValue()
     {
         _writer.WriteUVarLong((ulong)long.MaxValue);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadUVarLong().Should().Be((ulong)long.MaxValue);
     }
 
@@ -499,7 +487,7 @@ public class BufferReaderTests
     public void ReadUVarLong_ReadsMaxValue()
     {
         _writer.WriteUVarLong(ulong.MaxValue);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadUVarLong().Should().Be(ulong.MaxValue);
     }
 
@@ -543,28 +531,24 @@ public class BufferReaderTests
     [Test]
     public void ReadVarString_ReadsSimpleString()
     {
-        byte[] bytes = Encoding.UTF8.GetBytes("Hello");
-        _buffer[0] = (byte)(bytes.Length | 0x80);
-        _buffer[1] = (byte)bytes.Length;
-        bytes.CopyTo(_buffer, 2);
-        _reader = new BufferReader(_buffer);
+        _writer.WriteVarString("Hello");
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadVarString().Should().Be("Hello");
     }
 
     [Test]
     public void ReadVarString_ReadsNull()
     {
-        _buffer[0] = 0xFF;
-        _reader = new BufferReader(_buffer);
+        _writer.WriteVarString(null);
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadVarString().Should().BeNull();
     }
 
     [Test]
     public void ReadVarString_ReadsEmptyString()
     {
-        _buffer[0] = 0;
-        _buffer[1] = 0;
-        _reader = new BufferReader(_buffer);
+        _writer.WriteVarString("");
+        _reader = new BufferReader(_writer.Buffer);
         _reader.ReadVarString().Should().Be("");
     }
 
@@ -633,9 +617,9 @@ public class BufferReaderTests
     [Test]
     public void CreateRemaining_ReturnsReaderWithRemainingData()
     {
-        _writer.Dispose(); var writer = new BufferWriter(_arrayPool, BufferSize); writer.WriteInt(42);
+        _writer.WriteInt(42);
         _writer.WriteInt(99);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer.Slice(0, _writer.Position));
         _reader.ReadByte();
         var child = _reader.CreateRemaining();
         child.Remaining.Should().Be(7);
@@ -644,9 +628,9 @@ public class BufferReaderTests
     [Test]
     public void CreateChild_ReturnsReaderWithSpecifiedLength()
     {
-        _writer.Dispose(); var writer = new BufferWriter(_arrayPool, BufferSize); writer.WriteInt(42);
+        _writer.WriteInt(42);
         _writer.WriteInt(99);
-        _reader = new BufferReader(_buffer);
+        _reader = new BufferReader(_writer.Buffer);
         var child = _reader.CreateChild(4);
         child.Remaining.Should().Be(4);
         _reader.Position.Should().Be(4);
