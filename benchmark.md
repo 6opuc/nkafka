@@ -1,71 +1,19 @@
-BenchmarkDotNet v0.15.8, Linux Ubuntu 24.04.4 LTS (Noble Numbat)
-AMD Ryzen 7 5700X 1.74GHz, 1 CPU, 16 logical and 8 physical cores
-.NET SDK 10.0.203
-  [Host]     : .NET 10.0.7 (10.0.7, 10.0.726.21808), X64 RyuJIT x86-64-v3
-  DefaultJob : .NET 10.0.7 (10.0.7, 10.0.726.21808), X64 RyuJIT x86-64-v3
-
-
-| Method                    | Scenario     | Mean        | Error      | StdDev     | Median      | Gen0       | Completed Work Items | Lock Contentions | Gen1       | Allocated |
-|-------------------------- |------------- |------------:|-----------:|-----------:|------------:|-----------:|---------------------:|-----------------:|-----------:|----------:|
-| ConfluentConsumeBytes     | 12p 40Kx10KB | 2,011.35 ms | 141.738 ms | 417.917 ms | 2,231.46 ms | 25000.0000 |                    - |                - |          - | 403.77 MB |
-| ConfluentConsumeString    | 12p 40Kx10KB | 2,912.61 ms | 165.612 ms | 488.310 ms | 3,237.64 ms | 49000.0000 |                    - |                - |  3000.0000 |  794.4 MB |
-| NKafkaFetchBytesSeq1Part  | 12p 40Kx10KB |   199.84 ms |   2.008 ms |   1.780 ms |   200.50 ms |          - |           11060.5000 |                - |          - |    5.7 MB |
-| NKafkaFetchBytesSeqNPart  | 12p 40Kx10KB |   205.54 ms |   3.517 ms |   3.290 ms |   204.30 ms |   333.3333 |           11386.0000 |                - |          - |   6.21 MB |
-| NKafkaFetchBytesParNPart  | 12p 40Kx10KB |    83.22 ms |   0.417 ms |   0.349 ms |    83.18 ms |   333.3333 |           11943.6667 |                - |          - |   6.14 MB |
-| NKafkaFetchStringParNPart | 12p 40Kx10KB |   115.44 ms |   1.429 ms |   1.337 ms |   115.70 ms | 49500.0000 |           10930.0000 |                - |  4250.0000 | 788.32 MB |
-| NKafkaConsumeString       | 12p 40Kx10KB |   108.00 ms |   1.531 ms |   1.279 ms |   108.04 ms | 49500.0000 |           10908.7500 |                - | 12000.0000 | 788.67 MB |
-| NKafkaConsumeBytes        | 12p 40Kx10KB |    88.85 ms |   0.914 ms |   0.855 ms |    88.87 ms |   333.3333 |           12652.8333 |                - |          - |    6.6 MB |
-| NKafkaBatchConsumeBytes   | 12p 40Kx10KB |    88.83 ms |   1.211 ms |   1.133 ms |    88.84 ms |   400.0000 |           12494.8000 |                - |          - |   6.59 MB |
-
-
-BenchmarkDotNet v0.15.8, Linux Fedora Linux 44 (Workstation Edition)
-AMD Ryzen 5 7530U with Radeon Graphics 3.51GHz, 1 CPU, 12 logical and 6 physical cores
-.NET SDK 10.0.203
-  [Host]     : .NET 10.0.7 (10.0.7, 10.0.726.21808), X64 RyuJIT x86-64-v3
-  DefaultJob : .NET 10.0.7 (10.0.7, 10.0.726.21808), X64 RyuJIT x86-64-v3
-
-
-| Method                  | Scenario     | Mean     | Error    | StdDev   | Median   | Completed Work Items | Lock Contentions | Gen0     | Allocated |
-|------------------------ |------------- |---------:|---------:|---------:|---------:|---------------------:|-----------------:|---------:|----------:|
-| NKafkaConsumeBytes      | 12p 40Kx10KB | 326.4 ms | 23.95 ms | 70.60 ms | 346.6 ms |           36089.0000 |                - | 500.0000 |   6.82 MB |
-| NKafkaBatchConsumeBytes | 12p 40Kx10KB | 314.9 ms | 30.66 ms | 86.97 ms | 342.2 ms |           23434.0000 |                - |        - |    6.8 MB |
-
----
-
-## BufferReader/BufferWriter Optimization (PR #2 Fixes)
-
-**Date:** 2026-05-27  
-**Hardware:** AMD RYZEN AI MAX+ 395 w/ Radeon 8060S 1.68GHz, 32 logical / 16 physical cores  
-**.NET SDK:** 10.0.300  
-**.NET Runtime:** 10.0.8
-
-### NKafkaFetchBytesSeq1Part (12 partitions, 40K messages × 10KB)
-
-| Metric | Main (Baseline) | Optimized | Change |
-|--------|----------------|-----------|--------|
-| **Mean** | 82.64 ms | 81.98 ms | **-0.8%** |
-| **StdDev** | 3.762 ms | 1.286 ms | **-66%** (more stable) |
-| **Allocated** | 5.72 MB | 5.58 MB | **-2.4%** |
-| **Gen0** | 200.00 | 200.00 | No change |
-
-### Summary
-
-- **~0.8% faster** serialization/deserialization
-- **2.4% less memory allocation** (5.72MB → 5.58MB per operation)
-- **66% more consistent** performance (StdDev reduced from 3.76ms to 1.29ms)
-
-**Notes:**
-- Improvements are modest at this scale because network I/O is the bottleneck
-- Benefits would be more pronounced with:
-  - Higher throughput scenarios
-  - CPU-bound workloads
-  - Smaller messages where serialization overhead is proportionally larger
-
-**Optimizations applied:**
-- `ref BufferReader` / `ref BufferWriter` for zero-allocation serialization
-- Removed PooledBuffer abstraction
-- Standardized API consistency across all serializers
-- Consolidated VarIntSize to BufferWriter static method
-- Changed Message.Key/Value from `byte[]?` to `Memory<byte>?`
-
+BenchmarkDotNet v0.15.8, Linux Ubuntu 26.04 LTS (Resolute Raccoon)                                                                                                                                         
+AMD RYZEN AI MAX+ 395 w/ Radeon 8060S 1.68GHz, 1 CPU, 32 logical and 16 physical cores                                                                                                                     
+.NET SDK 10.0.300                                                                                                                                                                                          
+  [Host]     : .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v4                                                                                                                                  
+  DefaultJob : .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v4                                                                                                                                  
+                                                                                                                                                                                                           
+                                                                                                                                                                                                           
+| Method                    | Scenario     | Mean        | Error      | StdDev     | Median      | Completed Work Items | Lock Contentions | Gen0       | Gen1       | Allocated |                         
+|-------------------------- |------------- |------------:|-----------:|-----------:|------------:|---------------------:|-----------------:|-----------:|-----------:|----------:|                         
+| ConfluentConsumeBytes     | 12p 40Kx10KB | 2,553.84 ms | 158.910 ms | 468.551 ms | 2,228.72 ms |                    - |                - | 25000.0000 |          - | 403.77 MB |                         
+| ConfluentConsumeString    | 12p 40Kx10KB | 3,220.28 ms |   4.453 ms |   4.166 ms | 3,220.03 ms |                    - |                - | 49000.0000 |  3000.0000 |  794.4 MB |                         
+| NKafkaFetchBytesSeq1Part  | 12p 40Kx10KB |    80.06 ms |   1.601 ms |   2.493 ms |    80.29 ms |            8836.3333 |                - |   333.3333 |          - |   5.51 MB |                         
+| NKafkaFetchBytesSeqNPart  | 12p 40Kx10KB |    82.03 ms |   1.598 ms |   2.440 ms |    82.16 ms |            9012.8333 |                - |   333.3333 |          - |   6.01 MB |                         
+| NKafkaFetchBytesParNPart  | 12p 40Kx10KB |    35.36 ms |   0.397 ms |   0.441 ms |    35.23 ms |            7644.2143 |                - |   357.1429 |          - |   5.94 MB |
+| NKafkaFetchStringParNPart | 12p 40Kx10KB |    58.68 ms |   1.168 ms |   2.223 ms |    58.56 ms |            7057.0000 |                - | 49444.4444 |  4666.6667 | 788.12 MB |
+| NKafkaConsumeString       | 12p 40Kx10KB |    63.01 ms |   1.257 ms |   2.481 ms |    62.75 ms |            7273.8571 |                - | 49428.5714 | 10285.7143 | 788.43 MB |
+| NKafkaConsumeBytes        | 12p 40Kx10KB |    40.44 ms |   0.774 ms |   1.564 ms |    39.97 ms |            8276.7692 |           0.1538 |   384.6154 |          - |   6.36 MB |
+| NKafkaBatchConsumeBytes   | 12p 40Kx10KB |    39.13 ms |   0.629 ms |   0.525 ms |    39.14 ms |            9160.3333 |           0.0833 |   333.3333 |          - |   6.35 MB |
 
