@@ -1,4 +1,4 @@
-﻿namespace nKafka.Contracts;
+namespace nKafka.Contracts;
 
 public enum ApiKey : short
 {

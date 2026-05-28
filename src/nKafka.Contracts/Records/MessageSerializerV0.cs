@@ -1,71 +1,58 @@
+using nKafka.Contracts.Exceptions;
+
 namespace nKafka.Contracts.Records;
 
 public static class MessageSerializerV0
 {
-    public static Message? Deserialize(MemoryStream input, long eof, ISerializationContext context)
+    public static Message? Deserialize(ref BufferReader reader, long eof, ISerializationContext context)
     {
-        var start = input.Position;
-        if (start + 8 + 4 > eof)
+        if (reader.Position + 8 + 4 > eof)
         {
-            // we will not be able to read message size
             return null;
         }
 
         var message = new Message
         {
-            Offset = PrimitiveSerializer.DeserializeLong(input),
-            MessageSize = PrimitiveSerializer.DeserializeInt(input),
+            Offset = reader.ReadInt64BigEndian(),
+            MessageSize = reader.ReadInt32BigEndian(),
         };
-        
-        var messageStart = input.Position;
 
-        if (input.Position + message.MessageSize > eof)
+        int messageStart = reader.Position;
+
+        if (reader.Position + message.MessageSize > eof)
         {
-            // we will not be able to read full message
-            input.Position = start;
             return null;
         }
-        
-        message.Crc = PrimitiveSerializer.DeserializeUint(input);
 
-        var crcStart = input.Position;
-        message.Magic = PrimitiveSerializer.DeserializeByte(input);
+        message.Crc = reader.ReadUInt32BigEndian();
+
+        int crcStart = reader.Position;
+        message.Magic = reader.ReadByte();
         if (message.Magic != 0)
         {
-            throw new Exception($"Version 0 was expected, but received version {message.Magic}.");
+            throw new ProtocolException($"Version 0 was expected, but received version {message.Magic}.");
         }
-        message.Attributes = PrimitiveSerializer.DeserializeByte(input);
+        message.Attributes = reader.ReadByte();
 
-        var keyLength = PrimitiveSerializer.DeserializeInt(input);
+        int keyLength = reader.ReadInt32BigEndian();
         message.Key = keyLength == -1
             ? null
-            : keyLength == 0
-                ? Array.Empty<byte>()
-                : new byte[keyLength];
-        if (keyLength > 0)
-        {
-            input.Read(message.Key!, 0, keyLength);
-        }
-        var valueLength = PrimitiveSerializer.DeserializeInt(input);
+            : reader.ReadMemory(keyLength);
+        int valueLength = reader.ReadInt32BigEndian();
         message.Value = valueLength == -1
             ? null
-            : valueLength == 0
-                ? Array.Empty<byte>()
-                : new byte[valueLength];
-        if (valueLength > 0)
-        {
-            input.Read(message.Value!, 0, valueLength);
-        }
+            : reader.ReadMemory(valueLength);
 
         if (context.Config.CheckCrcs)
         {
-            ChecksumValidator.ValidateCrc32(message.Crc, input, crcStart);
+            long crcDataLength = reader.Position - crcStart;
+            ChecksumValidator.ValidateCrc32(message.Crc, reader.Buffer, (int)crcStart, crcDataLength);
         }
 
-        var actualMessageSize = input.Position - messageStart;
+        int actualMessageSize = reader.Position - messageStart;
         if (actualMessageSize != message.MessageSize)
         {
-            throw new Exception($"Expected message size was {message.MessageSize}, but got {actualMessageSize}.");
+            throw new DeserializationException($"Expected message size was {message.MessageSize}, but got {actualMessageSize}.");
         }
 
         return message;

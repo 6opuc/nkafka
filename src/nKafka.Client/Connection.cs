@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using nKafka.Contracts;
+using nKafka.Contracts.Exceptions;
 using nKafka.Contracts.MessageDefinitions;
 
 namespace nKafka.Client;
@@ -14,28 +15,29 @@ public class Connection : IConnection
     private readonly ILogger _logger;
     private Socket? _socket;
     private readonly ConnectionConfig _config;
-    
+
     private SocketWriterStream? _writerStream;
     private CancellationTokenSource? _stop;
 
     private Task _receiveBackgroundTask = default!;
 
     private ConcurrentDictionary<int, PendingRequest> _pendingRequests = new();
-    
+
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
-    
+    private readonly int _bufferSize;
+
     private readonly SerializationContext _serializationContext;
 
-    private Dictionary<ApiKey, short> _apiVersions = new ();
+    private Dictionary<ApiKey, short> _apiVersions = new();
 
     public Connection(ConnectionConfig config, ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(loggerFactory);
         _config = config;
+        _bufferSize = Math.Max(_config.RequestBufferSize, _config.ResponseBufferSize);
         _logger = loggerFactory.CreateLogger<Connection>();
-        var bufferSize = Math.Max(_config.RequestBufferSize, _config.ResponseBufferSize);
-        _serializationContext = new SerializationContext(_arrayPool, bufferSize)
+        _serializationContext = new SerializationContext(_arrayPool, _bufferSize)
         {
             Config = new SerializationConfig
             {
@@ -44,7 +46,7 @@ public class Connection : IConnection
             }
         };
     }
-    
+
     public async ValueTask OpenAsync(CancellationToken cancellationToken)
     {
         using var _ = BeginDefaultLoggingScope();
@@ -68,9 +70,9 @@ public class Connection : IConnection
         {
             throw new InvalidOperationException("Socket connection is already open.");
         }
-        
+
         _logger.LogInformation("Opening socket connection.");
-        
+
         var ip = await Dns.GetHostAddressesAsync(_config.Host, cancellationToken);
         if (ip.Length == 0)
         {
@@ -91,11 +93,11 @@ public class Connection : IConnection
         {
             return;
         }
-        
+
         _stop = new CancellationTokenSource();
         var cancellationToken = _stop.Token;
-        
-        var sizeBuffer = new byte[4];
+
+        byte[] sizeBuffer = new byte[4];
 
         _receiveBackgroundTask = Task.Run(
             async () =>
@@ -105,13 +107,13 @@ public class Connection : IConnection
                     await using var stream = new NetworkStream(_socket);
                     while (!cancellationToken.IsCancellationRequested)
                     {
-                        var bytesRead = await stream.ReadAtLeastAsync(
+                        int bytesRead = await stream.ReadAtLeastAsync(
                             sizeBuffer,
                             sizeBuffer.Length,
                             true,
                             cancellationToken);
 
-                        var payloadSize = GetIntFromByteArray(sizeBuffer);
+                        int? payloadSize = GetIntFromByteArray(sizeBuffer);
                         if (payloadSize == null)
                         {
                             throw new EndOfStreamException("Received unexpected response size.");
@@ -119,10 +121,10 @@ public class Connection : IConnection
 
                         _logger.LogDebug("Receiving payload ({@payloadSize} bytes).", payloadSize);
 
-                        var payload = _arrayPool.Rent(payloadSize.Value);
+                        byte[] payload = _arrayPool.Rent(payloadSize.Value);
                         try
                         {
-                            var read = await stream.ReadAtLeastAsync(
+                            int read = await stream.ReadAtLeastAsync(
                                 payload,
                                 payloadSize.Value,
                                 true,
@@ -134,7 +136,7 @@ public class Connection : IConnection
 
                             _logger.LogDebug("Read response payload ({@payloadSize} bytes).", payloadSize);
 
-                            var correlationId = GetIntFromByteArray(payload);
+                            int? correlationId = GetIntFromByteArray(payload);
                             if (correlationId == null ||
                                 !_pendingRequests.TryRemove(correlationId.Value, out var pendingRequest))
                             {
@@ -150,14 +152,14 @@ public class Connection : IConnection
 
                                 try
                                 {
-                                    using var input = new MemoryStream(payload, 0, payloadSize.Value, false, true);
-                                    var response = pendingRequest.DeserializeResponse(input, _serializationContext);
-                                    if (input.Length != input.Position)
+                                    var buffer = new Memory<byte>(payload, 0, payloadSize.Value);
+                                    var reader = new BufferReader(buffer);
+                                    object response = pendingRequest.DeserializeResponse(ref reader, _serializationContext);
+
+                                    if (reader.Remaining != 0)
                                     {
-                                        _logger.LogError(
-                                            "Received unexpected response length. Expected {@expectedLength}, but got {@actualLength}.",
-                                            input.Position,
-                                            input.Length);
+                                        throw new IncompleteMessageException(
+                                            $"Response has unconsumed data: {reader.Remaining} bytes remaining after deserialization.");
                                     }
 
                                     _logger.LogDebug("Deserialized.");
@@ -198,7 +200,7 @@ public class Connection : IConnection
                         pendingRequest.Response.SetException(endOfStreamException);
                     }
                     _pendingRequests.Clear();
-                    
+
                     // TODO: introduce a state-machine and do a transition to a failed state,
                     // rejecting all incoming requests.
                 }
@@ -208,7 +210,7 @@ public class Connection : IConnection
                 }
             }, cancellationToken);
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int? GetIntFromByteArray(byte[] payload)
     {
@@ -233,9 +235,9 @@ public class Connection : IConnection
         {
             return;
         }
-        
+
         _logger.LogInformation("Requesting API versions.");
-        
+
         var request = new ApiVersionsRequest
         {
             ClientSoftwareName = "nKafka.Client",
@@ -244,22 +246,22 @@ public class Connection : IConnection
         using var response = await SendAsync(request, cancellationToken);
         if (response.Message.ErrorCode != 0)
         {
-            throw new Exception($"Failed to choose API versions. Error code: {response.Message.ErrorCode}");
+            throw new ProtocolException($"Failed to choose API versions. Error code: {response.Message.ErrorCode}");
         }
-        
+
         var brokerApiVersions = response.Message.ApiKeys;
         if (brokerApiVersions == null || !brokerApiVersions.Any())
         {
-            throw new Exception($"Failed to choose API versions. Empty ApiKeys collection in response.");
+            throw new ProtocolException($"Failed to choose API versions. Empty ApiKeys collection in response.");
         }
-        
+
         foreach (var clientApiVersionRange in clientApiVersions)
         {
             if (!brokerApiVersions.TryGetValue((short)clientApiVersionRange.Key, out var apiVersion))
             {
                 continue;
             }
-            
+
             var brokerApiVersionRange = new VersionRange(
                 apiVersion.MinVersion!.Value, apiVersion.MaxVersion!.Value);
             var intersection = clientApiVersionRange.Value.Intersect(brokerApiVersionRange);
@@ -278,7 +280,7 @@ public class Connection : IConnection
         {
             throw new InvalidOperationException("Socket connection is not open.");
         }
-        
+
         using (BeginDefaultLoggingScope())
         {
             var completionPromise = new TaskCompletionSource<MessageWithPooledPayload>();
@@ -294,34 +296,25 @@ public class Connection : IConnection
                     completionPromise.TrySetCanceled();
                     _pendingRequests.TryRemove(pendingRequest.CorrelationId, out _);
                 });
-            
+
             using (BeginRequestLoggingScope(pendingRequest))
             {
-                var payload = _arrayPool.Rent(_config.RequestBufferSize);
+                _pendingRequests.TryAdd(pendingRequest.CorrelationId, pendingRequest);
+
+                _logger.LogDebug("Serializing.");
+                var writer = new BufferWriter(_arrayPool, _config.RequestBufferSize);
                 try
                 {
-                    using (BeginRequestLoggingScope(pendingRequest))
-                    {
-                        _logger.LogDebug("Processing.");
-                        _pendingRequests.TryAdd(pendingRequest.CorrelationId, pendingRequest);
+                    pendingRequest.SerializeRequest(ref writer, _serializationContext);
 
-                        _logger.LogDebug("Serializing.");
-                        using var output = new MemoryStream(payload, 0, payload.Length, true, true);
-                        pendingRequest.SerializeRequest(output, _serializationContext);
-
-                        _logger.LogDebug("Sending {@size} bytes.", output.Position);
-                        await _writerStream.WriteAsync(output.GetBuffer(), 0, (int)output.Position,
-                            pendingRequest.CancellationToken);
-                        _logger.LogDebug("Sent.");
-                    }
-                }
-                catch (Exception exception)
-                {
-                    pendingRequest.Response.TrySetException(exception);
+                    _logger.LogDebug("Sending {@size} bytes.", writer.Position);
+                    await _writerStream.WriteAsync(writer.Memory.Slice(0, writer.Position),
+                        pendingRequest.CancellationToken);
+                    _logger.LogDebug("Sent.");
                 }
                 finally
                 {
-                    _arrayPool.Return(payload);
+                    writer.Dispose();
                 }
             }
 
@@ -334,13 +327,13 @@ public class Connection : IConnection
     {
         public T Message => (T)message.Message;
         public short Version => version;
-        
+
         public void Dispose()
         {
             message.Dispose();
         }
     }
-    
+
     private IDisposable? BeginRequestLoggingScope(PendingRequest request)
     {
         return _logger.BeginScope($"request #{request.CorrelationId}({request.Payload.GetType().Name})");
@@ -352,11 +345,11 @@ public class Connection : IConnection
         {
             return;
         }
-        
+
         using var _ = BeginDefaultLoggingScope();
-        
+
         _logger.LogInformation("Closing socket connection.");
-        
+
         if (_stop != null)
         {
             await _stop.CancelAsync();
@@ -376,11 +369,10 @@ public class Connection : IConnection
     private class SerializationContext(ArrayPool<byte> arrayPool, int bufferSize) : ISerializationContext
     {
         public required SerializationConfig Config { get; init; }
-        
-        public MemoryStream CreateBuffer()
+
+        public BufferWriter CreateWriter()
         {
-            var buffer = arrayPool.Rent(bufferSize);
-            return new PooledMemoryStream(arrayPool, buffer);
+            return new BufferWriter(arrayPool, bufferSize);
         }
     }
 }

@@ -5,53 +5,43 @@ namespace nKafka.Contracts.Records;
 
 public class RecordSerializerV2
 {
-    //[MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Record? Deserialize(MemoryStream input, long eof)
+    public static Record? Deserialize(ref BufferReader reader, long eof)
     {
-        var rollbackPosition = input.Position;
-        var size = PrimitiveSerializer.DeserializeVarInt(input);
+        int start = reader.Position;
+        int size = reader.ReadVarInt();
         if (size <= 0)
         {
-            input.Position = rollbackPosition;
+            reader.Position = start;
             return null;
         }
 
-        var start = input.Position;
         if (start + size > eof)
         {
-            input.Position = rollbackPosition;
+            reader.Position = start;
             return null;
         }
-        
+
         var record = new Record
         {
-            Attributes = PrimitiveSerializer.DeserializeByte(input),
-            TimestampDelta = PrimitiveSerializer.DeserializeVarLong(input),
-            OffsetDelta = PrimitiveSerializer.DeserializeVarInt(input),
+            Attributes = reader.ReadByte(),
+            TimestampDelta = reader.ReadVarLong(),
+            OffsetDelta = reader.ReadVarInt(),
         };
 
-        var keyLength = PrimitiveSerializer.DeserializeVarInt(input);
+        int keyLength = reader.ReadVarInt();
         record.Key = keyLength == -1
             ? null
             : keyLength == 0
                 ? Memory<byte>.Empty
-                : input.GetBuffer().AsMemory((int)input.Position, keyLength);
-        if (keyLength > 0)
-        {
-            input.Position += keyLength;
-        }
-        var valueLength = PrimitiveSerializer.DeserializeVarInt(input);
+                : reader.ReadMemory(keyLength);
+        int valueLength = reader.ReadVarInt();
         record.Value = valueLength == -1
             ? null
             : valueLength == 0
                 ? Memory<byte>.Empty
-                : input.GetBuffer().AsMemory((int)input.Position, valueLength);
-        if (valueLength > 0)
-        {
-            input.Position += valueLength;
-        }
+                : reader.ReadMemory(valueLength);
 
-        var headerCount = PrimitiveSerializer.DeserializeVarInt(input);
+        int headerCount = reader.ReadVarInt();
         if (headerCount == 0)
         {
             record.Headers = ReadOnlyDictionary<string, Memory<byte>?>.Empty;
@@ -59,29 +49,20 @@ public class RecordSerializerV2
         else if (headerCount >= 0)
         {
             var headers = new Dictionary<string, Memory<byte>?>(headerCount);
-            for (var i = 0; i < headerCount; i++)
+            for (int i = 0; i < headerCount; i++)
             {
-                var headerKey = PrimitiveSerializer.DeserializeVarString(input);
-                var headerValueLength = PrimitiveSerializer.DeserializeVarInt(input);
+                string? headerKey = reader.ReadVarString();
+                int headerValueLength = reader.ReadVarInt();
                 var headerValue = headerValueLength == -1
                     ? null
                     : headerValueLength == 0
                         ? Memory<byte>.Empty
-                        : input.GetBuffer().AsMemory((int)input.Position, headerValueLength);
-                if (headerValueLength > 0)
-                {
-                    input.Position += headerValueLength;
-                }
+                        : reader.ReadMemory(headerValueLength);
 
                 headers[headerKey!] = headerValue!;
             }
 
             record.Headers = headers;
-        }
-
-        if (start + size != input.Position)
-        {
-            input.Position = start + size;
         }
 
         return record;

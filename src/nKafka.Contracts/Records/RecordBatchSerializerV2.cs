@@ -1,57 +1,54 @@
+using nKafka.Contracts.Exceptions;
+
 namespace nKafka.Contracts.Records;
 
 public static class RecordBatchSerializerV2
 {
-    public static RecordBatch? Deserialize(MemoryStream input, long eof, ISerializationContext context)
+    public static RecordBatch? Deserialize(ref BufferReader reader, long eof, ISerializationContext context)
     {
-        var start = input.Position;
-        if (start + 8 + 4 > eof)
+        if (reader.Position + 8 + 4 > eof)
         {
-            // we will not be able to read batch size
             return null;
         }
 
         var recordBatch = new RecordBatch
         {
-            BaseOffset = PrimitiveSerializer.DeserializeLong(input),
-            BatchLength = PrimitiveSerializer.DeserializeInt(input),
+            BaseOffset = reader.ReadInt64BigEndian(),
+            BatchLength = reader.ReadInt32BigEndian(),
         };
-        
-        var recordBatchStart = input.Position;
+
+        int recordBatchStart = reader.Position;
 
         if (recordBatchStart + recordBatch.BatchLength > eof)
         {
-            // we will not be able to read full batch
-            input.Position = start;
             return null;
         }
 
-        recordBatch.PartitionLeaderEpoch = PrimitiveSerializer.DeserializeInt(input);
-        recordBatch.Magic = PrimitiveSerializer.DeserializeByte(input);
+        recordBatch.PartitionLeaderEpoch = reader.ReadInt32BigEndian();
+        recordBatch.Magic = reader.ReadByte();
         if (recordBatch.Magic != 2)
         {
-            throw new Exception($"Version 2 was expected, but received version {recordBatch.Magic}.");
+            throw new ProtocolException($"Version 2 was expected, but received version {recordBatch.Magic}.");
         }
-        recordBatch.Crc = PrimitiveSerializer.DeserializeUint(input);
+        recordBatch.Crc = reader.ReadUInt32BigEndian();
 
-        var crcStart = input.Position;
-        recordBatch.Attributes = PrimitiveSerializer.DeserializeShort(input);
-        recordBatch.LastOffsetDelta = PrimitiveSerializer.DeserializeInt(input);
-        recordBatch.FirstTimestamp = PrimitiveSerializer.DeserializeLong(input);
-        recordBatch.MaxTimestamp = PrimitiveSerializer.DeserializeLong(input);
-        recordBatch.ProducerId = PrimitiveSerializer.DeserializeLong(input);
-        recordBatch.ProducerEpoch = PrimitiveSerializer.DeserializeShort(input);
-        recordBatch.BaseSequence = PrimitiveSerializer.DeserializeInt(input);
-        var recordsCount = PrimitiveSerializer.DeserializeInt(input);
+        int crcStart = reader.Position;
+        recordBatch.Attributes = reader.ReadInt16BigEndian();
+        recordBatch.LastOffsetDelta = reader.ReadInt32BigEndian();
+        recordBatch.FirstTimestamp = reader.ReadInt64BigEndian();
+        recordBatch.MaxTimestamp = reader.ReadInt64BigEndian();
+        recordBatch.ProducerId = reader.ReadInt64BigEndian();
+        recordBatch.ProducerEpoch = reader.ReadInt16BigEndian();
+        recordBatch.BaseSequence = reader.ReadInt32BigEndian();
+        int recordsCount = reader.ReadInt32BigEndian();
         if (recordsCount >= 0)
         {
             recordBatch.Records = new List<Record>(recordsCount);
             for (int i = 0; i < recordsCount; i++)
             {
-                var record = RecordSerializerV2.Deserialize(input, recordBatchStart + recordBatch.BatchLength);
+                var record = RecordSerializerV2.Deserialize(ref reader, recordBatchStart + recordBatch.BatchLength);
                 if (record == null)
                 {
-                    // incomplete record
                     break;
                 }
                 recordBatch.Records.Add(record);
@@ -60,13 +57,14 @@ public static class RecordBatchSerializerV2
 
         if (context.Config.CheckCrcs)
         {
-            ChecksumValidator.ValidateCrc32c(recordBatch.Crc, input, crcStart);
+            long crcDataLength = reader.Position - crcStart;
+            ChecksumValidator.ValidateCrc32c(recordBatch.Crc, reader.Buffer, (int)crcStart, (int)crcDataLength);
         }
 
-        var actualBatchLength = input.Position - recordBatchStart;
+        int actualBatchLength = reader.Position - recordBatchStart;
         if (actualBatchLength != recordBatch.BatchLength)
         {
-            throw new Exception($"Expected batch length was {recordBatch.BatchLength}, but got {actualBatchLength}.");
+            throw new DeserializationException($"Expected batch length was {recordBatch.BatchLength}, but got {actualBatchLength}.");
         }
 
         return recordBatch;

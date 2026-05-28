@@ -21,28 +21,28 @@ public class FetchBenchmarks
 
     [Benchmark]
     public Task ConfluentConsumeBytes() => ConfluentConsumeBytesTest.Test(Scenario!);
-    
+
     [Benchmark]
     public Task ConfluentConsumeString() => ConfluentConsumeStringTest.Test(Scenario!);
 
     [Benchmark]
     public Task NKafkaFetchBytesSeq1Part() => NKafkaFetchBytesSeqSinglePartTest.Test(Scenario!);
-    
+
     [Benchmark]
     public Task NKafkaFetchBytesSeqNPart() => NKafkaFetchBytesSeqMultiPartTest.Test(Scenario!);
-    
+
     [Benchmark]
     public Task NKafkaFetchBytesParNPart() => NKafkaFetchBytesParallelMultiPartTest.Test(Scenario!);
-    
+
     [Benchmark]
     public Task NKafkaFetchStringParNPart() => NKafkaFetchStringParallelMultiPartTest.Test(Scenario!);
-    
+
     [Benchmark]
     public Task NKafkaConsumeString() => NKafkaConsumeStringTest.Test(Scenario!);
-    
+
     [Benchmark]
     public Task NKafkaConsumeBytes() => NKafkaConsumeBytesTest.Test(Scenario!);
-    
+
     [Benchmark]
     public Task NKafkaBatchConsumeBytes() => NKafkaBatchConsumeBytesTest.Test(Scenario!);
 }

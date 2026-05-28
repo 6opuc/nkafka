@@ -89,7 +89,7 @@ public class ConnectionTests
     public async Task SendAsync_FindCoordinatorRequest_ShouldReturnExpectedResult(short apiVersion)
     {
         await using var connection = await OpenConnection();
-        var consumerGroupId = Guid.NewGuid().ToString();
+        string consumerGroupId = Guid.NewGuid().ToString();
         var request = new FindCoordinatorRequest
         {
             FixedVersion = apiVersion,
@@ -198,7 +198,7 @@ public class ConnectionTests
     [TestCase(9)]
     public async Task SendAsync_JoinGroupRequest_ShouldReturnExpectedResult(short apiVersion)
     {
-        var consumerGroupId = Guid.NewGuid().ToString();
+        string consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId);
         using var response = await JoinGroupAsync(connection, apiVersion, consumerGroupId);
 
@@ -279,7 +279,7 @@ public class ConnectionTests
     [TestCase(5)]
     public async Task SendAsync_LeaveGroupRequest_ShouldReturnExpectedResult(short apiVersion)
     {
-        var consumerGroupId = Guid.NewGuid().ToString();
+        string consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId);
         using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var request = new LeaveGroupRequest
@@ -313,7 +313,7 @@ public class ConnectionTests
     [TestCase(5)]
     public async Task SendAsync_SyncGroupRequest_ShouldReturnExpectedResult(short apiVersion)
     {
-        var consumerGroupId = Guid.NewGuid().ToString();
+        string consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId);
         using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var requestedAssignment = new ConsumerProtocolAssignment
@@ -364,7 +364,7 @@ public class ConnectionTests
     [TestCase(4)]
     public async Task SendAsync_HeartbeatRequest_ShouldReturnExpectedResult(short apiVersion)
     {
-        var consumerGroupId = Guid.NewGuid().ToString();
+        string consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId);
         using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var requestClient = new HeartbeatRequest
@@ -492,7 +492,7 @@ public class ConnectionTests
         var topicMetadata = metadata.Message.Topics!["test_p12_m1M_s4B"];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
-        var recordCount = 0;
+        int recordCount = 0;
         foreach (var group in partitions)
         {
             var broker = metadata.Message.Brokers![group.Key];
@@ -550,13 +550,13 @@ public class ConnectionTests
                     };
                     using var response = await connection.SendAsync(request, CancellationToken.None);
 
-                    var lastOffset = response.Message
+                    long lastOffset = response.Message
                         .Responses?.LastOrDefault()?
                         .Partitions?.LastOrDefault()?
                         .Records?.LastOffset ?? -1;
                     offset = lastOffset + 1;
 
-                    var responseRecordCount = response.Message.Responses!
+                    int responseRecordCount = response.Message.Responses!
                         .SelectMany(x => x.Partitions!)
                         .Sum(x => x.Records!.RecordCount);
                     if (responseRecordCount == 0)
@@ -594,7 +594,7 @@ public class ConnectionTests
         var topicMetadata = metadata.Message.Topics!["test_p12_m1M_s4B"];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
-        var recordCount = 0;
+        int recordCount = 0;
         foreach (var group in partitions)
         {
             var broker = metadata.Message.Brokers![group.Key];
@@ -670,7 +670,7 @@ public class ConnectionTests
                             continue;
                         }
 
-                        var lastOffset = partitionResponse.Records?.LastOffset;
+                        long? lastOffset = partitionResponse.Records?.LastOffset;
                         if (lastOffset != null)
                         {
                             partitionRequest.FetchOffset = lastOffset + 1;
@@ -678,7 +678,7 @@ public class ConnectionTests
                     }
                 }
 
-                var responseRecordCount = response.Message.Responses!
+                int responseRecordCount = response.Message.Responses!
                     .SelectMany(x => x.Partitions!)
                     .Sum(x => x.Records!.RecordCount);
                 if (responseRecordCount == 0)
@@ -692,7 +692,7 @@ public class ConnectionTests
 
         recordCount.Should().Be(1000000);
     }
-    
+
     [Test]
     [TestCase(1)]
     [TestCase(2)]

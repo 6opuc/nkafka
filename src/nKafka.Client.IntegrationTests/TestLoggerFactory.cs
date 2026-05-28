@@ -4,8 +4,8 @@ namespace nKafka.Client.IntegrationTests;
 
 public class TestLoggerFactory : ILoggerFactory
 {
-    public static TestLoggerFactory Instance { get; } = new ();
-    
+    public static TestLoggerFactory Instance { get; } = new();
+
     public void Dispose()
     {
     }

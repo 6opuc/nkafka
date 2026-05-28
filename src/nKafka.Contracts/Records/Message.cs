@@ -8,6 +8,6 @@ public class Message
     public byte Magic { get; set; }
     public byte Attributes { get; set; }
     public long? Timestamp { get; set; }
-    public byte[]? Key { get; set; }
-    public byte[]? Value { get; set; }
+    public Memory<byte>? Key { get; set; }
+    public Memory<byte>? Value { get; set; }
 }

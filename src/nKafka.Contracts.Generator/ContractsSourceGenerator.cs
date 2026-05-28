@@ -95,18 +95,20 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                           {{messageDefinition.CommonStructs.ToNestedTypeDeclarations()}}  
                       }
                       """));
-            
+
             context.AddSource(
                 $"MessageSerializers/{messageDefinition.Name}Serializer.g.cs",
                 Format(
                     $$"""
-                      #nullable enable
+                       #nullable enable
 
-                      using nKafka.Contracts.Records;
-                      using nKafka.Contracts.MessageDefinitions;
-                      using nKafka.Contracts.MessageDefinitions.{{messageDefinition.Name}}Nested;
+                       using System.Runtime.CompilerServices;
+                       using nKafka.Contracts.Exceptions;
+                       using nKafka.Contracts.Records;
+                       using nKafka.Contracts.MessageDefinitions;
+                       using nKafka.Contracts.MessageDefinitions.{{messageDefinition.Name}}Nested;
 
-                      namespace nKafka.Contracts.MessageSerializers
+                       namespace nKafka.Contracts.MessageSerializers
                       {
                             using nKafka.Contracts.MessageSerializers.{{messageDefinition.Name}}Nested;
                         
@@ -163,21 +165,21 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                       {
                           public ApiKey ApiKey => ApiKey.{{Enum.GetName(typeof(ApiKey), pair.Request.ApiKey!)}};
                           public short? FixedVersion { get; set; }
-                          public VersionRange FlexibleVersions { get; } = {{pair.Request.FlexibleVersions.ToLiteral()}};
-                          
-                          public void SerializeRequest(MemoryStream output, short version, ISerializationContext context)
-                          {
-                              {{pair.Request.Name}}Serializer.Serialize(output, this, version, context);
-                          }
-                          
-                          public object DeserializeResponse(MemoryStream input, short version, ISerializationContext context)
-                          {
-                              return {{pair.Response!.Name}}Serializer.Deserialize(input, version, context);
-                          }
+                           public VersionRange FlexibleVersions { get; } = {{pair.Request.FlexibleVersions.ToLiteral()}};
+                           
+                           public void SerializeRequest(ref BufferWriter writer, short version, ISerializationContext context)
+                           {
+                               {{pair.Request.Name}}Serializer.Serialize(ref writer, this, version, context);
+                           }
+                           
+                          public object DeserializeResponse(ref BufferReader reader, short version, ISerializationContext context)
+                            {
+                                return {{pair.Response!.Name}}Serializer.Deserialize(ref reader, version, context);
+                            }
                       }
                       """));
         }
-        
+
         context.AddSource(
             "ApiVersions.g.cs",
             Format(
@@ -205,7 +207,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
     {
         var tree = CSharpSyntaxTree.ParseText(source);
         var root = tree.GetRoot().NormalizeWhitespace();
-        var formatted = root.ToFullString();
+        string formatted = root.ToFullString();
         return formatted;
     }
 }

@@ -1,21 +1,22 @@
+using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
 
 namespace nKafka.Contracts;
 
 public static class Crc32c
 {
-    private static readonly Func<MemoryStream, long, long, uint> _calculate;
+    private static readonly Func<ReadOnlySpan<byte>, long, long, uint> _calculateSpan;
 
     static Crc32c()
     {
-        _calculate = Crc32cHardwareImplementation.IsSupported
-            ? Crc32cHardwareImplementation.Calculate
-            : Crc32cSoftwareImplementation.Calculate;
+        _calculateSpan = Crc32cHardwareImplementation.IsSupported
+            ? Crc32cHardwareImplementation.CalculateSpan
+            : Crc32cSoftwareImplementation.CalculateSpan;
     }
-    
-    public static uint Calculate(MemoryStream stream, long start, long size)
+
+    public static uint Calculate(ReadOnlySpan<byte> buffer, long start, long size)
     {
-        return _calculate(stream, start, size);
+        return _calculateSpan(buffer, start, size);
     }
 
     private static class Crc32cHardwareImplementation
@@ -25,45 +26,48 @@ public static class Crc32c
         private static readonly bool _sse42Available = Sse42.IsSupported;
 
         public static bool IsSupported => _sse42Available;
-        
-        public static uint Calculate(MemoryStream stream, long start, long size)
+
+        public static uint CalculateSpan(ReadOnlySpan<byte> buffer, long start, long size)
         {
             if (!_sse42Available)
             {
                 throw new PlatformNotSupportedException();
             }
-            
-            var crc = _seed;
-            var buffer = stream.GetBuffer();
+
+            if (start < 0 || start > int.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException(nameof(start), "Start position must be between 0 and int.MaxValue.");
+            }
+
+            uint crc = _seed;
+            var span = buffer.Slice((int)start, (int)size);
+            int pos = 0;
 
             if (_sse42x64Available)
             {
-                while (size >= 8)
+                while (pos + 8 <= span.Length)
                 {
-                    crc = (uint)Sse42.X64.Crc32(crc, BitConverter.ToUInt64(buffer, (int)start));
-                    start += 8;
-                    size -= 8;
+                    crc = (uint)Sse42.X64.Crc32(crc, MemoryMarshal.Read<ulong>(span.Slice(pos)));
+                    pos += 8;
                 }
             }
-            
-            while (size >= 4)
+
+            while (pos + 4 <= span.Length)
             {
-                crc = Sse42.Crc32(crc, BitConverter.ToUInt32(buffer, (int)start));
-                start += 4;
-                size -= 4;
+                crc = Sse42.Crc32(crc, MemoryMarshal.Read<uint>(span.Slice(pos)));
+                pos += 4;
             }
-            
-            while (size > 0)
+
+            while (pos < span.Length)
             {
-                crc = Sse42.Crc32(crc, buffer[start]);
-                start++;
-                size--;
+                crc = Sse42.Crc32(crc, span[pos]);
+                pos++;
             }
 
             return ~crc;
         }
     }
-    
+
     private static class Crc32cSoftwareImplementation
     {
         private static readonly uint _polynomial = 0x82F63B78u;
@@ -72,11 +76,11 @@ public static class Crc32c
 
         private static uint[] InitializeTable()
         {
-            var table = new uint[256];
-            for (var i = 0; i < 256; i++)
+            uint[] table = new uint[256];
+            for (int i = 0; i < 256; i++)
             {
-                var entry = (uint)i;
-                for (var j = 0; j < 8; j++)
+                uint entry = (uint)i;
+                for (int j = 0; j < 8; j++)
                     if ((entry & 1) == 1)
                         entry = (entry >> 1) ^ _polynomial;
                     else
@@ -86,13 +90,19 @@ public static class Crc32c
 
             return table;
         }
-        
-        public static uint Calculate(MemoryStream stream, long start, long size)
+
+        public static uint CalculateSpan(ReadOnlySpan<byte> buffer, long start, long size)
         {
-            var crc = _seed;
-            var buffer = stream.GetBuffer();
-            for (var i = start; i < start + size; ++i)
-                crc = (crc >> 8) ^ _table[buffer[i] ^ crc & 0xff];
+            if (start < 0 || start > int.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException(nameof(start), "Start position must be between 0 and int.MaxValue.");
+            }
+
+            uint crc = _seed;
+            var span = buffer.Slice((int)start, (int)size);
+            int end = (int)size;
+            for (int i = 0; i < end; i++)
+                crc = (crc >> 8) ^ _table[span[i] ^ crc & 0xff];
             return ~crc;
         }
     }

@@ -35,6 +35,6 @@ public class RecordsContainer
             return null;
         }
     }
-    
+
     public int RecordCount => RecordBatches?.Sum(b => b.Records?.Count ?? 0) ?? Messages?.Count ?? 0;
 }

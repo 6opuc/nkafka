@@ -10,8 +10,8 @@ public class Tests
     [TestCaseSource(nameof(GetMessageDefinitionFilePaths))]
     public void Deserialize_FromMessageDefinitionFile_ShouldNotFail(string filePath)
     {
-        var json = File.ReadAllText(filePath);
-        
+        string json = File.ReadAllText(filePath);
+
         var actual = JsonSerializer.Deserialize<MessageDefinition>(json, MessageDefinitionJsonSerializerOptions.Default);
 
         actual.Should().NotBeNull();
@@ -19,7 +19,7 @@ public class Tests
 
     public static IEnumerable<string> GetMessageDefinitionFilePaths()
     {
-        var files = Directory.GetFiles(ProjectSource.MessageDefinitionsDirectory, "*.json");
+        string[] files = Directory.GetFiles(ProjectSource.MessageDefinitionsDirectory, "*.json");
         return files;
     }
 }

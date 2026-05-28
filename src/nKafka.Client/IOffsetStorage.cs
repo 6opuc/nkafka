@@ -8,7 +8,7 @@ public interface IOffsetStorage
         string topic,
         int partition,
         CancellationToken cancellationToken);
-    
+
     ValueTask SetAsync(
         IConnection connection,
         string consumerGroup,

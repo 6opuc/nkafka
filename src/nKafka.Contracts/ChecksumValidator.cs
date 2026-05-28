@@ -1,38 +1,38 @@
+using nKafka.Contracts.Exceptions;
+
 namespace nKafka.Contracts;
 
 public static class ChecksumValidator
 {
     public static void ValidateCrc32(
         uint expectedCrc,
-        MemoryStream stream,
-        long start)
+        ReadOnlyMemory<byte> buffer,
+        long start,
+        long size)
     {
-        Validate(Crc32.Calculate, expectedCrc, stream, start);
+        Validate(Crc32.Calculate, expectedCrc, buffer.Span, start, size);
     }
-    
+
     public static void ValidateCrc32c(
         uint expectedCrc,
-        MemoryStream stream,
-        long start)
-    {
-        Validate(Crc32c.Calculate, expectedCrc, stream, start);
-    }
-    
-    private static void Validate(
-        Func<MemoryStream, long, long, uint> calculateChecksum,
-        uint expectedChecksum,
-        MemoryStream stream,
+        ReadOnlyMemory<byte> buffer,
         long start,
-        long size = -1)
+        long size)
     {
-        if (size < 0)
-        {
-            size = stream.Position - start;
-        }
-        var calculatedChecksum = calculateChecksum(stream, start, size);
+        Validate(Crc32c.Calculate, expectedCrc, buffer.Span, start, size);
+    }
+
+    private static void Validate(
+        Func<ReadOnlySpan<byte>, long, long, uint> calculateChecksumSpan,
+        uint expectedChecksum,
+        ReadOnlySpan<byte> buffer,
+        long start,
+        long size)
+    {
+        uint calculatedChecksum = calculateChecksumSpan(buffer, start, size);
         if (calculatedChecksum != expectedChecksum)
         {
-            throw new Exception($"Corrupt message: checksum does not match. Calculated {calculatedChecksum} but got {expectedChecksum}.");
+            throw new ChecksumValidationException($"Corrupt message: checksum does not match. Calculated {calculatedChecksum} but got {expectedChecksum}.");
         }
     }
 }
