@@ -24,6 +24,7 @@ public class Connection : IConnection
     private ConcurrentDictionary<int, PendingRequest> _pendingRequests = new();
 
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
+    private readonly int _bufferSize;
 
     private readonly SerializationContext _serializationContext;
 
@@ -34,8 +35,9 @@ public class Connection : IConnection
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(loggerFactory);
         _config = config;
+        _bufferSize = Math.Max(_config.RequestBufferSize, _config.ResponseBufferSize);
         _logger = loggerFactory.CreateLogger<Connection>();
-        _serializationContext = new SerializationContext(_arrayPool)
+        _serializationContext = new SerializationContext(_arrayPool, _bufferSize)
         {
             Config = new SerializationConfig
             {
@@ -244,13 +246,13 @@ public class Connection : IConnection
         using var response = await SendAsync(request, cancellationToken);
         if (response.Message.ErrorCode != 0)
         {
-            throw new Exception($"Failed to choose API versions. Error code: {response.Message.ErrorCode}");
+            throw new ProtocolException($"Failed to choose API versions. Error code: {response.Message.ErrorCode}");
         }
 
         var brokerApiVersions = response.Message.ApiKeys;
         if (brokerApiVersions == null || !brokerApiVersions.Any())
         {
-            throw new Exception($"Failed to choose API versions. Empty ApiKeys collection in response.");
+            throw new ProtocolException($"Failed to choose API versions. Empty ApiKeys collection in response.");
         }
 
         foreach (var clientApiVersionRange in clientApiVersions)
@@ -297,27 +299,22 @@ public class Connection : IConnection
 
             using (BeginRequestLoggingScope(pendingRequest))
             {
-                byte[] payload = _arrayPool.Rent(_config.RequestBufferSize);
+                _pendingRequests.TryAdd(pendingRequest.CorrelationId, pendingRequest);
+
+                _logger.LogDebug("Serializing.");
+                var writer = new BufferWriter(_arrayPool, _config.RequestBufferSize);
                 try
                 {
-                    _pendingRequests.TryAdd(pendingRequest.CorrelationId, pendingRequest);
-
-                    _logger.LogDebug("Serializing.");
-                    var writer = new BufferWriter(new Memory<byte>(payload, 0, payload.Length));
                     pendingRequest.SerializeRequest(ref writer, _serializationContext);
 
                     _logger.LogDebug("Sending {@size} bytes.", writer.Position);
-                    await _writerStream.WriteAsync(payload, 0, (int)writer.Position,
+                    await _writerStream.WriteAsync(writer.Memory.Slice(0, writer.Position),
                         pendingRequest.CancellationToken);
                     _logger.LogDebug("Sent.");
                 }
-                catch (Exception exception)
-                {
-                    pendingRequest.Response.TrySetException(exception);
-                }
                 finally
                 {
-                    _arrayPool.Return(payload);
+                    writer.Dispose();
                 }
             }
 
@@ -369,13 +366,13 @@ public class Connection : IConnection
         _socket = null;
     }
 
-    private class SerializationContext(ArrayPool<byte> arrayPool) : ISerializationContext
+    private class SerializationContext(ArrayPool<byte> arrayPool, int bufferSize) : ISerializationContext
     {
         public required SerializationConfig Config { get; init; }
 
-        public BufferWriter CreateWriter(int size = 4096)
+        public BufferWriter CreateWriter()
         {
-            return new BufferWriter(arrayPool, size);
+            return new BufferWriter(arrayPool, bufferSize);
         }
     }
 }

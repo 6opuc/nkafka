@@ -1,3 +1,5 @@
+using nKafka.Contracts.Exceptions;
+
 namespace nKafka.Contracts.Records;
 
 public static class RecordsContainerSerializerV2
@@ -20,7 +22,7 @@ public static class RecordsContainerSerializerV2
         int remainingBefore = reader.Remaining;
         if (size > remainingBefore)
         {
-            throw new Exception($"Record container expected {size} bytes but got only {remainingBefore}.");
+            throw new DeserializationException($"Record container expected {size} bytes but got only {remainingBefore}.");
         }
 
         var message = new RecordsContainer

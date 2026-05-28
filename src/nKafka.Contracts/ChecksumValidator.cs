@@ -1,3 +1,5 @@
+using nKafka.Contracts.Exceptions;
+
 namespace nKafka.Contracts;
 
 public static class ChecksumValidator
@@ -30,7 +32,7 @@ public static class ChecksumValidator
         uint calculatedChecksum = calculateChecksumSpan(buffer, start, size);
         if (calculatedChecksum != expectedChecksum)
         {
-            throw new Exception($"Corrupt message: checksum does not match. Calculated {calculatedChecksum} but got {expectedChecksum}.");
+            throw new ChecksumValidationException($"Corrupt message: checksum does not match. Calculated {calculatedChecksum} but got {expectedChecksum}.");
         }
     }
 }

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 using FluentAssertions;
 using nKafka.Contracts;
@@ -12,13 +13,14 @@ public class BufferReaderTests
     private byte[] _buffer = null!;
     private BufferReader _reader = default;
     private BufferWriter _writer = default;
+    private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
 
     [SetUp]
     public void Setup()
     {
         _buffer = new byte[BufferSize];
         _reader = new BufferReader(_buffer);
-        _writer = new BufferWriter(_buffer);
+        _writer = new BufferWriter(_arrayPool, BufferSize);
     }
 
     [TearDown]
@@ -631,7 +633,7 @@ public class BufferReaderTests
     [Test]
     public void CreateRemaining_ReturnsReaderWithRemainingData()
     {
-        _writer.Dispose(); var writer = new BufferWriter(_buffer); writer.WriteInt(42);
+        _writer.Dispose(); var writer = new BufferWriter(_arrayPool, BufferSize); writer.WriteInt(42);
         _writer.WriteInt(99);
         _reader = new BufferReader(_buffer);
         _reader.ReadByte();
@@ -642,7 +644,7 @@ public class BufferReaderTests
     [Test]
     public void CreateChild_ReturnsReaderWithSpecifiedLength()
     {
-        _writer.Dispose(); var writer = new BufferWriter(_buffer); writer.WriteInt(42);
+        _writer.Dispose(); var writer = new BufferWriter(_arrayPool, BufferSize); writer.WriteInt(42);
         _writer.WriteInt(99);
         _reader = new BufferReader(_buffer);
         var child = _reader.CreateChild(4);

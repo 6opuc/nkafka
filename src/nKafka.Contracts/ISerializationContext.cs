@@ -4,5 +4,5 @@ public interface ISerializationContext
 {
     SerializationConfig Config { get; }
 
-    BufferWriter CreateWriter(int size = 4096);
+    BufferWriter CreateWriter();
 }

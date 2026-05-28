@@ -1,3 +1,5 @@
+using nKafka.Contracts.Exceptions;
+
 namespace nKafka.Contracts.Records;
 
 public static class MessageSerializerV1
@@ -34,7 +36,7 @@ public static class MessageSerializerV1
         message.Magic = reader.ReadByte();
         if (message.Magic != 1)
         {
-            throw new Exception($"Version 1 was expected, but received version {message.Magic}.");
+            throw new ProtocolException($"Version 1 was expected, but received version {message.Magic}.");
         }
         message.Attributes = reader.ReadByte();
         message.Timestamp = reader.ReadInt64BigEndian();
@@ -57,7 +59,7 @@ public static class MessageSerializerV1
         int actualMessageSize = reader.Position - messageStart;
         if (actualMessageSize != message.MessageSize)
         {
-            throw new Exception($"Expected message size was {message.MessageSize}, but got {actualMessageSize}.");
+            throw new DeserializationException($"Expected message size was {message.MessageSize}, but got {actualMessageSize}.");
         }
 
         return message;

@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Text;
+using nKafka.Contracts.Exceptions;
 
 namespace nKafka.Contracts;
 
@@ -26,7 +27,7 @@ public struct BufferReader
     {
         if (count < 0 || _pos + count > _buffer.Length)
         {
-            throw new InvalidOperationException($"Insufficient buffer data: need {count} bytes but only {Remaining} bytes remaining.");
+            throw new DeserializationException($"Insufficient buffer data: need {count} bytes but only {Remaining} bytes remaining.");
         }
     }
 
@@ -35,7 +36,7 @@ public struct BufferReader
     {
         if (count < 0 || _pos + count > _buffer.Length)
         {
-            throw new InvalidOperationException($"Invalid advance: cannot advance by {count} bytes from position {_pos} in buffer of size {_buffer.Length}.");
+            throw new DeserializationException($"Invalid advance: cannot advance by {count} bytes from position {_pos} in buffer of size {_buffer.Length}.");
         }
         _pos += count;
     }
@@ -159,7 +160,7 @@ public struct BufferReader
         if (value == 0) return -1;
         if (value > int.MaxValue + 1UL)
         {
-            throw new InvalidOperationException($"Length value {value} exceeds maximum allowed ({int.MaxValue}).");
+            throw new DeserializationException($"Length value {value} exceeds maximum allowed ({int.MaxValue}).");
         }
         return (int)value - 1;
     }
@@ -200,7 +201,7 @@ public struct BufferReader
     {
         if (length < 0)
         {
-            throw new InvalidOperationException($"Invalid memory length: {length}.");
+            throw new DeserializationException($"Invalid memory length: {length}.");
         }
         EnsureAvailable(length);
         var result = _buffer.Slice(_pos, length);

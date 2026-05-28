@@ -100,14 +100,15 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                 $"MessageSerializers/{messageDefinition.Name}Serializer.g.cs",
                 Format(
                     $$"""
-                      #nullable enable
+                       #nullable enable
 
-                      using System.Runtime.CompilerServices;
-                      using nKafka.Contracts.Records;
-                      using nKafka.Contracts.MessageDefinitions;
-                      using nKafka.Contracts.MessageDefinitions.{{messageDefinition.Name}}Nested;
+                       using System.Runtime.CompilerServices;
+                       using nKafka.Contracts.Exceptions;
+                       using nKafka.Contracts.Records;
+                       using nKafka.Contracts.MessageDefinitions;
+                       using nKafka.Contracts.MessageDefinitions.{{messageDefinition.Name}}Nested;
 
-                      namespace nKafka.Contracts.MessageSerializers
+                       namespace nKafka.Contracts.MessageSerializers
                       {
                             using nKafka.Contracts.MessageSerializers.{{messageDefinition.Name}}Nested;
                         

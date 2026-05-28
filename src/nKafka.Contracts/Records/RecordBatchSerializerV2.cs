@@ -1,3 +1,5 @@
+using nKafka.Contracts.Exceptions;
+
 namespace nKafka.Contracts.Records;
 
 public static class RecordBatchSerializerV2
@@ -26,7 +28,7 @@ public static class RecordBatchSerializerV2
         recordBatch.Magic = reader.ReadByte();
         if (recordBatch.Magic != 2)
         {
-            throw new Exception($"Version 2 was expected, but received version {recordBatch.Magic}.");
+            throw new ProtocolException($"Version 2 was expected, but received version {recordBatch.Magic}.");
         }
         recordBatch.Crc = reader.ReadUInt32BigEndian();
 
@@ -62,7 +64,7 @@ public static class RecordBatchSerializerV2
         int actualBatchLength = reader.Position - recordBatchStart;
         if (actualBatchLength != recordBatch.BatchLength)
         {
-            throw new Exception($"Expected batch length was {recordBatch.BatchLength}, but got {actualBatchLength}.");
+            throw new DeserializationException($"Expected batch length was {recordBatch.BatchLength}, but got {actualBatchLength}.");
         }
 
         return recordBatch;

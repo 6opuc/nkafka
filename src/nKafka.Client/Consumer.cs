@@ -2,6 +2,7 @@ using System.Text;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using nKafka.Contracts;
+using nKafka.Contracts.Exceptions;
 using nKafka.Contracts.MessageDefinitions;
 using nKafka.Contracts.MessageDefinitions.ConsumerProtocolAssignmentNested;
 using nKafka.Contracts.MessageDefinitions.FetchRequestNested;
@@ -120,7 +121,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         using var metadataResponse = await RequestMetadata(GetCoordinatorConnection(), cancellationToken);
         if (metadataResponse.Message.Topics == null)
         {
-            throw new Exception("Metadata response did not contain topics.");
+            throw new ProtocolException("Metadata response did not contain topics.");
         }
         _topicsMetadata = metadataResponse.Message.Topics;
         _topicsMetadataById = metadataResponse.Message.Topics
@@ -180,7 +181,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             }
         }
 
-        throw new Exception("No connection could be established.");
+        throw new ConnectionException("No connection could be established.");
     }
 
     private async ValueTask<IConnection> OpenCoordinatorConnectionAsync(
@@ -203,7 +204,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             if (response.Message.ErrorCode != 0)
             {
-                throw new Exception($"Failed to find group coordinator. Error code {response.Message.ErrorCode}");
+                throw new ProtocolException($"Failed to find group coordinator. Error code {response.Message.ErrorCode}");
             }
 
             coordinatorConnectionConfig = new ConnectionConfig(
@@ -222,13 +223,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             var coordinator = response.Message.Coordinators?.FirstOrDefault(x => x.Key == _config.GroupId);
             if (coordinator == null)
             {
-                throw new Exception(
+                throw new ProtocolException(
                     $"Failed to find group coordinator. Response did not match coordinator key '{_config.GroupId}'.");
             }
 
             if (coordinator.ErrorCode != 0)
             {
-                throw new Exception($"Failed to find group coordinator. Error code {coordinator.ErrorCode}");
+                throw new ProtocolException($"Failed to find group coordinator. Error code {coordinator.ErrorCode}");
             }
 
             coordinatorConnectionConfig = new ConnectionConfig(
@@ -278,14 +279,14 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
             if (topic.ErrorCode != 0)
             {
-                throw new Exception($"Metadata request failed for topic {topic.Name}. Error code {topic.ErrorCode}.");
+                throw new ProtocolException($"Metadata request failed for topic {topic.Name}. Error code {topic.ErrorCode}.");
             }
 
             foreach (var partition in topic.Partitions!)
             {
                 if (partition.ErrorCode != 0)
                 {
-                    throw new Exception(
+                    throw new ProtocolException(
                         $"Metadata request failed for topic {topic.Name} partition {partition.PartitionIndex}. Error code {partition.ErrorCode}");
                 }
             }
@@ -339,7 +340,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         if (response.Message.ErrorCode != 0)
         {
-            throw new Exception($"Failed to join consumer group. Error code {response.Message.ErrorCode}");
+            throw new ProtocolException($"Failed to join consumer group. Error code {response.Message.ErrorCode}");
         }
 
         return response;
@@ -427,7 +428,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         if (response.Message.ErrorCode != 0)
         {
-            throw new Exception($"Failed to synchronize consumer group. Error code {response.Message.ErrorCode}");
+            throw new ProtocolException($"Failed to synchronize consumer group. Error code {response.Message.ErrorCode}");
         }
 
         var actualAssignments = response.Message.Assignment!;
@@ -963,7 +964,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         if (response.Message.ErrorCode != 0)
         {
-            throw new Exception($"Failed to leave consumer group. Error code {response.Message.ErrorCode}");
+            throw new ProtocolException($"Failed to leave consumer group. Error code {response.Message.ErrorCode}");
         }
 
         _groupMembership = null;

@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Text;
+using nKafka.Contracts.Exceptions;
 
 namespace nKafka.Contracts;
 
@@ -11,15 +12,6 @@ public struct BufferWriter : IDisposable
     private readonly byte[]? _rentedArray;
     private readonly ArrayPool<byte>? _pool;
     private int _pos;
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public BufferWriter(Memory<byte> buffer)
-    {
-        _buffer = buffer;
-        _rentedArray = null;
-        _pool = null;
-        _pos = 0;
-    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public BufferWriter(ArrayPool<byte> pool, int capacity)
@@ -53,7 +45,7 @@ public struct BufferWriter : IDisposable
     {
         if (_pos + count > _buffer.Length)
         {
-            throw new InvalidOperationException($"Insufficient buffer space: need {count} bytes but only {Remaining} bytes remaining.");
+            throw new SerializationException($"Insufficient buffer space: need {count} bytes but only {Remaining} bytes remaining.");
         }
     }
 
@@ -62,7 +54,7 @@ public struct BufferWriter : IDisposable
     {
         if (count < 0 || _pos + count > _buffer.Length)
         {
-            throw new InvalidOperationException($"Invalid advance: cannot advance by {count} bytes from position {_pos} in buffer of size {_buffer.Length}.");
+            throw new SerializationException($"Invalid advance: cannot advance by {count} bytes from position {_pos} in buffer of size {_buffer.Length}.");
         }
         _pos += count;
     }
@@ -166,7 +158,7 @@ public struct BufferWriter : IDisposable
         int length = Encoding.UTF8.GetByteCount(value);
         if (length > short.MaxValue)
         {
-            throw new InvalidOperationException($"String is too long: {length} bytes exceeds maximum of {short.MaxValue}.");
+            throw new SerializationException($"String is too long: {length} bytes exceeds maximum of {short.MaxValue}.");
         }
         WriteInt16BigEndian((short)length);
         var span = value.AsSpan();

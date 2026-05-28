@@ -225,33 +225,35 @@ public static class FieldDefinitionExtensions
                 source.AppendLine("""
                                   if (tagSectionLength > 0)
                                   {
-                                        var tw = context.CreateWriter();
-                                        try
-                                        {
+                                  var writerTemp = context.CreateWriter();
+                                  try
+                                  {
                                   """);
                 foreach (var taggedField in taggedFields)
                 {
                     source.AppendLine($$"""
                                         if (message.{{taggedField.Name}} != null)
                                         {
-                                            tw.Reset();
-                                            {{taggedField.ToSerializationStatements(apiKey, version, flexible, "tw")}}
-                                            var size = (int)tw.Position;
+                                            writerTemp.Reset();
+                                            {{taggedField.ToSerializationStatements(apiKey, version, flexible, "writerTemp")}}
+                                            var size = (int)writerTemp.Position;
                                             var tagNumber = (uint){{taggedField.Tag}};
                                             var tagOverhead = (uint)BufferWriter.VarIntSize(tagNumber) + (uint)BufferWriter.VarIntSize((uint)size);
                                             if (writer.Remaining < tagOverhead + (uint)size)
                                             {
-                                                throw new InvalidOperationException($"Insufficient buffer space for tagged field {{taggedField.Name}}. Need {tagOverhead + size} bytes but only {writer.Remaining} available.");
+                                                throw new SerializationException($"Insufficient buffer space for tagged field {{taggedField.Name}}. Need {tagOverhead + size} bytes but only {writer.Remaining} available.");
                                             }
                                             writer.WriteUVarInt(tagNumber); // tag number
                                             writer.WriteUVarInt((uint)size); // tag payload size
-                                            writer.Write(tw.Memory.Span.Slice(0, size)); // tag payload
+                                            writer.Write(writerTemp.Memory.Span.Slice(0, size)); // tag payload
                                         }
                                         """);
                 }
-                source.AppendLine("}");
-                source.AppendLine("finally { tw.Dispose(); }");
-                source.AppendLine("}");
+                source.AppendLine("""
+                                  }
+                                  finally { writerTemp.Dispose(); }
+                                  }
+                                  """);
             }
         }
 
@@ -264,7 +266,7 @@ public static class FieldDefinitionExtensions
         short? apiKey,
         short version,
         bool flexible,
-        string output = "writer")
+        string writer = "writer")
     {
         if (!field.Versions.Includes(version))
         {
@@ -285,7 +287,7 @@ public static class FieldDefinitionExtensions
                 version,
                 flexible,
                 propertyType,
-                output);
+                writer);
         }
 
         string lengthSerialization = flexible
@@ -297,7 +299,7 @@ public static class FieldDefinitionExtensions
                      {{lengthSerialization}}
                      foreach (var item in message.{{field.Name}} ?? [])
                      {
-                        {{GetSerializationStatements("item", apiKey, version, flexible, propertyType, output)}}
+                        {{GetSerializationStatements("item", apiKey, version, flexible, propertyType, writer)}}
                      }
                      """;
         }
@@ -306,7 +308,7 @@ public static class FieldDefinitionExtensions
                  {{lengthSerialization}}
                  foreach (var item in message.{{field.Name}}?.Values ?? [])
                  {
-                    {{GetSerializationStatements("item", apiKey, version, flexible, propertyType, output)}}
+                    {{GetSerializationStatements("item", apiKey, version, flexible, propertyType, writer)}}
                  }
                  """;
     }
@@ -317,87 +319,87 @@ public static class FieldDefinitionExtensions
         short version,
         bool flexible,
         string? propertyType,
-        string output = "writer")
+        string writer = "writer")
     {
         if (propertyType == "string")
         {
             return flexible
-                ? $"{output}.WriteVarString({propertyPath});"
-                : $"{output}.WriteString({propertyPath});";
+                ? $"{writer}.WriteVarString({propertyPath});"
+                : $"{writer}.WriteString({propertyPath});";
         }
 
         if (propertyType == "short")
         {
-            return $"{output}.WriteShort({propertyPath});";
+            return $"{writer}.WriteShort({propertyPath});";
         }
 
         if (propertyType == "ushort")
         {
-            return $"{output}.WriteUshort({propertyPath});";
+            return $"{writer}.WriteUshort({propertyPath});";
         }
 
         if (propertyType == "byte")
         {
-            return $"{output}.WriteByte({propertyPath});";
+            return $"{writer}.WriteByte({propertyPath});";
         }
 
         if (propertyType == "bool")
         {
-            return $"{output}.WriteBool({propertyPath});";
+            return $"{writer}.WriteBool({propertyPath});";
         }
 
         if (propertyType == "int")
         {
-            return $"{output}.WriteInt({propertyPath});";
+            return $"{writer}.WriteInt({propertyPath});";
         }
 
         if (propertyType == "long")
         {
-            return $"{output}.WriteLong({propertyPath});";
+            return $"{writer}.WriteLong({propertyPath});";
         }
 
         if (propertyType == "double")
         {
-            return $"{output}.WriteDoubleBigEndian({propertyPath});";
+            return $"{writer}.WriteDoubleBigEndian({propertyPath});";
         }
 
         if (propertyType == "Memory<byte>")
         {
             string lengthSerialization = flexible
-                ? $"{output}.WriteLength({propertyPath}?.Length ?? 0);"
-                : $"{output}.WriteInt({propertyPath}?.Length ?? -1);";
+                ? $"{writer}.WriteLength({propertyPath}?.Length ?? 0);"
+                : $"{writer}.WriteInt({propertyPath}?.Length ?? -1);";
             return $$"""
                       {{lengthSerialization}}
                       if ({{propertyPath}} != null)
                       {
-                          {{output}}.WriteMemory({{propertyPath}}.Value);
+                          {{writer}}.WriteMemory({{propertyPath}}.Value);
                       }
                       """;
         }
 
         if (propertyType == "Guid")
         {
-            return $"{output}.WriteGuid({propertyPath});";
+            return $"{writer}.WriteGuid({propertyPath});";
         }
 
 
         if (propertyType == "RecordsContainer")
         {
             string recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
-            return $"RecordsContainerSerializer{recordsVersion}.Serialize(ref {output}, {propertyPath}, context);";
+            return $"RecordsContainerSerializer{recordsVersion}.Serialize(ref {writer}, {propertyPath}, context);";
         }
 
         if (propertyType == "ConsumerProtocolAssignment")
         {
-            return $"ConsumerProtocolAssignmentSerializationHelper.Serialize(ref {output}, {propertyPath}, {flexible.ToString().ToLower()}, context);";
+            return $"ConsumerProtocolAssignmentSerializationHelper.Serialize(ref {writer}, {propertyPath}, {flexible.ToString().ToLower()}, context);";
         }
 
         if (propertyType == "ConsumerProtocolSubscription")
         {
-            return $"ConsumerProtocolSubscriptionSerializationHelper.Serialize(ref {output}, {propertyPath}, {flexible.ToString().ToLower()}, context);";
+            return $"ConsumerProtocolSubscriptionSerializationHelper.Serialize(ref {writer}, {propertyPath}, {flexible.ToString().ToLower()}, context);";
         }
 
-        return $"if ({propertyPath} == null)\n                 {{\n                    throw new InvalidOperationException(\"Property {propertyPath} has not been initialized.\");\n                 }}\n                 {propertyType}SerializerV{version}.Serialize(ref {output}, {propertyPath}, context);";
+        return $"if ({propertyPath} == null)\n                 {{\n                    throw new InvalidOperationException(\"Property {propertyPath} has not been initialized.\");\n                 }}\n                 {propertyType}SerializerV{version}.Serialize(ref {writer}, {propertyPath}, context);";
     }
 
     public static string ToNestedSerializerDeclarations(

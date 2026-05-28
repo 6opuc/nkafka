@@ -1,3 +1,5 @@
+using nKafka.Contracts.Exceptions;
+
 namespace nKafka.Contracts.Records;
 
 public static class RecordsContainerSerializerV1
@@ -12,14 +14,14 @@ public static class RecordsContainerSerializerV1
         int size = reader.ReadInt32BigEndian();
         if (size < 0)
         {
-            throw new Exception($"Negative record container size: {size}.");
+            throw new ProtocolException($"Negative record container size: {size}.");
         }
 
         int start = reader.Position;
         int remainingBefore = reader.Remaining;
         if (size > remainingBefore)
         {
-            throw new Exception(
+            throw new DeserializationException(
                 $"Record container expected {size} bytes but got only {remainingBefore}.");
         }
 

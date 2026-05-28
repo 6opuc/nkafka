@@ -52,3 +52,31 @@
 - Comprehensive test coverage for buffer operations
 - Test bounds checking, error cases, and edge conditions
 - Roundtrip tests for all data types
+- Test naming pattern: `MethodUnderTest_Condition_Expectation` (e.g., `WriteByte_Zero_CanBeReadByBufferReader`)
+
+### Exception Hierarchy
+- **KafkaException** (base)
+  - **SerializationException** - BufferWriter errors, serialization failures
+  - **DeserializationException** - BufferReader errors, deserialization failures
+  - **ProtocolException** - Protocol violations, invalid message structure
+  - **ChecksumValidationException** - CRC/checksum validation failures
+  - **ConnectionException** - Network/connection failures
+  - **IncompleteMessageException** - Partial/incomplete messages
+- **Remove:** `InvalidMessageException` (unused), `CorruptRecordException` (rename to ChecksumValidationException)
+- **Keep as `InvalidOperationException`:** Programming errors (uninitialized properties, null key values)
+
+### Buffer Management
+- **BufferWriter:** Use pool-based constructor only: `new BufferWriter(arrayPool, size)`
+- **Buffer size:** Use `Math.Max(RequestBufferSize, ResponseBufferSize)` for consistency
+- **Temporary writers:** Use `writerTemp` naming convention for temporary serializers
+- **CreateWriter():** No parameters, uses configured buffer size
+
+### Dead Code Removal
+- **Crc32c.cs:** Remove all MemoryStream-based methods (`CalculateStream`, `_calculateStream` field)
+- Keep only `ReadOnlySpan<byte>` overloads
+- **Remove unused methods** before refactoring
+
+### Implementation Plan
+- All 18 PR #2 review comments analyzed and organized into 7 phases
+- Implementation plan: `~/projects/pr2-implementation-plan.md` (NOT in repository)
+- Wait for approval before implementing
