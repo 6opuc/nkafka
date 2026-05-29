@@ -3,29 +3,59 @@
 Yet another [more] efficient Kafka client implementation for .net ;)
 
 The work is still ongoing, but there are already promising results comparing to the official client:
-- **60x** less memory allocations
-- **16x** ~~faster~~ more efficient in CPU utilization
-- it scales much better with the number of consumers (**10x** less memory footprint for 20 consumers)
+- **32x** less memory allocations
+- **10x** faster in PLAINTEXT mode
+- **2x** faster in SASL_SSL mode
+- it scales much better with the number of consumers
 
 ## Benchmarks
-- one topic with 12 partitions, 40K messages of 10KB in size
-- one consumer which reads the message payload as plain bytes
-- the test ends when all messages from the topic are read
 
-This benchmark just shows the overhead of the client itself.
+### Scenarios
 
+All benchmarks run against topics with 12 partitions and replication factor 2:
 
-```
-BenchmarkDotNet v0.14.0, Fedora Linux 41 (Workstation Edition)
-AMD Ryzen 5 7530U with Radeon Graphics, 1 CPU, 12 logical and 6 physical cores
-.NET SDK 9.0.100
-  [Host]     : .NET 8.0.10 (8.0.1024.46610), X64 RyuJIT AVX2
-  DefaultJob : .NET 8.0.10 (8.0.1024.46610), X64 RyuJIT AVX2
-```
-| Method                    | Scenario     | Mean       | Gen0        | Gen1       | Allocated |
-|-------------------------- |------------- |-----------:|------------:|-----------:|----------:|
-| ConfluentConsumeBytes     | 12p 40Kx10KB | 2,227.6 ms |  50000.0000 |  1000.0000 | 405.61 MB |
-| **NKafkaConsumeBytes**    | 12p 40Kx10KB |   137.8 ms |    750.0000 |          - |    6.8 MB |
+| Scenario | Messages | Size/msg | Total |
+|----------|----------|----------|-------|
+| 12p 1Mx4B | 1,000,000 | 4B | 4MB |
+| 12p 100Kx4KB | 100,000 | 4KB | 400MB |
+| 12p 10Kx40KB | 10,000 | 40KB | 400MB |
+| 12p 4Kx100KB | 4,000 | 100KB | 400MB |
+| **12p 40Kx10KB** | 40,000 | 10KB | 400MB |
+| 12p 1Kx400KB | 1,000 | 400KB | 400MB |
+
+### Results (12p 40Kx10KB)
+
+Ubuntu 26.04 LTS, AMD RYZEN AI MAX+ 395, .NET 10.0.8
+
+#### PLAINTEXT
+
+| Method                    | Mean      | Gen0       | Gen1       | Allocated |
+|-------------------------- |----------:|-----------:|-----------:|----------:|
+| ConfluentConsumeBytes     | 302.93 ms | 25000.0000 |          - | 403.78 MB |
+| ConfluentConsumeString    | 297.73 ms | 49500.0000 |  3500.0000 | 794.41 MB |
+| NKafkaFetchBytesSeq1Part  |  79.97 ms |   600.0000 |          - |  11.74 MB |
+| NKafkaFetchBytesSeqNPart  |  56.54 ms |   666.6667 |   111.1111 |  10.64 MB |
+| NKafkaFetchBytesParNPart  |  24.64 ms |   750.0000 |   250.0000 |  12.17 MB |
+| NKafkaFetchStringParNPart |  57.80 ms | 57000.0000 | 20200.0000 | 794.35 MB |
+| NKafkaConsumeString       |  69.31 ms | 50285.7143 |   142.8571 | 794.47 MB |
+| NKafkaConsumeBytes        |  28.18 ms |   733.3333 |   333.3333 |  12.32 MB |
+| NKafkaBatchConsumeBytes   |  28.66 ms |   750.0000 |   343.7500 |  12.32 MB |
+
+#### SASL_SSL (SCRAM-SHA-512)
+
+| Method                    | Mean      | Gen0       | Gen1       | Allocated |
+|-------------------------- |----------:|-----------:|-----------:|----------:|
+| ConfluentConsumeBytes     | 295.05 ms | 25000.0000 |          - | 403.78 MB |
+| ConfluentConsumeString    | 295.43 ms | 49000.0000 |  3000.0000 | 794.41 MB |
+| NKafkaFetchBytesSeq1Part  | 285.84 ms |          - |          - |  11.81 MB |
+| NKafkaFetchBytesSeqNPart  | 281.06 ms |   500.0000 |          - |  10.71 MB |
+| NKafkaFetchBytesParNPart  | 114.48 ms |   750.0000 |          - |  13.24 MB |
+| NKafkaFetchStringParNPart | 148.18 ms | 52666.6667 | 13000.0000 | 794.75 MB |
+| NKafkaConsumeString       | 153.61 ms | 50000.0000 | 16000.0000 | 794.57 MB |
+| NKafkaConsumeBytes        | 144.00 ms |   750.0000 |   250.0000 |  12.41 MB |
+| NKafkaBatchConsumeBytes   | 141.94 ms |   750.0000 |   250.0000 |  12.41 MB |
+
+See [benchmark.md](benchmark.md) for full results across multiple machines.
 
 ## Current status
 > [!CAUTION]
@@ -57,6 +87,9 @@ ${CONTAINER_TOOL:-docker} compose -f infra/docker-compose.yaml up -d
 
 # 3. Create SCRAM users (admin / admin-secret)
 ./infra/init-cluster.sh
+
+# 4. Create benchmark topics and fill them with test data
+./infra/init-benchmark-topics.sh
 ```
 
 Broker ports (SASL_SSL / PLAINTEXT):
@@ -65,6 +98,19 @@ Broker ports (SASL_SSL / PLAINTEXT):
 | kafka-1 | `localhost:9192` | `localhost:9193` |
 | kafka-2 | `localhost:9292` | `localhost:9293` |
 | kafka-3 | `localhost:9392` | `localhost:9393` |
+
+## Benchmark topics
+
+The `init-benchmark-topics.sh` script creates 6 topics (12 partitions, RF=2) used by the benchmarks:
+
+| Topic | Messages | Size/msg | Total |
+|-------|----------|----------|-------|
+| `test_p12_m1M_s4B` | 1,000,000 | 4B | 4MB |
+| `test_p12_m100K_s4KB` | 100,000 | 4KB | 400MB |
+| `test_p12_m10K_s40KB` | 10,000 | 40KB | 400MB |
+| `test_p12_m4K_s100KB` | 4,000 | 100KB | 400MB |
+| `test_p12_m40K_s10KB` | 40,000 | 10KB | 400MB |
+| `test_p12_m1K_s400KB` | 1,000 | 400KB | 400MB |
 
 ## Links
 - The idea of code generation from kafka message definitions is taken from this interesting project: https://github.com/Fresa/Kafka.Protocol

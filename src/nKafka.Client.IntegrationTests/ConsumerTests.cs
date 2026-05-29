@@ -7,7 +7,7 @@ public class ConsumerTests
     private const string Topic = "test_p12_m1M_s4B";
 
     private const string BootstrapServers =
-        "PLAINTEXT://localhost:9192,PLAINTEXT://localhost:9292,PLAINTEXT://localhost:9392";
+        "PLAINTEXT://localhost:9193,PLAINTEXT://localhost:9293,PLAINTEXT://localhost:9393";
 
     private const long OffsetPastEndOfTopic = 1_000_000;
     private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(10);

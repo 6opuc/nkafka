@@ -17,6 +17,8 @@ services:
       - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9194,2@kafka-2:9294,3@kafka-3:9394
       - KAFKA_CLUSTER_ID=r4zt_wrqTRuT7W2NJsB_GA
       - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      # Enable classic consumer group protocol (JoinGroup/SyncGroup/Heartbeat)
+      - KAFKA_GROUP_COORDINATOR_REBALANCE_PROTOCOLS=classic,consumer
       # SASL / SCRAM
       - KAFKA_SASL_ENABLED_MECHANISMS=SCRAM-SHA-512
       # SSL (TLS for EXTERNAL_SASL listener)

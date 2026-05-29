@@ -16,6 +16,15 @@ public class ConnectionSaslTests
             TestContext.CurrentContext.TestDirectory,
             "../../../../../infra/secrets/ca-cert.pem"));
 
+    [SetUp]
+    public void SetUp()
+    {
+        if (!File.Exists(SslCaCertPath))
+        {
+            Assert.Ignore($"SASL/SSL infrastructure not available: CA cert not found at '{SslCaCertPath}'. Run 'infra/gen-certs.sh' and 'infra/init-cluster.sh' first.");
+        }
+    }
+
     [Test]
     public async Task ConnectAsync_SaslSsl_ShouldSucceed()
     {

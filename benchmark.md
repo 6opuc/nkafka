@@ -1,21 +1,30 @@
-BenchmarkDotNet v0.15.8, Linux Ubuntu 26.04 LTS (Resolute Raccoon)                                                                                                                                         
-AMD RYZEN AI MAX+ 395 w/ Radeon 8060S 1.68GHz, 1 CPU, 32 logical and 16 physical cores                                                                                                                     
-.NET SDK 10.0.300                                                                                                                                                                                          
-  [Host]     : .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v4                                                                                                                                  
-  DefaultJob : .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v4                                                                                                                                  
-                                                                                                                                                                                                            
-                                                                                                                                                                                                            
-| Method                    | Scenario     | Mean        | Error      | StdDev     | Median      | Completed Work Items | Lock Contentions | Gen0       | Gen1       | Allocated |                         
-|-------------------------- |------------- |------------:|-----------:|-----------:|------------:|---------------------:|-----------------:|-----------:|-----------:|----------:|                         
-| ConfluentConsumeBytes     | 12p 40Kx10KB | 2,553.84 ms | 158.910 ms | 468.551 ms | 2,228.72 ms |                    - |                - | 25000.0000 |          - | 403.77 MB |                         
-| ConfluentConsumeString    | 12p 40Kx10KB | 3,220.28 ms |   4.453 ms |   4.166 ms | 3,220.03 ms |                    - |                - | 49000.0000 |  3000.0000 |  794.4 MB |                         
-| NKafkaFetchBytesSeq1Part  | 12p 40Kx10KB |    80.06 ms |   1.601 ms |   2.493 ms |    80.29 ms |            8836.3333 |                - |   333.3333 |          - |   5.51 MB |                         
-| NKafkaFetchBytesSeqNPart  | 12p 40Kx10KB |    82.03 ms |   1.598 ms |   2.440 ms |    82.16 ms |            9012.8333 |                - |   333.3333 |          - |   6.01 MB |                         
-| NKafkaFetchBytesParNPart  | 12p 40Kx10KB |    35.36 ms |   0.397 ms |   0.441 ms |    35.23 ms |            7644.2143 |                - |   357.1429 |          - |   5.94 MB |
-| NKafkaFetchStringParNPart | 12p 40Kx10KB |    58.68 ms |   1.168 ms |   2.223 ms |    58.56 ms |            7057.0000 |                - | 49444.4444 |  4666.6667 | 788.12 MB |
-| NKafkaConsumeString       | 12p 40Kx10KB |    63.01 ms |   1.257 ms |   2.481 ms |    62.75 ms |            7273.8571 |                - | 49428.5714 | 10285.7143 | 788.43 MB |
-| NKafkaConsumeBytes        | 12p 40Kx10KB |    40.44 ms |   0.774 ms |   1.564 ms |    39.97 ms |            8276.7692 |           0.1538 |   384.6154 |          - |   6.36 MB |
-| NKafkaBatchConsumeBytes   | 12p 40Kx10KB |    39.13 ms |   0.629 ms |   0.525 ms |    39.14 ms |            9160.3333 |           0.0833 |   333.3333 |          - |   6.35 MB |
+BenchmarkDotNet v0.15.8, Linux Ubuntu 26.04 LTS (Resolute Raccoon)
+AMD RYZEN AI MAX+ 395 w/ Radeon 8060S 1.63GHz, 1 CPU, 32 logical and 16 physical cores
+.NET SDK 10.0.300
+  [Host]     : .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v4
+  DefaultJob : .NET 10.0.8 (10.0.8, 10.0.826.23019), X64 RyuJIT x86-64-v4
+
+
+| Method                    | Protocol  | Scenario     | Mean      | Error    | StdDev    | Completed Work Items | Lock Contentions | Gen0       | Gen1       | Gen2     | Allocated |
+|-------------------------- |---------- |------------- |----------:|---------:|----------:|---------------------:|-----------------:|-----------:|-----------:|---------:|----------:|
+| ConfluentConsumeBytes     | PLAINTEXT | 12p 40Kx10KB | 302.93 ms | 5.971 ms | 10.300 ms |                    - |                - | 25000.0000 |          - |        - | 403.78 MB |
+| ConfluentConsumeString    | PLAINTEXT | 12p 40Kx10KB | 297.73 ms | 5.431 ms |  6.670 ms |                    - |                - | 49500.0000 |  3500.0000 |        - | 794.41 MB |
+| NKafkaFetchBytesSeq1Part  | PLAINTEXT | 12p 40Kx10KB |  79.97 ms | 1.589 ms |  2.279 ms |            5517.0000 |                - |   600.0000 |          - |        - |  11.74 MB |
+| NKafkaFetchBytesSeqNPart  | PLAINTEXT | 12p 40Kx10KB |  56.54 ms | 1.082 ms |  1.012 ms |            3539.1111 |                - |   666.6667 |   111.1111 |        - |  10.64 MB |
+| NKafkaFetchBytesParNPart  | PLAINTEXT | 12p 40Kx10KB |  24.64 ms | 0.420 ms |  0.351 ms |            3638.0625 |                - |   750.0000 |   250.0000 |        - |  12.17 MB |
+| NKafkaFetchStringParNPart | PLAINTEXT | 12p 40Kx10KB |  57.80 ms | 1.152 ms |  1.793 ms |            2786.9000 |                - | 57000.0000 | 20200.0000 | 100.0000 | 794.35 MB |
+| NKafkaConsumeString       | PLAINTEXT | 12p 40Kx10KB |  69.31 ms | 1.380 ms |  1.842 ms |            3294.7143 |                - | 50285.7143 |   142.8571 |        - | 794.47 MB |
+| NKafkaConsumeBytes        | PLAINTEXT | 12p 40Kx10KB |  28.18 ms | 0.399 ms |  0.353 ms |            3814.1333 |                - |   733.3333 |   333.3333 |        - |  12.32 MB |
+| NKafkaBatchConsumeBytes   | PLAINTEXT | 12p 40Kx10KB |  28.66 ms | 0.560 ms |  0.786 ms |            3691.3438 |                - |   750.0000 |   343.7500 |        - |  12.32 MB |
+| ConfluentConsumeBytes     | SASL_SSL  | 12p 40Kx10KB | 295.05 ms | 5.702 ms |  8.178 ms |                    - |                - | 25000.0000 |          - |        - | 403.78 MB |
+| ConfluentConsumeString    | SASL_SSL  | 12p 40Kx10KB | 295.43 ms | 5.863 ms |  5.758 ms |                    - |                - | 49000.0000 |  3000.0000 |        - | 794.41 MB |
+| NKafkaFetchBytesSeq1Part  | SASL_SSL  | 12p 40Kx10KB | 285.84 ms | 5.720 ms | 16.684 ms |           37153.0000 |                - |          - |          - |        - |  11.81 MB |
+| NKafkaFetchBytesSeqNPart  | SASL_SSL  | 12p 40Kx10KB | 281.06 ms | 5.289 ms |  5.879 ms |           38649.0000 |                - |   500.0000 |          - |        - |  10.71 MB |
+| NKafkaFetchBytesParNPart  | SASL_SSL  | 12p 40Kx10KB | 114.48 ms | 2.139 ms |  1.896 ms |           33407.7500 |                - |   750.0000 |          - |        - |  13.24 MB |
+| NKafkaFetchStringParNPart | SASL_SSL  | 12p 40Kx10KB | 148.18 ms | 2.842 ms |  3.696 ms |           31908.3333 |                - | 52666.6667 | 13000.0000 |        - | 794.75 MB |
+| NKafkaConsumeString       | SASL_SSL  | 12p 40Kx10KB | 153.61 ms | 3.043 ms |  5.641 ms |           27813.0000 |                - | 50000.0000 | 16000.0000 |        - | 794.57 MB |
+| NKafkaConsumeBytes        | SASL_SSL  | 12p 40Kx10KB | 144.00 ms | 2.739 ms |  2.813 ms |           35844.2500 |                - |   750.0000 |   250.0000 |        - |  12.41 MB |
+| NKafkaBatchConsumeBytes   | SASL_SSL  | 12p 40Kx10KB | 141.94 ms | 2.802 ms |  2.483 ms |           33445.7500 |                - |   750.0000 |   250.0000 |        - |  12.41 MB |
 
 
 BenchmarkDotNet v0.15.8, Linux Ubuntu 24.04.4 LTS (Noble Numbat)
@@ -65,5 +74,3 @@ AMD Ryzen 5 7530U with Radeon Graphics 2.90GHz, 1 CPU, 12 logical and 6 physical
 | NKafkaConsumeString       | SASL_SSL  | 12p 40Kx10KB |   767.0 ms | 14.96 ms | 26.20 ms | 99000.0000 |           28480.0000 |                - | 19000.0000 | 788.89 MB |
 | NKafkaConsumeBytes        | SASL_SSL  | 12p 40Kx10KB |   742.8 ms | 14.85 ms | 36.43 ms |          - |           33202.0000 |                - |          - |   6.76 MB |
 | NKafkaBatchConsumeBytes   | SASL_SSL  | 12p 40Kx10KB |   713.9 ms | 14.14 ms | 28.24 ms |          - |           23464.0000 |                - |          - |   6.74 MB |
-
-

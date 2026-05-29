@@ -16,6 +16,9 @@ using nKafka.Contracts.MessageSerializers;
 
 namespace nKafka.Client;
 
+public delegate void RequestWriterDelegate(ref BufferWriter writer, ISerializationContext context);
+public delegate TResponse ResponseReaderDelegate<TResponse>(ref BufferReader reader, short version, ISerializationContext context);
+
 public class Connection : IConnection
 {
     private readonly ILogger _logger;
@@ -165,13 +168,13 @@ public class Connection : IConnection
         // 1. SaslHandshake (inline — no receive loop yet)
         _logger.LogDebug("Sending SaslHandshakeRequest.");
         var handshakeResponse = await SendRequestInlineAsync(
-            requestWriter: (buf, ctx) =>
+            requestWriter: (ref BufferWriter buf, ISerializationContext ctx) =>
             {
-                SaslHandshakeRequestSerializer.Serialize(buf, new SaslHandshakeRequest { Mechanism = mechanism }, 0, ctx);
+                SaslHandshakeRequestSerializer.Serialize(ref buf, new SaslHandshakeRequest { Mechanism = mechanism }, 0, ctx);
             },
-            responseReader: (buf, version, ctx) =>
+            responseReader: (ref BufferReader buf, short version, ISerializationContext ctx) =>
             {
-                return SaslHandshakeResponseSerializer.Deserialize(buf, version, ctx);
+                return SaslHandshakeResponseSerializer.Deserialize(ref buf, version, ctx);
             },
             apiKey: 17,
             cancellationToken,
@@ -225,8 +228,8 @@ public class Connection : IConnection
     }
 
     private async Task<TResponse> SendRequestInlineAsync<TResponse>(
-        Action<MemoryStream, ISerializationContext> requestWriter,
-        Func<MemoryStream, short, ISerializationContext, TResponse> responseReader,
+        RequestWriterDelegate requestWriter,
+        ResponseReaderDelegate<TResponse> responseReader,
         short apiKey,
         CancellationToken cancellationToken,
         short apiVersion = 0)
@@ -243,29 +246,25 @@ public class Connection : IConnection
             ClientId = _config.ClientId,
         };
 
-        var rentSize = Math.Max(_config.RequestBufferSize, 4096);
-        var buffer = _arrayPool.Rent(rentSize);
+        var writer = new BufferWriter(_arrayPool, _config.RequestBufferSize);
         try
         {
-            using var output = new MemoryStream(buffer, 0, buffer.Length, true, true);
+            int start = writer.Position;
+            writer.WriteInt(0);
 
-            PrimitiveSerializer.SerializeInt(output, 0);
-            var payloadStart = output.Position;
+            RequestHeaderSerializer.Serialize(ref writer, requestHeader, requestHeaderVersion, _serializationContext);
+            requestWriter(ref writer, _serializationContext);
 
-            RequestHeaderSerializer.Serialize(output, requestHeader, requestHeaderVersion, _serializationContext);
-            requestWriter(output, _serializationContext);
+            int end = writer.Position;
+            int size = end - start - 4;
+            writer.Position = start;
+            writer.WriteInt(size);
+            writer.Position = end;
 
-            var payloadEnd = output.Position;
-            var payloadSize = (int)(payloadEnd - payloadStart);
-            output.Position = payloadStart - 4;
-            PrimitiveSerializer.SerializeInt(output, payloadSize);
-            output.Position = payloadEnd;
-
-            await _sslStream!.WriteAsync(
-                new ReadOnlyMemory<byte>(buffer, 0, (int)payloadEnd), cancellationToken);
-            await _sslStream.FlushAsync(cancellationToken);
+            await _writeStream!.WriteAsync(writer.Memory.Slice(0, writer.Position), cancellationToken);
+            await _writeStream.FlushAsync(cancellationToken);
             _logger.LogDebug("Handshake request written ({PayloadSize} bytes). Hex: {Hex}",
-                payloadEnd, Convert.ToHexString(buffer.AsSpan(0, (int)payloadEnd)));
+                writer.Position, Convert.ToHexString(writer.Memory.Span.Slice(0, writer.Position)));
 
             var sizeBuf = new byte[4];
             var stream = GetReadStream();
@@ -280,10 +279,9 @@ public class Connection : IConnection
                 await stream.ReadAtLeastAsync(
                     responseBuffer, responseSize, true, cancellationToken);
 
-                using var input = new MemoryStream(
-                    responseBuffer, 0, responseSize, false, true);
-                var responseHeader = ResponseHeaderSerializer.Deserialize(
-                    input, responseHeaderVersion, _serializationContext);
+                var buffer = new Memory<byte>(responseBuffer, 0, responseSize);
+                var reader = new BufferReader(buffer);
+                var responseHeader = ResponseHeaderSerializer.Deserialize(ref reader, responseHeaderVersion, _serializationContext);
 
                 if (responseHeader.CorrelationId != correlationId)
                 {
@@ -291,7 +289,7 @@ public class Connection : IConnection
                         $"Correlation ID mismatch: expected {correlationId}, got {responseHeader.CorrelationId}");
                 }
 
-                return responseReader(input, apiVersion, _serializationContext);
+                return responseReader(ref reader, apiVersion, _serializationContext);
             }
             finally
             {
@@ -300,7 +298,7 @@ public class Connection : IConnection
         }
         finally
         {
-            _arrayPool.Return(buffer);
+            writer.Dispose();
         }
     }
 
@@ -329,29 +327,25 @@ public class Connection : IConnection
             ClientId = _config.ClientId,
         };
 
-        var rentSize = Math.Max(_config.RequestBufferSize, 4096);
-        var buffer = _arrayPool.Rent(rentSize);
+        var writer = new BufferWriter(_arrayPool, _config.RequestBufferSize);
         try
         {
-            using var output = new MemoryStream(buffer, 0, buffer.Length, true, true);
+            int start = writer.Position;
+            writer.WriteInt(0);
 
-            PrimitiveSerializer.SerializeInt(output, 0); // placeholder for size
-            var payloadStart = output.Position;
+            RequestHeaderSerializer.Serialize(ref writer, requestHeader, requestHeaderVersion, _serializationContext);
+            SaslAuthenticateRequestSerializer.Serialize(ref writer, request, apiVersion, _serializationContext);
 
-            RequestHeaderSerializer.Serialize(output, requestHeader, requestHeaderVersion, _serializationContext);
-            SaslAuthenticateRequestSerializer.Serialize(output, request, apiVersion, _serializationContext);
+            int end = writer.Position;
+            int size = end - start - 4;
+            writer.Position = start;
+            writer.WriteInt(size);
+            writer.Position = end;
 
-            var payloadEnd = output.Position;
-            var payloadSize = (int)(payloadEnd - payloadStart);
-            output.Position = payloadStart - 4;
-            PrimitiveSerializer.SerializeInt(output, payloadSize);
-            output.Position = payloadEnd;
-
-            await _sslStream!.WriteAsync(
-                new ReadOnlyMemory<byte>(buffer, 0, (int)payloadEnd), cancellationToken);
-            await _sslStream.FlushAsync(cancellationToken);
+            await _writeStream!.WriteAsync(writer.Memory.Slice(0, writer.Position), cancellationToken);
+            await _writeStream.FlushAsync(cancellationToken);
             _logger.LogDebug("Auth request written ({PayloadSize} bytes). Hex: {Hex}",
-                payloadEnd, Convert.ToHexString(buffer.AsSpan(0, (int)payloadEnd)));
+                writer.Position, Convert.ToHexString(writer.Memory.Span.Slice(0, writer.Position)));
 
             // Read response: size prefix + header + body
             var sizeBuf = new byte[4];
@@ -375,10 +369,9 @@ public class Connection : IConnection
                 await stream.ReadAtLeastAsync(
                     responseBuffer, responseSize, true, cancellationToken);
 
-                using var input = new MemoryStream(
-                    responseBuffer, 0, responseSize, false, true);
-                var responseHeader = ResponseHeaderSerializer.Deserialize(
-                    input, responseHeaderVersion, _serializationContext);
+                var buffer = new Memory<byte>(responseBuffer, 0, responseSize);
+                var reader = new BufferReader(buffer);
+                var responseHeader = ResponseHeaderSerializer.Deserialize(ref reader, responseHeaderVersion, _serializationContext);
 
                 if (responseHeader.CorrelationId != correlationId)
                 {
@@ -386,8 +379,7 @@ public class Connection : IConnection
                         $"Correlation ID mismatch: expected {correlationId}, got {responseHeader.CorrelationId}");
                 }
 
-                var response = SaslAuthenticateResponseSerializer.Deserialize(
-                    input, apiVersion, _serializationContext);
+                var response = SaslAuthenticateResponseSerializer.Deserialize(ref reader, apiVersion, _serializationContext);
 
                 if (response.ErrorCode != 0)
                 {
@@ -404,7 +396,7 @@ public class Connection : IConnection
         }
         finally
         {
-            _arrayPool.Return(buffer);
+            writer.Dispose();
         }
     }
 
