@@ -23,10 +23,10 @@ public class FetchBenchmarks
 
 
     [Benchmark]
-    public Task ConfluentConsumeBytes() => ConfluentConsumeBytesTest.Test(Scenario!);
+    public Task ConfluentConsumeBytes() => ConfluentConsumeBytesTest.Test(Scenario!, Protocol);
 
     [Benchmark]
-    public Task ConfluentConsumeString() => ConfluentConsumeStringTest.Test(Scenario!);
+    public Task ConfluentConsumeString() => ConfluentConsumeStringTest.Test(Scenario!, Protocol);
 
     [Benchmark]
     public Task NKafkaFetchBytesSeq1Part() => NKafkaFetchBytesSeqSinglePartTest.Test(Scenario!, Protocol);

@@ -8,7 +8,7 @@ public class TopicInitializer
 {
     public static async Task InitializeTestTopic(FetchScenario scenario)
     {
-        var bootstrapServers = "SASL_SSL://localhost:9192, SASL_SSL://localhost:9292, SASL_SSL://localhost:9392";
+        var bootstrapServers = BenchmarkHelper.BootstrapServers("SASL_SSL");
         var adminClientConfig = new AdminClientConfig
         {
             BootstrapServers = bootstrapServers,
