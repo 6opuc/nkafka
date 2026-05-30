@@ -27,7 +27,7 @@ public class ConnectionTests
 
     private async Task<Connection> OpenConnection()
     {
-        var config = new ConnectionConfig("PLAINTEXT", "localhost", 9192, "nKafka.Client.IntegrationTests")
+        var config = new ConnectionConfig("PLAINTEXT", "localhost", 9193, "nKafka.Client.IntegrationTests")
         {
             RequestApiVersionsOnOpen = false,
         };
@@ -745,7 +745,7 @@ public class ConnectionTests
 
     private async Task<Connection> OpenCoordinatorConnection(string groupId)
     {
-        var config = new ConnectionConfig("PLAINTEXT", "localhost", 9192, "nKafka.Client.IntegrationTests")
+        var config = new ConnectionConfig("PLAINTEXT", "localhost", 9193, "nKafka.Client.IntegrationTests")
         {
             RequestApiVersionsOnOpen = false,
         };
@@ -755,6 +755,7 @@ public class ConnectionTests
         var request = new FindCoordinatorRequest
         {
             FixedVersion = 4,
+            Key = groupId,
             KeyType = 0, // 0 = group, 1 = transaction
             CoordinatorKeys = [groupId], // for versions 4+
         };

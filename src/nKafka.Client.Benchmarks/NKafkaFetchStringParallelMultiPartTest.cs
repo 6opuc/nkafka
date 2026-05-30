@@ -8,9 +8,9 @@ namespace nKafka.Client.Benchmarks;
 
 public static class NKafkaFetchStringParallelMultiPartTest
 {
-    public static async Task Test(FetchScenario scenario)
+    public static async Task Test(FetchScenario scenario, string protocol)
     {
-        using var metadata = await RequestMetadata(scenario);
+        using var metadata = await RequestMetadata(scenario, protocol);
         var topicMetadata = metadata.Message.Topics![scenario.TopicName];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
@@ -21,16 +21,9 @@ public static class NKafkaFetchStringParallelMultiPartTest
             var task = Task.Run(async () =>
             {
                 var broker = metadata.Message.Brokers![group.Key];
-                var config = new ConnectionConfig(
-                    "PLAINTEXT",
-                    broker.Host!,
-                    broker.Port!.Value,
-                    "nKafka.Client.IntegrationTests",
-                    10 * 512 * 1024)
-                {
-                    RequestApiVersionsOnOpen = false,
-                    CheckCrcs = false,
-                };
+                var config = BenchmarkHelper.CreateConnectionConfig(
+                    broker.Host!, broker.Port!.Value, protocol,
+                    responseBufferSize: 10 * 512 * 1024);
                 await using var connection = new Connection(config, NullLoggerFactory.Instance);
                 await connection.OpenAsync(CancellationToken.None);
 
@@ -132,12 +125,10 @@ public static class NKafkaFetchStringParallelMultiPartTest
         await Task.WhenAll(tasks);
     }
 
-    private static async Task<IDisposableMessage<MetadataResponse>> RequestMetadata(FetchScenario scenario)
+    private static async Task<IDisposableMessage<MetadataResponse>> RequestMetadata(FetchScenario scenario, string protocol)
     {
-        var config = new ConnectionConfig("PLAINTEXT", "localhost", 9192, "nKafka.Client.Benchmarks")
-        {
-            RequestApiVersionsOnOpen = false,
-        };
+        var config = BenchmarkHelper.CreateConnectionConfig("localhost",
+            BenchmarkHelper.BootstrapPort(protocol), protocol);
         await using var connection = new Connection(config, NullLoggerFactory.Instance);
 
         await connection.OpenAsync(CancellationToken.None);

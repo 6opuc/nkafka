@@ -8,6 +8,9 @@ public class FetchBenchmarks
 {
     [ParamsSource(nameof(Scenarios))] public FetchScenario? Scenario { get; set; }
 
+    [Params("SASL_SSL", "PLAINTEXT")]
+    public string Protocol { get; set; } = "SASL_SSL";
+
     public IEnumerable<FetchScenario> Scenarios => new[]
     {
         //new FetchScenario { PartitionCount = 12, MessageCount = 1_000_000, MessageSize = 4 },
@@ -20,29 +23,29 @@ public class FetchBenchmarks
 
 
     [Benchmark]
-    public Task ConfluentConsumeBytes() => ConfluentConsumeBytesTest.Test(Scenario!);
+    public Task ConfluentConsumeBytes() => ConfluentConsumeBytesTest.Test(Scenario!, Protocol);
 
     [Benchmark]
-    public Task ConfluentConsumeString() => ConfluentConsumeStringTest.Test(Scenario!);
+    public Task ConfluentConsumeString() => ConfluentConsumeStringTest.Test(Scenario!, Protocol);
 
     [Benchmark]
-    public Task NKafkaFetchBytesSeq1Part() => NKafkaFetchBytesSeqSinglePartTest.Test(Scenario!);
+    public Task NKafkaFetchBytesSeq1Part() => NKafkaFetchBytesSeqSinglePartTest.Test(Scenario!, Protocol);
 
     [Benchmark]
-    public Task NKafkaFetchBytesSeqNPart() => NKafkaFetchBytesSeqMultiPartTest.Test(Scenario!);
+    public Task NKafkaFetchBytesSeqNPart() => NKafkaFetchBytesSeqMultiPartTest.Test(Scenario!, Protocol);
 
     [Benchmark]
-    public Task NKafkaFetchBytesParNPart() => NKafkaFetchBytesParallelMultiPartTest.Test(Scenario!);
+    public Task NKafkaFetchBytesParNPart() => NKafkaFetchBytesParallelMultiPartTest.Test(Scenario!, Protocol);
 
     [Benchmark]
-    public Task NKafkaFetchStringParNPart() => NKafkaFetchStringParallelMultiPartTest.Test(Scenario!);
+    public Task NKafkaFetchStringParNPart() => NKafkaFetchStringParallelMultiPartTest.Test(Scenario!, Protocol);
 
     [Benchmark]
-    public Task NKafkaConsumeString() => NKafkaConsumeStringTest.Test(Scenario!);
+    public Task NKafkaConsumeString() => NKafkaConsumeStringTest.Test(Scenario!, Protocol);
 
     [Benchmark]
-    public Task NKafkaConsumeBytes() => NKafkaConsumeBytesTest.Test(Scenario!);
+    public Task NKafkaConsumeBytes() => NKafkaConsumeBytesTest.Test(Scenario!, Protocol);
 
     [Benchmark]
-    public Task NKafkaBatchConsumeBytes() => NKafkaBatchConsumeBytesTest.Test(Scenario!);
+    public Task NKafkaBatchConsumeBytes() => NKafkaBatchConsumeBytesTest.Test(Scenario!, Protocol);
 }

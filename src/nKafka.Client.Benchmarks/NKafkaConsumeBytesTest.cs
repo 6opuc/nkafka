@@ -4,16 +4,22 @@ namespace nKafka.Client.Benchmarks;
 
 public static class NKafkaConsumeBytesTest
 {
-    public static async Task Test(FetchScenario scenario)
+    public static async Task Test(FetchScenario scenario, string protocol)
     {
         var consumerConfig = new ConsumerConfig(
-            "PLAINTEXT://localhost:9192, PLAINTEXT://localhost:9292, PLAINTEXT://localhost:9392",
+            BenchmarkHelper.BootstrapServers(protocol),
             scenario.TopicName,
-            "test-consumer-group",
             $"testapp-{DateTime.UtcNow.Date:yyyyMMdd}-{Guid.NewGuid():N}",
-            "PLAINTEXT",
-            "nKafka.Client.Benchmarks");
-
+            "test-consumer-group",
+            protocol,
+            protocol)
+        {
+            SslCaCertPath = protocol == "SASL_SSL" ? BenchmarkHelper.GetCACertPath() : null,
+            SaslMechanism = protocol == "SASL_SSL" ? "SCRAM-SHA-512" : null,
+            SaslUsername = protocol == "SASL_SSL" ? "admin" : null,
+            SaslPassword = protocol == "SASL_SSL" ? "admin-secret" : null,
+        };
+        
         await using var consumer = new Consumer<Memory<byte>?>(
             consumerConfig,
             new DummyBytesMessageDeserializer(),

@@ -11,8 +11,13 @@ public class ConnectionConfig
     public int ResponseBufferSize { get; }
     public int RequestBufferSize { get; }
 
-    public bool CheckCrcs { get; init; } = false;
-    public bool RequestApiVersionsOnOpen { get; init; } = true;
+    public bool CheckCrcs { get; set; } = false;
+    public bool RequestApiVersionsOnOpen { get; set; } = true;
+
+    public string? SaslMechanism { get; set; }
+    public string? SaslUsername { get; set; }
+    public string? SaslPassword { get; set; }
+    public string? SslCaCertPath { get; set; }
 
     public ConnectionConfig(
         string protocol,

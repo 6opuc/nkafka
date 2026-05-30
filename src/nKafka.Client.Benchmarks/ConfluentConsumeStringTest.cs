@@ -4,15 +4,26 @@ namespace nKafka.Client.Benchmarks;
 
 public class ConfluentConsumeStringTest
 {
-    public static Task Test(FetchScenario scenario)
+    public static Task Test(FetchScenario scenario, string protocol)
     {
         var config = new Confluent.Kafka.ConsumerConfig
         {
-            BootstrapServers = "PLAINTEXT://localhost:9192, PLAINTEXT://localhost:9292, PLAINTEXT://localhost:9392",
+            BootstrapServers = BenchmarkHelper.BootstrapServers(protocol),
             GroupId = Guid.NewGuid().ToString(),
             AutoOffsetReset = AutoOffsetReset.Earliest,
             CheckCrcs = false,
         };
+
+        if (protocol == "SASL_SSL")
+        {
+            config.SslCaLocation = BenchmarkHelper.GetCACertPath();
+            config.SaslMechanism = SaslMechanism.ScramSha512;
+            config.SaslUsername = "admin";
+            config.SaslPassword = "admin-secret";
+            config.SecurityProtocol = SecurityProtocol.SaslSsl;
+        }
+
+        config.FetchQueueBackoffMs = 10;
 
         using var consumer = new ConsumerBuilder<Null, string>(config).Build();
         consumer.Subscribe(scenario.TopicName);

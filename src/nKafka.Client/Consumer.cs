@@ -144,6 +144,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 _config.RequestBufferSize)
             {
                 CheckCrcs = _config.CheckCrcs,
+                SaslMechanism = _config.SaslMechanism,
+                SaslUsername = _config.SaslUsername,
+                SaslPassword = _config.SaslPassword,
+                SslCaCertPath = _config.SslCaCertPath,
             };
             var connection = new Connection(connectionConfig, _loggerFactory);
             await connection.OpenAsync(cancellationToken);
@@ -168,6 +172,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 _config.RequestBufferSize)
             {
                 RequestApiVersionsOnOpen = false,
+                SaslMechanism = _config.SaslMechanism,
+                SaslUsername = _config.SaslUsername,
+                SaslPassword = _config.SaslPassword,
+                SslCaCertPath = _config.SslCaCertPath,
             };
             try
             {
@@ -216,6 +224,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 _config.RequestBufferSize)
             {
                 CheckCrcs = _config.CheckCrcs,
+                SaslMechanism = _config.SaslMechanism,
+                SaslUsername = _config.SaslUsername,
+                SaslPassword = _config.SaslPassword,
+                SslCaCertPath = _config.SslCaCertPath,
             };
         }
         else
@@ -241,6 +253,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 _config.RequestBufferSize)
             {
                 CheckCrcs = _config.CheckCrcs,
+                SaslMechanism = _config.SaslMechanism,
+                SaslUsername = _config.SaslUsername,
+                SaslPassword = _config.SaslPassword,
+                SslCaCertPath = _config.SslCaCertPath,
             };
         }
 
