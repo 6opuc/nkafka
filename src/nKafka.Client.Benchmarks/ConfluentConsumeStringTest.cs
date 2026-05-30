@@ -23,6 +23,8 @@ public class ConfluentConsumeStringTest
             config.SecurityProtocol = SecurityProtocol.SaslSsl;
         }
 
+        config.FetchQueueBackoffMs = 10;
+
         using var consumer = new ConsumerBuilder<Null, string>(config).Build();
         consumer.Subscribe(scenario.TopicName);
 
