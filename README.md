@@ -114,3 +114,5 @@ The `init-benchmark-topics.sh` script creates 6 topics (12 partitions, RF=2) use
 
 ## Links
 - The idea of code generation from kafka message definitions is taken from this interesting project: https://github.com/Fresa/Kafka.Protocol
+
+
