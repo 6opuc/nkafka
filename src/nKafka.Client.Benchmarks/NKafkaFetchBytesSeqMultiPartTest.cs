@@ -39,7 +39,7 @@ public static class NKafkaFetchBytesSeqMultiPartTest
                 [
                     new FetchTopic
                     {
-                        Topic = "test_p12_m1M_s4B",
+                        Topic = scenario.TopicName,
                         TopicId = topicMetadata.TopicId,
                         Partitions = group
                             .Select(x =>
