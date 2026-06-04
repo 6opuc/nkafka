@@ -25,35 +25,35 @@ All benchmarks run against topics with 12 partitions and replication factor 2:
 
 ### Results (12p 40Kx10KB)
 
-Ubuntu 26.04 LTS, AMD RYZEN AI MAX+ 395, .NET 10.0.8
+Ubuntu 26.04 LTS, AMD RYZEN AI MAX+ 395 w/ Radeon 8060S 2.00GHz, .NET 10.0.8, .NET SDK 10.0.300
 
 #### PLAINTEXT
 
 | Method                    | Mean      | Gen0       | Gen1       | Allocated |
 |-------------------------- |----------:|-----------:|-----------:|----------:|
-| ConfluentConsumeBytes     | 302.93 ms | 25000.0000 |          - | 403.78 MB |
-| ConfluentConsumeString    | 297.73 ms | 49500.0000 |  3500.0000 | 794.41 MB |
-| NKafkaFetchBytesSeq1Part  |  79.97 ms |   600.0000 |          - |  11.74 MB |
-| NKafkaFetchBytesSeqNPart  |  56.54 ms |   666.6667 |   111.1111 |  10.64 MB |
-| NKafkaFetchBytesParNPart  |  24.64 ms |   750.0000 |   250.0000 |  12.17 MB |
-| NKafkaFetchStringParNPart |  57.80 ms | 57000.0000 | 20200.0000 | 794.35 MB |
-| NKafkaConsumeString       |  69.31 ms | 50285.7143 |   142.8571 | 794.47 MB |
-| NKafkaConsumeBytes        |  28.18 ms |   733.3333 |   333.3333 |  12.32 MB |
-| NKafkaBatchConsumeBytes   |  28.66 ms |   750.0000 |   343.7500 |  12.32 MB |
+| ConfluentConsumeBytes     | 243.68 ms | 25000.0000 |          - | 403.77 MB |
+| ConfluentConsumeString    | 253.58 ms | 49500.0000 |  3500.0000 | 794.41 MB |
+| NKafkaFetchBytesSeq1Part  |  53.92 ms |   666.6667 |          - |  10.87 MB |
+| NKafkaFetchBytesSeqNPart  |  41.21 ms |   583.3333 |    83.3333 |  10.31 MB |
+| NKafkaFetchBytesParNPart  |  19.06 ms |   718.7500 |   343.7500 |  11.84 MB |
+| NKafkaFetchStringParNPart |  65.18 ms | 61285.7143 |   142.8571 | 794.02 MB |
+| NKafkaConsumeString       |  76.15 ms | 50285.7143 |   142.8571 | 794.18 MB |
+| NKafkaConsumeBytes        |  23.37 ms |   750.0000 |   343.7500 |  12.04 MB |
+| NKafkaBatchConsumeBytes   |  23.96 ms |   733.3333 |   333.3333 |  12.01 MB |
 
 #### SASL_SSL (SCRAM-SHA-512)
 
 | Method                    | Mean      | Gen0       | Gen1       | Allocated |
 |-------------------------- |----------:|-----------:|-----------:|----------:|
-| ConfluentConsumeBytes     | 295.05 ms | 25000.0000 |          - | 403.78 MB |
-| ConfluentConsumeString    | 295.43 ms | 49000.0000 |  3000.0000 | 794.41 MB |
-| NKafkaFetchBytesSeq1Part  | 285.84 ms |          - |          - |  11.81 MB |
-| NKafkaFetchBytesSeqNPart  | 281.06 ms |   500.0000 |          - |  10.71 MB |
-| NKafkaFetchBytesParNPart  | 114.48 ms |   750.0000 |          - |  13.24 MB |
-| NKafkaFetchStringParNPart | 148.18 ms | 52666.6667 | 13000.0000 | 794.75 MB |
-| NKafkaConsumeString       | 153.61 ms | 50000.0000 | 16000.0000 | 794.57 MB |
-| NKafkaConsumeBytes        | 144.00 ms |   750.0000 |   250.0000 |  12.41 MB |
-| NKafkaBatchConsumeBytes   | 141.94 ms |   750.0000 |   250.0000 |  12.41 MB |
+| ConfluentConsumeBytes     | 287.01 ms | 25000.0000 |          - | 403.78 MB |
+| ConfluentConsumeString    | 292.57 ms | 49500.0000 |  3500.0000 | 794.41 MB |
+| NKafkaFetchBytesSeq1Part  | 237.02 ms |   500.0000 |          - |  10.92 MB |
+| NKafkaFetchBytesSeqNPart  | 240.04 ms |   500.0000 |          - |  10.38 MB |
+| NKafkaFetchBytesParNPart  | 106.74 ms |   500.0000 |          - |  11.91 MB |
+| NKafkaFetchStringParNPart | 144.13 ms | 56000.0000 |   500.0000 | 794.09 MB |
+| NKafkaConsumeString       | 391.96 ms | 50000.0000 |  1000.0000 | 794.27 MB |
+| NKafkaConsumeBytes        | 133.76 ms |   750.0000 |   250.0000 |  13.14 MB |
+| NKafkaBatchConsumeBytes   | 134.59 ms |   750.0000 |   250.0000 |  12.10 MB |
 
 See [benchmark.md](benchmark.md) for full results across multiple machines.
 
