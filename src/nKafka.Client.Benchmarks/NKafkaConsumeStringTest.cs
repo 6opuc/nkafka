@@ -16,8 +16,8 @@ public static class NKafkaConsumeStringTest
             BenchmarkHelper.BootstrapServers(protocol),
             scenario.TopicName,
             $"testapp-{DateTime.UtcNow.Date:yyyyMMdd}-{Guid.NewGuid():N}",
-            "test-consumer-group",
-            protocol,
+            $"test-consumer-group-{Guid.NewGuid():N}",
+            $"test-instance-{Guid.NewGuid():N}",
             protocol)
         {
             SslCaCertPath = protocol == "SASL_SSL" ? BenchmarkHelper.GetCACertPath() : null,

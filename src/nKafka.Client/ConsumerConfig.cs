@@ -19,6 +19,7 @@ public class ConsumerConfig
     public TimeSpan MaxWaitTime { get; set; } = TimeSpan.FromSeconds(5);
     public int MaxFetchRetries { get; set; } = 3;
     public TimeSpan FetchRetryBaseDelay { get; set; } = TimeSpan.FromMilliseconds(500);
+    public int FetchPartitionMaxBytes { get; set; } = 1 * 1024 * 1024;
 
     public string? SaslMechanism { get; set; }
     public string? SaslUsername { get; set; }

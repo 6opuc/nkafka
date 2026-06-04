@@ -446,7 +446,7 @@ public class ConnectionTests
                                     FetchOffset = 0, // ???
                                     LastFetchedEpoch = -1, // ???
                                     LogStartOffset = -1, // ???
-                                    PartitionMaxBytes = 512 * 1024, // !!!
+                                    PartitionMaxBytes = 1 * 1024 * 1024,
                                     ReplicaDirectoryId = Guid.Empty, // ???
                                 }
                             ]
@@ -539,7 +539,7 @@ public class ConnectionTests
                                         FetchOffset = offset, // ???
                                         LastFetchedEpoch = -1, // ???
                                         LogStartOffset = -1, // ???
-                                        PartitionMaxBytes = 512 * 1024, // !!!
+                                        PartitionMaxBytes = 1 * 1024 * 1024,
                                         ReplicaDirectoryId = Guid.Empty, // ???
                                     }
                                 ]
@@ -638,7 +638,7 @@ public class ConnectionTests
                                     FetchOffset = 0, // ???
                                     LastFetchedEpoch = -1, // ???
                                     LogStartOffset = -1, // ???
-                                    PartitionMaxBytes = 512 * 1024, // !!!
+                                    PartitionMaxBytes = 1 * 1024 * 1024,
                                     ReplicaDirectoryId = Guid.Empty, // ???
                                 })
                             .ToList(),

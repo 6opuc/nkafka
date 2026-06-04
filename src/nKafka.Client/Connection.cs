@@ -590,6 +590,16 @@ public class Connection : IConnection
         }
     }
 
+    public bool SupportsApiKeyVersion(ApiKey apiKey, short minVersion)
+    {
+        if (_apiVersions.TryGetValue(apiKey, out var maxVersion))
+        {
+            return maxVersion >= minVersion;
+        }
+
+        return false;
+    }
+
     public async ValueTask<IDisposableMessage<TResponse>> SendAsync<TResponse>(
         IRequest<TResponse> request,
         CancellationToken cancellationToken)
