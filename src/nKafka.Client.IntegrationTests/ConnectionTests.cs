@@ -9,12 +9,16 @@ using nKafka.Contracts.MessageDefinitions.LeaveGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
 using nKafka.Contracts.MessageDefinitions.OffsetFetchRequestNested;
 using nKafka.Contracts.MessageDefinitions.SyncGroupRequestNested;
+using System.Collections;
 
 namespace nKafka.Client.IntegrationTests;
 
 public class ConnectionTests
 {
-    private const string SslCaCertPath = "../../../../../../infra/secrets/ca-cert.pem";
+    private static readonly string SslCaCertPath = Path.Combine(
+        TestContext.CurrentContext.TestDirectory,
+        "../../../../../infra/secrets/ca-cert.pem");
+
     private const string SaslMechanism = "SCRAM-SHA-512";
     private const string SaslUsername = "admin";
     private const string SaslPassword = "admin-secret";

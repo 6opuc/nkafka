@@ -1,5 +1,6 @@
 using FluentAssertions;
 using nKafka.Client;
+using System.Collections;
 
 namespace nKafka.Client.IntegrationTests;
 

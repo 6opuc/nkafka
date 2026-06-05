@@ -12,22 +12,21 @@ internal static class BenchmarkHelper
     internal const int PartitionMaxBytes = 1 * 1024 * 1024;
     internal const int ResponseBufferSize = 10 * 512 * 1024;
 
-    internal static ConsumerConfig ConfigureProtocol(this ConsumerConfig config, string protocol)
+    internal static Confluent.Kafka.ConsumerConfig ConfigureProtocol(this Confluent.Kafka.ConsumerConfig config, string protocol)
     {
         if (protocol == "SASL_SSL")
         {
             config.SslCaLocation = CACertPath;
-            config.SaslMechanism = SaslMechanism.ScramSha512;
+            config.SaslMechanism = Confluent.Kafka.SaslMechanism.ScramSha512;
             config.SaslUsername = "admin";
             config.SaslPassword = "admin-secret";
-            config.SecurityProtocol = SecurityProtocol.SaslSsl;
+            config.SecurityProtocol = Confluent.Kafka.SecurityProtocol.SaslSsl;
         }
         config.FetchMaxBytes = FetchMaxBytes;
-        config.PartitionMaxBytes = PartitionMaxBytes;
         return config;
     }
 
-    internal static ConnectionConfig ConfigureProtocol(this ConnectionConfig config, string protocol)
+    internal static nKafka.Client.ConnectionConfig ConfigureProtocol(this nKafka.Client.ConnectionConfig config, string protocol)
     {
         if (protocol == "SASL_SSL")
         {
@@ -40,7 +39,7 @@ internal static class BenchmarkHelper
         return config;
     }
 
-    internal static Client.ConsumerConfig ConfigureProtocol(this Client.ConsumerConfig config, string protocol)
+    internal static nKafka.Client.ConsumerConfig ConfigureProtocol(this nKafka.Client.ConsumerConfig config, string protocol)
     {
         if (protocol == "SASL_SSL")
         {
