@@ -14,39 +14,165 @@ namespace nKafka.Client.IntegrationTests;
 
 public class ConnectionTests
 {
+    private const string SslCaCertPath = "../../../../../../infra/secrets/ca-cert.pem";
+    private const string SaslMechanism = "SCRAM-SHA-512";
+    private const string SaslUsername = "admin";
+    private const string SaslPassword = "admin-secret";
+    private const string SaslBootstrapHost = "localhost";
+    private const int SaslBootstrapPort = 9192;
+
     [SetUp]
     public void Setup()
     {
-    }
-
-    [Test]
-    public async Task ConnectAsyncAndDisposeAsyncShouldNotThrow()
-    {
-        await using var connection = await OpenConnection();
-    }
-
-    private async Task<Connection> OpenConnection()
-    {
-        var config = new ConnectionConfig("PLAINTEXT", "localhost", 9193, "nKafka.Client.IntegrationTests")
+        if (!File.Exists(SslCaCertPath))
         {
-            RequestApiVersionsOnOpen = false,
-        };
-        var connection = new Connection(config, TestLoggerFactory.Instance);
+            Assert.Ignore($"SASL/SSL infrastructure not available: CA cert not found at '{SslCaCertPath}'. Run 'infra/gen-certs.sh' and 'infra/init-cluster.sh' first.");
+        }
+    }
 
-        await connection.OpenAsync(CancellationToken.None);
+    public static IEnumerable OpenableProtocols
+    {
+        get { yield return "PLAINTEXT"; yield return "SASL_SSL"; }
+    }
 
-        return connection;
+    public static IEnumerable VersionedApiTests
+    {
+        get
+        {
+            foreach (var protocol in OpenableProtocols)
+            {
+                foreach (var version in new[] { (short)0, (short)1, (short)2, (short)3, (short)4 })
+                {
+                    yield return new object[] { protocol, version };
+                }
+            }
+        }
+    }
+
+    public static IEnumerable FindCoordinatorVersions
+    {
+        get
+        {
+            foreach (var protocol in OpenableProtocols)
+            {
+                foreach (var version in new[] { (short)0, (short)1, (short)2, (short)3, (short)4, (short)5, (short)6 })
+                {
+                    yield return new object[] { protocol, version };
+                }
+            }
+        }
+    }
+
+    public static IEnumerable MetadataVersions
+    {
+        get
+        {
+            foreach (var protocol in OpenableProtocols)
+            {
+                foreach (var version in new[] { (short)0, (short)1, (short)2, (short)3, (short)4, (short)5, (short)6, (short)7, (short)8, (short)9, (short)10, (short)11, (short)12, (short)13 })
+                {
+                    yield return new object[] { protocol, version };
+                }
+            }
+        }
+    }
+
+    public static IEnumerable JoinGroupVersions
+    {
+        get
+        {
+            foreach (var protocol in OpenableProtocols)
+            {
+                foreach (var version in new[] { (short)0, (short)1, (short)2, (short)3, (short)4, (short)5, (short)6, (short)7, (short)8, (short)9 })
+                {
+                    yield return new object[] { protocol, version };
+                }
+            }
+        }
+    }
+
+    public static IEnumerable LeaveGroupVersions
+    {
+        get
+        {
+            foreach (var protocol in OpenableProtocols)
+            {
+                foreach (var version in new[] { (short)0, (short)1, (short)2, (short)3, (short)4, (short)5 })
+                {
+                    yield return new object[] { protocol, version };
+                }
+            }
+        }
+    }
+
+    public static IEnumerable SyncGroupVersions
+    {
+        get
+        {
+            foreach (var protocol in OpenableProtocols)
+            {
+                foreach (var version in new[] { (short)0, (short)1, (short)2, (short)3, (short)4, (short)5 })
+                {
+                    yield return new object[] { protocol, version };
+                }
+            }
+        }
+    }
+
+    public static IEnumerable HeartbeatVersions
+    {
+        get
+        {
+            foreach (var protocol in OpenableProtocols)
+            {
+                foreach (var version in new[] { (short)0, (short)1, (short)2, (short)3, (short)4 })
+                {
+                    yield return new object[] { protocol, version };
+                }
+            }
+        }
+    }
+
+    public static IEnumerable FetchVersions
+    {
+        get
+        {
+            foreach (var protocol in OpenableProtocols)
+            {
+                foreach (var version in new[] { (short)4, (short)5, (short)6, (short)7, (short)8, (short)9, (short)10, (short)11, (short)12, (short)13, (short)14, (short)15, (short)16, (short)17, (short)18 })
+                {
+                    yield return new object[] { protocol, version };
+                }
+            }
+        }
+    }
+
+    public static IEnumerable OffsetFetchVersions
+    {
+        get
+        {
+            foreach (var protocol in OpenableProtocols)
+            {
+                foreach (var version in new[] { (short)1, (short)2, (short)3, (short)4, (short)5, (short)6, (short)7, (short)8, (short)9, (short)10 })
+                {
+                    yield return new object[] { protocol, version };
+                }
+            }
+        }
     }
 
     [Test]
-    [TestCase(0)]
-    [TestCase(1)]
-    [TestCase(2)]
-    [TestCase(3)]
-    [TestCase(4)]
-    public async Task SendAsync_ApiVersionsRequest_ShouldReturnExpectedResult(short apiVersion)
+    [TestCaseSource(nameof(OpenableProtocols))]
+    public async Task ConnectAsyncAndDisposeAsyncShouldNotThrow(string protocol)
     {
-        await using var connection = await OpenConnection();
+        await using var connection = await OpenConnection(protocol);
+    }
+
+    [Test]
+    [TestCaseSource(nameof(VersionedApiTests))]
+    public async Task SendAsync_ApiVersionsRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
+    {
+        await using var connection = await OpenConnection(protocol);
         var request = new ApiVersionsRequest
         {
             FixedVersion = apiVersion,
@@ -79,23 +205,17 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCase(0)]
-    [TestCase(1)]
-    [TestCase(2)]
-    [TestCase(3)]
-    [TestCase(4)]
-    [TestCase(5)]
-    [TestCase(6)]
-    public async Task SendAsync_FindCoordinatorRequest_ShouldReturnExpectedResult(short apiVersion)
+    [TestCaseSource(nameof(FindCoordinatorVersions))]
+    public async Task SendAsync_FindCoordinatorRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
-        await using var connection = await OpenConnection();
+        await using var connection = await OpenConnection(protocol);
         string consumerGroupId = Guid.NewGuid().ToString();
         var request = new FindCoordinatorRequest
         {
             FixedVersion = apiVersion,
             Key = consumerGroupId,
-            KeyType = 0, // 0 = group, 1 = transaction
-            CoordinatorKeys = [consumerGroupId], // for versions 4+
+            KeyType = 0,
+            CoordinatorKeys = [consumerGroupId],
         };
 
         using var response = await connection.SendAsync(request, CancellationToken.None);
@@ -124,23 +244,10 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCase(0)]
-    [TestCase(1)]
-    [TestCase(2)]
-    [TestCase(3)]
-    [TestCase(4)]
-    [TestCase(5)]
-    [TestCase(6)]
-    [TestCase(7)]
-    [TestCase(8)]
-    [TestCase(9)]
-    [TestCase(10)]
-    [TestCase(11)]
-    [TestCase(12)]
-    [TestCase(13)]
-    public async Task SendAsync_MetadataRequest_ShouldReturnExpectedResult(short apiVersion)
+    [TestCaseSource(nameof(MetadataVersions))]
+    public async Task SendAsync_MetadataRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
-        await using var connection = await OpenConnection();
+        await using var connection = await OpenConnection(protocol);
         var request = new MetadataRequest
         {
             FixedVersion = apiVersion,
@@ -186,20 +293,11 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCase(0)]
-    [TestCase(1)]
-    [TestCase(2)]
-    [TestCase(3)]
-    [TestCase(4)]
-    [TestCase(5)]
-    [TestCase(6)]
-    [TestCase(7)]
-    [TestCase(8)]
-    [TestCase(9)]
-    public async Task SendAsync_JoinGroupRequest_ShouldReturnExpectedResult(short apiVersion)
+    [TestCaseSource(nameof(JoinGroupVersions))]
+    public async Task SendAsync_JoinGroupRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         string consumerGroupId = Guid.NewGuid().ToString();
-        await using var connection = await OpenCoordinatorConnection(consumerGroupId);
+        await using var connection = await OpenCoordinatorConnection(consumerGroupId, protocol);
         using var response = await JoinGroupAsync(connection, apiVersion, consumerGroupId);
 
         response.Message.ErrorCode.Should().Be(0);
@@ -228,10 +326,10 @@ public class ConnectionTests
         var protocolSubscription = new ConsumerProtocolSubscription
         {
             Topics = ["test_p12_m1M_s4B"],
-            UserData = null, // ???
-            OwnedPartitions = null, // ???
-            GenerationId = -1, // ???
-            RackId = null // ???
+            UserData = null,
+            OwnedPartitions = null,
+            GenerationId = -1,
+            RackId = null
         };
         var request = new JoinGroupRequest
         {
@@ -239,7 +337,7 @@ public class ConnectionTests
             GroupId = consumerGroupId,
             SessionTimeoutMs = (int)TimeSpan.FromSeconds(45).TotalMilliseconds,
             RebalanceTimeoutMs = -1,
-            MemberId = string.Empty, // ???
+            MemberId = string.Empty,
             GroupInstanceId = Guid.NewGuid().ToString(),
             ProtocolType = "consumer",
             Protocols = new Dictionary<string, JoinGroupRequestProtocol>
@@ -259,7 +357,6 @@ public class ConnectionTests
 
         if (apiVersion == 4 && response.Message.ErrorCode == (short)ErrorCode.MemberIdRequired)
         {
-            // retry with given member id
             request.MemberId = response.Message.MemberId;
             response.Dispose();
 
@@ -271,16 +368,11 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCase(0)]
-    [TestCase(1)]
-    [TestCase(2)]
-    [TestCase(3)]
-    [TestCase(4)]
-    [TestCase(5)]
-    public async Task SendAsync_LeaveGroupRequest_ShouldReturnExpectedResult(short apiVersion)
+    [TestCaseSource(nameof(LeaveGroupVersions))]
+    public async Task SendAsync_LeaveGroupRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         string consumerGroupId = Guid.NewGuid().ToString();
-        await using var connection = await OpenCoordinatorConnection(consumerGroupId);
+        await using var connection = await OpenCoordinatorConnection(consumerGroupId, protocol);
         using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var request = new LeaveGroupRequest
         {
@@ -305,16 +397,11 @@ public class ConnectionTests
 
 
     [Test]
-    [TestCase(0)]
-    [TestCase(1)]
-    [TestCase(2)]
-    [TestCase(3)]
-    [TestCase(4)]
-    [TestCase(5)]
-    public async Task SendAsync_SyncGroupRequest_ShouldReturnExpectedResult(short apiVersion)
+    [TestCaseSource(nameof(SyncGroupVersions))]
+    public async Task SendAsync_SyncGroupRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         string consumerGroupId = Guid.NewGuid().ToString();
-        await using var connection = await OpenCoordinatorConnection(consumerGroupId);
+        await using var connection = await OpenCoordinatorConnection(consumerGroupId, protocol);
         using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var requestedAssignment = new ConsumerProtocolAssignment
         {
@@ -328,7 +415,7 @@ public class ConnectionTests
                     }
                 }
             },
-            UserData = null, // ???
+            UserData = null,
         };
         var request = new SyncGroupRequest
         {
@@ -336,7 +423,7 @@ public class ConnectionTests
             GroupId = consumerGroupId,
             GenerationId = joinGroupResponse.Message.GenerationId,
             MemberId = joinGroupResponse.Message.MemberId,
-            GroupInstanceId = null, // ???
+            GroupInstanceId = null,
             ProtocolType = "consumer",
             ProtocolName = "nkafka-consumer",
             Assignments =
@@ -357,15 +444,11 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCase(0)]
-    [TestCase(1)]
-    [TestCase(2)]
-    [TestCase(3)]
-    [TestCase(4)]
-    public async Task SendAsync_HeartbeatRequest_ShouldReturnExpectedResult(short apiVersion)
+    [TestCaseSource(nameof(HeartbeatVersions))]
+    public async Task SendAsync_HeartbeatRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         string consumerGroupId = Guid.NewGuid().ToString();
-        await using var connection = await OpenCoordinatorConnection(consumerGroupId);
+        await using var connection = await OpenCoordinatorConnection(consumerGroupId, protocol);
         using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var requestClient = new HeartbeatRequest
         {
@@ -373,7 +456,7 @@ public class ConnectionTests
             GroupId = consumerGroupId,
             GenerationId = joinGroupResponse.Message.GenerationId,
             MemberId = joinGroupResponse.Message.MemberId,
-            GroupInstanceId = null, // ???
+            GroupInstanceId = null,
         };
         using var response = await connection.SendAsync(requestClient, CancellationToken.None);
 
@@ -382,24 +465,10 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCase(4)]
-    [TestCase(5)]
-    [TestCase(6)]
-    [TestCase(7)]
-    [TestCase(8)]
-    [TestCase(9)]
-    [TestCase(10)]
-    [TestCase(11)]
-    [TestCase(12)]
-    [TestCase(13)]
-    [TestCase(14)]
-    [TestCase(15)]
-    [TestCase(16)]
-    [TestCase(17)]
-    [TestCase(18)]
-    public async Task SendAsync_FetchRequest_ShouldReturnExpectedResult(short apiVersion)
+    [TestCaseSource(nameof(FetchVersions))]
+    public async Task SendAsync_FetchRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
-        using var metadata = await RequestMetadata();
+        using var metadata = await RequestMetadata(protocol);
         var topicMetadata = metadata.Message.Topics!["test_p12_m1M_s4B"];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
@@ -407,12 +476,17 @@ public class ConnectionTests
         {
             var broker = metadata.Message.Brokers![group.Key];
             var config = new ConnectionConfig(
-                "PLAINTEXT",
+                protocol,
                 broker.Host!,
                 broker.Port!.Value,
                 "nKafka.Client.IntegrationTests")
             {
                 RequestApiVersionsOnOpen = false,
+                SslCaCertPath = protocol == "SASL_SSL" ? SslCaCertPath : null,
+                SaslMechanism = protocol == "SASL_SSL" ? SaslMechanism : null,
+                SaslUsername = protocol == "SASL_SSL" ? SaslUsername : null,
+                SaslPassword = protocol == "SASL_SSL" ? SaslPassword : null,
+                CheckCrcs = protocol == "SASL_SSL",
             };
             await using var connection = new Connection(config, TestLoggerFactory.Instance);
             await connection.OpenAsync(CancellationToken.None);
@@ -422,15 +496,15 @@ public class ConnectionTests
                 var request = new FetchRequest
                 {
                     FixedVersion = apiVersion,
-                    ClusterId = null, // ???
+                    ClusterId = null,
                     ReplicaId = -1,
-                    ReplicaState = null, // ???
-                    MaxWaitMs = 0, // ???
-                    MinBytes = 0, // ???
+                    ReplicaState = null,
+                    MaxWaitMs = 0,
+                    MinBytes = 0,
                     MaxBytes = 0x7fffffff,
-                    IsolationLevel = 0, // !!!
-                    SessionId = 0, // ???
-                    SessionEpoch = -1, // ???
+                    IsolationLevel = 0,
+                    SessionId = 0,
+                    SessionEpoch = -1,
                     Topics =
                     [
                         new FetchTopic
@@ -442,18 +516,18 @@ public class ConnectionTests
                                 new FetchPartition
                                 {
                                     Partition = partition.PartitionIndex!.Value,
-                                    CurrentLeaderEpoch = -1, // ???
-                                    FetchOffset = 0, // ???
-                                    LastFetchedEpoch = -1, // ???
-                                    LogStartOffset = -1, // ???
+                                    CurrentLeaderEpoch = -1,
+                                    FetchOffset = 0,
+                                    LastFetchedEpoch = -1,
+                                    LogStartOffset = -1,
                                     PartitionMaxBytes = 1 * 1024 * 1024,
-                                    ReplicaDirectoryId = Guid.Empty, // ???
+                                    ReplicaDirectoryId = Guid.Empty,
                                 }
                             ]
                         },
                     ],
-                    ForgottenTopicsData = [], // ???
-                    RackId = string.Empty, // ???
+                    ForgottenTopicsData = [],
+                    RackId = string.Empty,
                 };
                 using var response = await connection.SendAsync(request, CancellationToken.None);
 
@@ -471,24 +545,10 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCase(4)]
-    [TestCase(5)]
-    [TestCase(6)]
-    [TestCase(7)]
-    [TestCase(8)]
-    [TestCase(9)]
-    [TestCase(10)]
-    [TestCase(11)]
-    [TestCase(12)]
-    [TestCase(13)]
-    [TestCase(14)]
-    [TestCase(15)]
-    [TestCase(16)]
-    [TestCase(17)]
-    [TestCase(18)]
-    public async Task SendAsync_FetchRequest_ShouldFetchAllRecords(short apiVersion)
+    [TestCaseSource(nameof(FetchVersions))]
+    public async Task SendAsync_FetchRequest_ShouldFetchAllRecords(string protocol, short apiVersion)
     {
-        using var metadata = await RequestMetadata();
+        using var metadata = await RequestMetadata(protocol);
         var topicMetadata = metadata.Message.Topics!["test_p12_m1M_s4B"];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
@@ -497,12 +557,17 @@ public class ConnectionTests
         {
             var broker = metadata.Message.Brokers![group.Key];
             var config = new ConnectionConfig(
-                "PLAINTEXT",
+                protocol,
                 broker.Host!,
                 broker.Port!.Value,
                 "nKafka.Client.IntegrationTests")
             {
                 RequestApiVersionsOnOpen = false,
+                SslCaCertPath = protocol == "SASL_SSL" ? SslCaCertPath : null,
+                SaslMechanism = protocol == "SASL_SSL" ? SaslMechanism : null,
+                SaslUsername = protocol == "SASL_SSL" ? SaslUsername : null,
+                SaslPassword = protocol == "SASL_SSL" ? SaslPassword : null,
+                CheckCrcs = protocol == "SASL_SSL",
             };
             await using var connection = new Connection(config, NullLoggerFactory.Instance);
             await connection.OpenAsync(CancellationToken.None);
@@ -515,15 +580,15 @@ public class ConnectionTests
                     var request = new FetchRequest
                     {
                         FixedVersion = apiVersion,
-                        ClusterId = null, // ???
+                        ClusterId = null,
                         ReplicaId = -1,
-                        ReplicaState = null, // ???
-                        MaxWaitMs = 0, // ???
-                        MinBytes = 0, // ???
+                        ReplicaState = null,
+                        MaxWaitMs = 0,
+                        MinBytes = 0,
                         MaxBytes = 0x7fffffff,
-                        IsolationLevel = 0, // !!!
-                        SessionId = 0, // ???
-                        SessionEpoch = -1, // ???
+                        IsolationLevel = 0,
+                        SessionId = 0,
+                        SessionEpoch = -1,
                         Topics =
                         [
                             new FetchTopic
@@ -535,18 +600,18 @@ public class ConnectionTests
                                     new FetchPartition
                                     {
                                         Partition = partition.PartitionIndex!.Value,
-                                        CurrentLeaderEpoch = -1, // ???
-                                        FetchOffset = offset, // ???
-                                        LastFetchedEpoch = -1, // ???
-                                        LogStartOffset = -1, // ???
+                                        CurrentLeaderEpoch = -1,
+                                        FetchOffset = offset,
+                                        LastFetchedEpoch = -1,
+                                        LogStartOffset = -1,
                                         PartitionMaxBytes = 1 * 1024 * 1024,
-                                        ReplicaDirectoryId = Guid.Empty, // ???
+                                        ReplicaDirectoryId = Guid.Empty,
                                     }
                                 ]
                             },
                         ],
-                        ForgottenTopicsData = [], // ???
-                        RackId = string.Empty, // ???
+                        ForgottenTopicsData = [],
+                        RackId = string.Empty,
                     };
                     using var response = await connection.SendAsync(request, CancellationToken.None);
 
@@ -573,24 +638,10 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCase(4)]
-    [TestCase(5)]
-    [TestCase(6)]
-    [TestCase(7)]
-    [TestCase(8)]
-    [TestCase(9)]
-    [TestCase(10)]
-    [TestCase(11)]
-    [TestCase(12)]
-    [TestCase(13)]
-    [TestCase(14)]
-    [TestCase(15)]
-    [TestCase(16)]
-    [TestCase(17)]
-    [TestCase(18)]
-    public async Task SendAsync_FetchRequestWithSeveralPartitions_ShouldFetchAllRecords(short apiVersion)
+    [TestCaseSource(nameof(FetchVersions))]
+    public async Task SendAsync_FetchRequestWithSeveralPartitions_ShouldFetchAllRecords(string protocol, short apiVersion)
     {
-        using var metadata = await RequestMetadata();
+        using var metadata = await RequestMetadata(protocol);
         var topicMetadata = metadata.Message.Topics!["test_p12_m1M_s4B"];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
@@ -599,13 +650,17 @@ public class ConnectionTests
         {
             var broker = metadata.Message.Brokers![group.Key];
             var config = new ConnectionConfig(
-                "PLAINTEXT",
+                protocol,
                 broker.Host!,
                 broker.Port!.Value,
                 "nKafka.Client.IntegrationTests",
                 10 * 512 * 1024)
             {
                 RequestApiVersionsOnOpen = false,
+                SslCaCertPath = protocol == "SASL_SSL" ? SslCaCertPath : null,
+                SaslMechanism = protocol == "SASL_SSL" ? SaslMechanism : null,
+                SaslUsername = protocol == "SASL_SSL" ? SaslUsername : null,
+                SaslPassword = protocol == "SASL_SSL" ? SaslPassword : null,
                 CheckCrcs = true,
             };
             await using var connection = new Connection(config, NullLoggerFactory.Instance);
@@ -614,15 +669,15 @@ public class ConnectionTests
             var request = new FetchRequest
             {
                 FixedVersion = apiVersion,
-                ClusterId = null, // ???
+                ClusterId = null,
                 ReplicaId = -1,
-                ReplicaState = null, // ???
-                MaxWaitMs = 0, // ???
-                MinBytes = 0, // ???
+                ReplicaState = null,
+                MaxWaitMs = 0,
+                MinBytes = 0,
                 MaxBytes = 0x7fffffff,
-                IsolationLevel = 0, // !!!
-                SessionId = 0, // ???
-                SessionEpoch = -1, // ???
+                IsolationLevel = 0,
+                SessionId = 0,
+                SessionEpoch = -1,
                 Topics =
                 [
                     new FetchTopic
@@ -634,18 +689,18 @@ public class ConnectionTests
                                 new FetchPartition
                                 {
                                     Partition = x.PartitionIndex!.Value,
-                                    CurrentLeaderEpoch = -1, // ???
-                                    FetchOffset = 0, // ???
-                                    LastFetchedEpoch = -1, // ???
-                                    LogStartOffset = -1, // ???
+                                    CurrentLeaderEpoch = -1,
+                                    FetchOffset = 0,
+                                    LastFetchedEpoch = -1,
+                                    LogStartOffset = -1,
                                     PartitionMaxBytes = 1 * 1024 * 1024,
-                                    ReplicaDirectoryId = Guid.Empty, // ???
+                                    ReplicaDirectoryId = Guid.Empty,
                                 })
                             .ToList(),
                     },
                 ],
-                ForgottenTopicsData = [], // ???
-                RackId = string.Empty, // ???
+                ForgottenTopicsData = [],
+                RackId = string.Empty,
             };
 
             while (true)
@@ -694,20 +749,11 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCase(1)]
-    [TestCase(2)]
-    [TestCase(3)]
-    [TestCase(4)]
-    [TestCase(5)]
-    [TestCase(6)]
-    [TestCase(7)]
-    [TestCase(8)]
-    [TestCase(9)]
-    [TestCase(10)]
-    public async Task SendAsync_OffsetFetchRequest_ShouldReturnExpectedResult(short apiVersion)
+    [TestCaseSource(nameof(OffsetFetchVersions))]
+    public async Task SendAsync_OffsetFetchRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
-        var metadata = await RequestMetadata();
-        await using var connection = await OpenConnection();
+        var metadata = await RequestMetadata(protocol);
+        await using var connection = await OpenConnection(protocol);
         var request = new OffsetFetchRequest
         {
             GroupId = Guid.NewGuid().ToString(),
@@ -743,11 +789,41 @@ public class ConnectionTests
         response.Should().NotBeNull();
     }
 
-    private async Task<Connection> OpenCoordinatorConnection(string groupId)
+    private async Task<Connection> OpenConnection(string protocol)
     {
-        var config = new ConnectionConfig("PLAINTEXT", "localhost", 9193, "nKafka.Client.IntegrationTests")
+        var (host, port) = protocol == "SASL_SSL"
+            ? (SaslBootstrapHost, SaslBootstrapPort)
+            : ("localhost", 9193);
+
+        var config = new ConnectionConfig(protocol, host, port, "nKafka.Client.IntegrationTests")
         {
             RequestApiVersionsOnOpen = false,
+            SslCaCertPath = protocol == "SASL_SSL" ? SslCaCertPath : null,
+            SaslMechanism = protocol == "SASL_SSL" ? SaslMechanism : null,
+            SaslUsername = protocol == "SASL_SSL" ? SaslUsername : null,
+            SaslPassword = protocol == "SASL_SSL" ? SaslPassword : null,
+            CheckCrcs = protocol == "SASL_SSL",
+        };
+        var connection = new Connection(config, TestLoggerFactory.Instance);
+
+        await connection.OpenAsync(CancellationToken.None);
+
+        return connection;
+    }
+
+    private async Task<Connection> OpenCoordinatorConnection(string groupId, string protocol)
+    {
+        var config = new ConnectionConfig(protocol,
+            protocol == "SASL_SSL" ? SaslBootstrapHost : "localhost",
+            protocol == "SASL_SSL" ? SaslBootstrapPort : 9193,
+            "nKafka.Client.IntegrationTests")
+        {
+            RequestApiVersionsOnOpen = false,
+            SslCaCertPath = protocol == "SASL_SSL" ? SslCaCertPath : null,
+            SaslMechanism = protocol == "SASL_SSL" ? SaslMechanism : null,
+            SaslUsername = protocol == "SASL_SSL" ? SaslUsername : null,
+            SaslPassword = protocol == "SASL_SSL" ? SaslPassword : null,
+            CheckCrcs = protocol == "SASL_SSL",
         };
         await using var connection = new Connection(config, TestLoggerFactory.Instance);
         await connection.OpenAsync(CancellationToken.None);
@@ -756,8 +832,8 @@ public class ConnectionTests
         {
             FixedVersion = 4,
             Key = groupId,
-            KeyType = 0, // 0 = group, 1 = transaction
-            CoordinatorKeys = [groupId], // for versions 4+
+            KeyType = 0,
+            CoordinatorKeys = [groupId],
         };
 
         using var response = await connection.SendAsync(request, CancellationToken.None);
@@ -774,12 +850,17 @@ public class ConnectionTests
         }
 
         var coordinatorConfig = new ConnectionConfig(
-            "PLAINTEXT",
+            protocol,
             coordinator.Host!,
             coordinator.Port!.Value,
             "nKafka.Client.IntegrationTests")
         {
             RequestApiVersionsOnOpen = false,
+            SslCaCertPath = protocol == "SASL_SSL" ? SslCaCertPath : null,
+            SaslMechanism = protocol == "SASL_SSL" ? SaslMechanism : null,
+            SaslUsername = protocol == "SASL_SSL" ? SaslUsername : null,
+            SaslPassword = protocol == "SASL_SSL" ? SaslPassword : null,
+            CheckCrcs = protocol == "SASL_SSL",
         };
         var coordinatorConnection = new Connection(coordinatorConfig, TestLoggerFactory.Instance);
         await coordinatorConnection.OpenAsync(CancellationToken.None);
@@ -787,9 +868,9 @@ public class ConnectionTests
         return coordinatorConnection;
     }
 
-    private async Task<IDisposableMessage<MetadataResponse>> RequestMetadata()
+    private async Task<IDisposableMessage<MetadataResponse>> RequestMetadata(string protocol)
     {
-        await using var connection = await OpenConnection();
+        await using var connection = await OpenConnection(protocol);
         var request = new MetadataRequest
         {
             FixedVersion = 12,
@@ -808,5 +889,78 @@ public class ConnectionTests
 
         var response = await connection.SendAsync(request, CancellationToken.None);
         return response;
+    }
+
+    [Test]
+    public async Task SaslHandshake_ShouldReturnSupportedMechanisms()
+    {
+        var config = new ConnectionConfig(
+            "SASL_SSL",
+            SaslBootstrapHost,
+            SaslBootstrapPort,
+            "nKafka.Client.IntegrationTests")
+        {
+            RequestApiVersionsOnOpen = false,
+            SslCaCertPath = SslCaCertPath,
+        };
+
+        await using var connection = new Connection(config, TestLoggerFactory.Instance);
+        await connection.OpenAsync(CancellationToken.None);
+
+        var request = new SaslHandshakeRequest
+        {
+            Mechanism = SaslMechanism,
+        };
+        using var response = await connection.SendAsync(request, CancellationToken.None);
+
+        response.Should().NotBeNull();
+        response.Message.ErrorCode.Should().Be(0);
+        response.Message.Mechanisms.Should().Contain(SaslMechanism);
+    }
+
+    [Test]
+    public async Task ConnectAsync_WrongPassword_ShouldFail()
+    {
+        var config = new ConnectionConfig(
+            "SASL_SSL",
+            SaslBootstrapHost,
+            SaslBootstrapPort,
+            "nKafka.Client.IntegrationTests")
+        {
+            RequestApiVersionsOnOpen = false,
+            SaslMechanism = SaslMechanism,
+            SaslUsername = SaslUsername,
+            SaslPassword = "wrong-password",
+            SslCaCertPath = SslCaCertPath,
+        };
+
+        var connection = new Connection(config, TestLoggerFactory.Instance);
+
+        var act = async () => await connection.OpenAsync(CancellationToken.None);
+        await act.Should().ThrowAsync<Exception>()
+            .WithMessage("*authentication failed*");
+    }
+
+    [Test]
+    public async Task ConnectAsync_UnsupportedMechanism_ShouldFail()
+    {
+        var config = new ConnectionConfig(
+            "SASL_SSL",
+            SaslBootstrapHost,
+            SaslBootstrapPort,
+            "nKafka.Client.IntegrationTests")
+        {
+            RequestApiVersionsOnOpen = false,
+            SaslMechanism = "SCRAM-SHA-1",
+            SaslUsername = SaslUsername,
+            SaslPassword = SaslPassword,
+            SslCaCertPath = SslCaCertPath,
+        };
+
+        var connection = new Connection(config, TestLoggerFactory.Instance);
+
+        var act = async () => await connection.OpenAsync(CancellationToken.None);
+        await act.Should().ThrowAsync<Exception>()
+            .WithMessage("*error code 33*");
     }
 }

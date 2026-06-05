@@ -23,7 +23,8 @@ public static class NKafkaFetchBytesParallelMultiPartTest
                 var broker = metadata.Message.Brokers![group.Key];
                 var config = BenchmarkHelper.CreateConnectionConfig(
                     broker.Host!, broker.Port!.Value, protocol,
-                    responseBufferSize: 10 * 512 * 1024);
+                    BenchmarkHelper.ResponseBufferSize,
+                    BenchmarkHelper.ResponseBufferSize);
                 await using var connection = new Connection(config, NullLoggerFactory.Instance);
                 await connection.OpenAsync(CancellationToken.None);
 
@@ -35,7 +36,7 @@ public static class NKafkaFetchBytesParallelMultiPartTest
                     ReplicaState = null, // ???
                     MaxWaitMs = 0, // ???
                     MinBytes = 0, // ???
-                    MaxBytes = 0x7fffffff,
+                    MaxBytes = BenchmarkHelper.FetchMaxBytes,
                     IsolationLevel = 0, // !!!
                     SessionId = 0, // ???
                     SessionEpoch = -1, // ???
@@ -54,7 +55,7 @@ public static class NKafkaFetchBytesParallelMultiPartTest
                                         FetchOffset = 0, // ???
                                         LastFetchedEpoch = -1, // ???
                                         LogStartOffset = -1, // ???
-                                        PartitionMaxBytes = 1 * 1024 * 1024,
+                                        PartitionMaxBytes = BenchmarkHelper.PartitionMaxBytes,
                                         ReplicaDirectoryId = Guid.Empty, // ???
                                     })
                                 .ToList(),

@@ -13,13 +13,8 @@ public static class NKafkaConsumeBytesTest
             $"test-consumer-group-{Guid.NewGuid():N}",
             $"test-instance-{Guid.NewGuid():N}",
             protocol)
-        {
-            MaxWaitTime = TimeSpan.FromMilliseconds(100),
-            SslCaCertPath = protocol == "SASL_SSL" ? BenchmarkHelper.GetCACertPath() : null,
-            SaslMechanism = protocol == "SASL_SSL" ? "SCRAM-SHA-512" : null,
-            SaslUsername = protocol == "SASL_SSL" ? "admin" : null,
-            SaslPassword = protocol == "SASL_SSL" ? "admin-secret" : null,
-        };
+            .ConfigureProtocol(protocol);
+        consumerConfig.MaxWaitTime = TimeSpan.FromMilliseconds(100);
 
         Consumer<Memory<byte>?>? consumer = null;
         try

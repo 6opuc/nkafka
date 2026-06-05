@@ -35,7 +35,7 @@ public static class NKafkaFetchBytesSeqSinglePartTest
                         ReplicaState = null, // ???
                         MaxWaitMs = 0, // ???
                         MinBytes = 0, // ???
-                        MaxBytes = 0x7fffffff,
+                        MaxBytes = BenchmarkHelper.FetchMaxBytes,
                         IsolationLevel = 0, // !!!
                         SessionId = 0, // ???
                         SessionEpoch = -1, // ???
@@ -54,7 +54,7 @@ public static class NKafkaFetchBytesSeqSinglePartTest
                                         FetchOffset = offset, // ???
                                         LastFetchedEpoch = -1, // ???
                                         LogStartOffset = -1, // ???
-                                        PartitionMaxBytes = 1 * 1024 * 1024,
+                                        PartitionMaxBytes = BenchmarkHelper.PartitionMaxBytes,
                                         ReplicaDirectoryId = Guid.Empty, // ???
                                     }
                                 ]

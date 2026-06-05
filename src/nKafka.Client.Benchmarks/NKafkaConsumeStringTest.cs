@@ -19,12 +19,7 @@ public static class NKafkaConsumeStringTest
             $"test-consumer-group-{Guid.NewGuid():N}",
             $"test-instance-{Guid.NewGuid():N}",
             protocol)
-        {
-            SslCaCertPath = protocol == "SASL_SSL" ? BenchmarkHelper.GetCACertPath() : null,
-            SaslMechanism = protocol == "SASL_SSL" ? "SCRAM-SHA-512" : null,
-            SaslUsername = protocol == "SASL_SSL" ? "admin" : null,
-            SaslPassword = protocol == "SASL_SSL" ? "admin-secret" : null,
-        };
+            .ConfigureProtocol(protocol);
         
         await using var consumer = new Consumer<string>(
             consumerConfig,

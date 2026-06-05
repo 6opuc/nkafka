@@ -1,30 +1,80 @@
+using Confluent.Kafka;
+using Microsoft.Extensions.Logging.Abstractions;
+using nKafka.Contracts;
+
 namespace nKafka.Client.Benchmarks;
 
 internal static class BenchmarkHelper
 {
     internal static readonly string CACertPath = ResolvePath();
 
-    internal static string GetCACertPath() => CACertPath;
+    internal const int FetchMaxBytes = 100 * 1024 * 1024;
+    internal const int PartitionMaxBytes = 1 * 1024 * 1024;
+    internal const int ResponseBufferSize = 10 * 512 * 1024;
+
+    internal static ConsumerConfig ConfigureProtocol(this ConsumerConfig config, string protocol)
+    {
+        if (protocol == "SASL_SSL")
+        {
+            config.SslCaLocation = CACertPath;
+            config.SaslMechanism = SaslMechanism.ScramSha512;
+            config.SaslUsername = "admin";
+            config.SaslPassword = "admin-secret";
+            config.SecurityProtocol = SecurityProtocol.SaslSsl;
+        }
+        config.FetchMaxBytes = FetchMaxBytes;
+        config.PartitionMaxBytes = PartitionMaxBytes;
+        return config;
+    }
+
+    internal static ConnectionConfig ConfigureProtocol(this ConnectionConfig config, string protocol)
+    {
+        if (protocol == "SASL_SSL")
+        {
+            config.SslCaCertPath = CACertPath;
+            config.SaslMechanism = "SCRAM-SHA-512";
+            config.SaslUsername = "admin";
+            config.SaslPassword = "admin-secret";
+            config.CheckCrcs = false;
+        }
+        return config;
+    }
+
+    internal static Client.ConsumerConfig ConfigureProtocol(this Client.ConsumerConfig config, string protocol)
+    {
+        if (protocol == "SASL_SSL")
+        {
+            config.SslCaCertPath = CACertPath;
+            config.SaslMechanism = "SCRAM-SHA-512";
+            config.SaslUsername = "admin";
+            config.SaslPassword = "admin-secret";
+        }
+        return config;
+    }
+
+    internal static async Task<Connection> OpenConnectionAsync(string protocol)
+    {
+        var config = new ConnectionConfig(
+            protocol,
+            "localhost",
+            BootstrapPort(protocol),
+            "nKafka.Client.Benchmarks");
+        var connection = new Connection(config, NullLoggerFactory.Instance);
+        await connection.OpenAsync(CancellationToken.None);
+        return connection;
+    }
 
     internal static ConnectionConfig CreateConnectionConfig(
         string host, int port, string protocol,
-        int responseBufferSize = 512 * 1024,
-        int requestBufferSize = 512 * 1024)
+        int responseBufferSize,
+        int requestBufferSize)
     {
         var config = new ConnectionConfig(
             protocol, host, port, "nKafka.Client.Benchmarks",
             responseBufferSize, requestBufferSize)
         {
             RequestApiVersionsOnOpen = false,
-        };
-        if (protocol == "SASL_SSL")
-        {
-            config.SslCaCertPath = GetCACertPath();
-            config.SaslMechanism = "SCRAM-SHA-512";
-            config.SaslUsername = "admin";
-            config.SaslPassword = "admin-secret";
-            config.CheckCrcs = false;
-        }
+        }.ConfigureProtocol(protocol);
         return config;
     }
 

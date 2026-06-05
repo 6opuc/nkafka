@@ -12,16 +12,7 @@ public class ConfluentConsumeStringTest
             GroupId = Guid.NewGuid().ToString(),
             AutoOffsetReset = AutoOffsetReset.Earliest,
             CheckCrcs = false,
-        };
-
-        if (protocol == "SASL_SSL")
-        {
-            config.SslCaLocation = BenchmarkHelper.GetCACertPath();
-            config.SaslMechanism = SaslMechanism.ScramSha512;
-            config.SaslUsername = "admin";
-            config.SaslPassword = "admin-secret";
-            config.SecurityProtocol = SecurityProtocol.SaslSsl;
-        }
+        }.ConfigureProtocol(protocol);
 
         config.FetchQueueBackoffMs = 10;
 
