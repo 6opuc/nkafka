@@ -12,9 +12,9 @@ public static class NKafkaConsumeBytesTest
             $"testapp-{DateTime.UtcNow.Date:yyyyMMdd}-{Guid.NewGuid():N}",
             $"test-consumer-group-{Guid.NewGuid():N}",
             $"test-instance-{Guid.NewGuid():N}",
-            protocol)
+            protocol,
+            MaxWaitTime: TimeSpan.FromMilliseconds(100))
             .ConfigureProtocol(protocol);
-        consumerConfig.MaxWaitTime = TimeSpan.FromMilliseconds(100);
 
         Consumer<Memory<byte>?>? consumer = null;
         try

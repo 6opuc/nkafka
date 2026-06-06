@@ -110,9 +110,9 @@ public class Connection : IConnection
         _logger.LogInformation("Starting TLS handshake.");
 
         X509Certificate2? caCert = null;
-        if (_config.SslCaCertPath != null)
+        if (_config.Ssl?.SslCaCertPath is string certPath)
         {
-            caCert = X509CertificateLoader.LoadCertificateFromFile(_config.SslCaCertPath);
+            caCert = X509CertificateLoader.LoadCertificateFromFile(certPath);
         }
 
         _sslStream = new SslStream(
@@ -157,7 +157,7 @@ public class Connection : IConnection
 
     private async ValueTask AuthenticateSaslAsync(CancellationToken cancellationToken)
     {
-        var mechanism = _config.SaslMechanism;
+        var mechanism = _config.Ssl?.SaslMechanism;
         if (string.IsNullOrEmpty(mechanism))
         {
             return;
@@ -207,8 +207,8 @@ public class Connection : IConnection
             throw new NotSupportedException($"SASL mechanism {mechanism} is not supported");
 
         var scramClient = new ScramClient(
-            _config.SaslUsername!,
-            _config.SaslPassword!,
+            _config.Ssl!.SaslUsername,
+            _config.Ssl!.SaslPassword,
             hashAlgorithm);
 
         // Round 1: Client-First → Server-First

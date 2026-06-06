@@ -26,27 +26,20 @@ internal static class BenchmarkHelper
         return config;
     }
 
-    internal static nKafka.Client.ConnectionConfig ConfigureProtocol(this nKafka.Client.ConnectionConfig config, string protocol)
+    internal static ConnectionConfig ConfigureProtocol(this ConnectionConfig config, string protocol)
     {
         if (protocol == "SASL_SSL")
         {
-            config.SslCaCertPath = CACertPath;
-            config.SaslMechanism = "SCRAM-SHA-512";
-            config.SaslUsername = "admin";
-            config.SaslPassword = "admin-secret";
-            config.CheckCrcs = false;
+            return config with { Ssl = new SslConfig("SCRAM-SHA-512", "admin", "admin-secret", CACertPath), CheckCrcs = false };
         }
         return config;
     }
 
-    internal static nKafka.Client.ConsumerConfig ConfigureProtocol(this nKafka.Client.ConsumerConfig config, string protocol)
+    internal static ConsumerConfig ConfigureProtocol(this ConsumerConfig config, string protocol)
     {
         if (protocol == "SASL_SSL")
         {
-            config.SslCaCertPath = CACertPath;
-            config.SaslMechanism = "SCRAM-SHA-512";
-            config.SaslUsername = "admin";
-            config.SaslPassword = "admin-secret";
+            return config with { Ssl = new SslConfig("SCRAM-SHA-512", "admin", "admin-secret", CACertPath) };
         }
         return config;
     }
@@ -70,11 +63,8 @@ internal static class BenchmarkHelper
     {
         var config = new ConnectionConfig(
             protocol, host, port, "nKafka.Client.Benchmarks",
-            responseBufferSize, requestBufferSize)
-        {
-            RequestApiVersionsOnOpen = false,
-        }.ConfigureProtocol(protocol);
-        return config;
+            responseBufferSize, requestBufferSize);
+        return config.ConfigureProtocol(protocol);
     }
 
     internal static int BootstrapPort(string protocol) =>

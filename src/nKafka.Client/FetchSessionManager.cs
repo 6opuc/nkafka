@@ -84,7 +84,7 @@ public class FetchSessionManager
         return request;
     }
 
-    public void HandleResponse(FetchResponse response)
+    public void OnResponseReceived(FetchResponse response)
     {
         if (response.SessionId == null) return;
 
@@ -111,7 +111,7 @@ public class FetchSessionManager
         }
     }
 
-    public void AddPartitions(IEnumerable<FetchTopic> topics)
+    public void AddTopicsToSession(IEnumerable<FetchTopic> topics)
     {
         if (!_useSessions) return;
 
@@ -142,7 +142,7 @@ public class FetchSessionManager
         }
     }
 
-    public void RemovePartitions(IEnumerable<FetchTopic> topics)
+    public void RemoveTopicsFromSession(IEnumerable<FetchTopic> topics)
     {
         if (!_useSessions) return;
 

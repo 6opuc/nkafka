@@ -171,14 +171,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 broker.Port!.Value,
                 _config.ClientId,
                 _config.ResponseBufferSize,
-                _config.RequestBufferSize)
-            {
-                CheckCrcs = _config.CheckCrcs,
-                SaslMechanism = _config.SaslMechanism,
-                SaslUsername = _config.SaslUsername,
-                SaslPassword = _config.SaslPassword,
-                SslCaCertPath = _config.SslCaCertPath,
-            };
+                _config.RequestBufferSize,
+                _config.Ssl is not null ? new SslConfig(_config.Ssl.SaslMechanism, _config.Ssl.SaslUsername, _config.Ssl.SaslPassword, _config.Ssl.SslCaCertPath) : null,
+                _config.CheckCrcs);
             var connection = new Connection(connectionConfig, _loggerFactory);
             await connection.OpenAsync(cancellationToken);
             _connections[broker.NodeId!.Value] = connection;
@@ -195,18 +190,12 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         foreach (string connectionString in connectionStrings)
         {
-            var connectionConfig = new ConnectionConfig(
+            var connectionConfig = ConnectionConfig.FromConnectionString(
                 connectionString,
                 _config.ClientId,
-                _config.RequestBufferSize,
+                _config.ResponseBufferSize,
                 _config.RequestBufferSize)
-            {
-                RequestApiVersionsOnOpen = false,
-                SaslMechanism = _config.SaslMechanism,
-                SaslUsername = _config.SaslUsername,
-                SaslPassword = _config.SaslPassword,
-                SslCaCertPath = _config.SslCaCertPath,
-            };
+                with { Ssl = _config.Ssl is not null ? new SslConfig(_config.Ssl.SaslMechanism, _config.Ssl.SaslUsername, _config.Ssl.SaslPassword, _config.Ssl.SslCaCertPath) : null, RequestApiVersionsOnOpen = false };
             try
             {
                 var connection = new Connection(connectionConfig, _loggerFactory);
@@ -245,20 +234,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 throw new ProtocolException($"Failed to find group coordinator. Error code {response.Message.ErrorCode}");
             }
 
-            coordinatorConnectionConfig = new ConnectionConfig(
+coordinatorConnectionConfig = new ConnectionConfig(
                 _config.Protocol,
                 response.Message.Host!,
                 response.Message.Port!.Value,
                 _config.ClientId,
                 _config.ResponseBufferSize,
-                _config.RequestBufferSize)
-            {
-                CheckCrcs = _config.CheckCrcs,
-                SaslMechanism = _config.SaslMechanism,
-                SaslUsername = _config.SaslUsername,
-                SaslPassword = _config.SaslPassword,
-                SslCaCertPath = _config.SslCaCertPath,
-            };
+                _config.RequestBufferSize,
+                _config.Ssl is not null ? new SslConfig(_config.Ssl.SaslMechanism, _config.Ssl.SaslUsername, _config.Ssl.SaslPassword, _config.Ssl.SslCaCertPath) : null,
+                _config.CheckCrcs);
         }
         else
         {
@@ -280,14 +264,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 coordinator.Port!.Value,
                 _config.ClientId,
                 _config.ResponseBufferSize,
-                _config.RequestBufferSize)
-            {
-                CheckCrcs = _config.CheckCrcs,
-                SaslMechanism = _config.SaslMechanism,
-                SaslUsername = _config.SaslUsername,
-                SaslPassword = _config.SaslPassword,
-                SslCaCertPath = _config.SslCaCertPath,
-            };
+                _config.RequestBufferSize,
+                _config.Ssl is not null ? new SslConfig(_config.Ssl.SaslMechanism, _config.Ssl.SaslUsername, _config.Ssl.SaslPassword, _config.Ssl.SslCaCertPath) : null,
+                _config.CheckCrcs);
         }
 
         var coordinatorConnection = new Connection(coordinatorConnectionConfig, _loggerFactory);
@@ -667,7 +646,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
                     if (response.Message.SessionId != null)
                     {
-                        sessionManager.HandleResponse(response.Message);
+                        sessionManager.OnResponseReceived(response.Message);
                     }
 
                    if (response.Message.ErrorCode != 0)

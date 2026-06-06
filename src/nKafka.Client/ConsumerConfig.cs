@@ -1,55 +1,20 @@
 namespace nKafka.Client;
 
-public class ConsumerConfig
-{
-    public string BootstrapServers { get; }
-    public string Topics { get; }
-    public string ClientId { get; }
-    public string GroupId { get; }
-    public string InstanceId { get; }
-    public string Protocol { get; }
-    public int ResponseBufferSize { get; }
-    public int RequestBufferSize { get; }
-    public int SessionTimeoutMs { get; }
-    public int HeartbeatIntervalMs { get; }
-
-    public int MaxPollIntervalMs { get; }
-
-    public bool CheckCrcs { get; set; } = false;
-    public TimeSpan MaxWaitTime { get; set; } = TimeSpan.FromSeconds(5);
-    public int MaxFetchRetries { get; set; } = 3;
-    public TimeSpan FetchRetryBaseDelay { get; set; } = TimeSpan.FromMilliseconds(500);
-    public int FetchPartitionMaxBytes { get; set; } = 1 * 1024 * 1024;
-
-    public string? SaslMechanism { get; set; }
-    public string? SaslUsername { get; set; }
-    public string? SaslPassword { get; set; }
-    public string? SslCaCertPath { get; set; }
-
-
-    public ConsumerConfig(
-        string bootstrapServers,
-        string topics,
-        string clientId,
-        string groupId,
-        string instanceId,
-        string protocol,
-        int responseBufferSize = 512 * 1024,
-        int requestBufferSize = 512 * 1024,
-        int sessionTimeoutMs = 45_000,
-        int heartbeatIntervalMs = 45_000 / 3,
-        int maxPollIntervalMs = 30_000)
-    {
-        BootstrapServers = bootstrapServers;
-        Topics = topics;
-        ClientId = clientId;
-        GroupId = groupId;
-        InstanceId = instanceId;
-        Protocol = protocol;
-        RequestBufferSize = requestBufferSize;
-        ResponseBufferSize = responseBufferSize;
-        SessionTimeoutMs = sessionTimeoutMs;
-        HeartbeatIntervalMs = heartbeatIntervalMs;
-        MaxPollIntervalMs = maxPollIntervalMs;
-    }
-}
+public sealed record ConsumerConfig(
+    string BootstrapServers,
+    string Topics,
+    string ClientId,
+    string GroupId,
+    string InstanceId,
+    string Protocol,
+    int ResponseBufferSize = 512 * 1024,
+    int RequestBufferSize = 512 * 1024,
+    int SessionTimeoutMs = 45_000,
+    int HeartbeatIntervalMs = 15_000,
+    int MaxPollIntervalMs = 30_000,
+    bool CheckCrcs = false,
+    TimeSpan MaxWaitTime = default,
+    int MaxFetchRetries = 3,
+    TimeSpan FetchRetryBaseDelay = default,
+    int FetchPartitionMaxBytes = 1 * 1024 * 1024,
+    SslConfig? Ssl = null);

@@ -100,14 +100,9 @@ public class ConsumerTests
             clientId,
             consumerGroup,
             instanceId,
-            protocol)
-        {
-            MaxWaitTime = TimeSpan.FromSeconds(1),
-            SslCaCertPath = protocol == "SASL_SSL" ? SslCaCertPath : null,
-            SaslMechanism = protocol == "SASL_SSL" ? SaslMechanism : null,
-            SaslUsername = protocol == "SASL_SSL" ? SaslUsername : null,
-            SaslPassword = protocol == "SASL_SSL" ? SaslPassword : null,
-        };
+            protocol,
+            MaxWaitTime: TimeSpan.FromSeconds(1),
+            Ssl: protocol == "SASL_SSL" ? new SslConfig(SaslMechanism, SaslUsername, SaslPassword, SslCaCertPath) : null);
 
         var offsetStorage = new FixedOffsetStorage(OffsetPastEndOfTopic);
         var deserializer = new DummyDeserializer();
@@ -126,14 +121,9 @@ public class ConsumerTests
             $"sasl-fetch-session-test-{Guid.NewGuid()}",
             $"sasl-fetch-session-group-{Guid.NewGuid()}",
             $"sasl-fetch-session-instance-{Guid.NewGuid()}",
-            "SASL_SSL")
-        {
-            MaxWaitTime = TimeSpan.FromSeconds(2),
-            SslCaCertPath = SslCaCertPath,
-            SaslMechanism = SaslMechanism,
-            SaslUsername = SaslUsername,
-            SaslPassword = SaslPassword,
-        };
+            "SASL_SSL",
+            MaxWaitTime: TimeSpan.FromSeconds(2),
+            Ssl: new SslConfig(SaslMechanism, SaslUsername, SaslPassword, SslCaCertPath));
 
         var offsetStorage = new FixedOffsetStorage(0);
         var deserializer = new DummyDeserializer();
@@ -175,14 +165,9 @@ public class ConsumerTests
             $"sasl-stats-test-{Guid.NewGuid()}",
             $"sasl-stats-group-{Guid.NewGuid()}",
             $"sasl-stats-instance-{Guid.NewGuid()}",
-            "SASL_SSL")
-        {
-            MaxWaitTime = TimeSpan.FromSeconds(2),
-            SslCaCertPath = SslCaCertPath,
-            SaslMechanism = SaslMechanism,
-            SaslUsername = SaslUsername,
-            SaslPassword = SaslPassword,
-        };
+            "SASL_SSL",
+            MaxWaitTime: TimeSpan.FromSeconds(2),
+            Ssl: new SslConfig(SaslMechanism, SaslUsername, SaslPassword, SslCaCertPath));
 
         var offsetStorage = new FixedOffsetStorage(0);
         var deserializer = new DummyDeserializer();

@@ -7,6 +7,8 @@ public class ScramClient
 {
     private const string ClientKeyConst = "Client Key";
     private const string ServerKeyConst = "Server Key";
+    private static readonly byte[] ClientKeyBytes = Encoding.ASCII.GetBytes(ClientKeyConst);
+    private static readonly byte[] ServerKeyBytes = Encoding.ASCII.GetBytes(ServerKeyConst);
 
     private readonly string _username;
     private readonly string _password;
@@ -57,9 +59,9 @@ public class ScramClient
 
         _saltedPassword = PBKDF2(_password, salt, iterations, hashSize);
 
-        var clientKey = HMAC(_saltedPassword, ClientKeyConst);
+        var clientKey = HMAC(_saltedPassword, ClientKeyBytes);
         var storedKey = Hash(clientKey);
-        var serverKey = HMAC(_saltedPassword, ServerKeyConst);
+        var serverKey = HMAC(_saltedPassword, ServerKeyBytes);
 
         _clientFinalMessageWithoutProof = $"c=biws,r={serverNonce}";
         var authMessage = $"{_clientFirstMessageBare},{_serverFirstMessage},{_clientFinalMessageWithoutProof}";
@@ -89,7 +91,7 @@ public class ScramClient
         var expectedSignature = Convert.FromBase64String(serverFinalMessage[2..]);
 
         var authMessage = $"{_clientFirstMessageBare},{_serverFirstMessage},{_clientFinalMessageWithoutProof}";
-        var serverKey = HMAC(_saltedPassword!, ServerKeyConst);
+        var serverKey = HMAC(_saltedPassword!, ServerKeyBytes);
         var serverSignature = HMAC(serverKey, authMessage);
 
         if (!ConstantTimeEquals(expectedSignature, serverSignature))
@@ -146,6 +148,11 @@ public class ScramClient
     private static byte[] HMAC(byte[] key, string data)
     {
         return HMACSHA512.HashData(key, Encoding.ASCII.GetBytes(data));
+    }
+
+    private static byte[] HMAC(byte[] key, byte[] data)
+    {
+        return HMACSHA512.HashData(key, data);
     }
 
     private static byte[] Hash(byte[] data)

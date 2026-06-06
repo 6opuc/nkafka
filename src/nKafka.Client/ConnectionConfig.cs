@@ -2,42 +2,27 @@ using System.Text.RegularExpressions;
 
 namespace nKafka.Client;
 
-public class ConnectionConfig
+public sealed record SslConfig(
+    string? SaslMechanism,
+    string? SaslUsername,
+    string? SaslPassword,
+    string? SslCaCertPath);
+
+public sealed record ConnectionConfig(
+    string Protocol,
+    string Host,
+    int Port,
+    string ClientId,
+    int ResponseBufferSize = 512 * 1024,
+    int RequestBufferSize = 512 * 1024,
+    SslConfig? Ssl = null,
+    bool CheckCrcs = false,
+    bool RequestApiVersionsOnOpen = true)
 {
-    public string Protocol { get; }
-    public string Host { get; }
-    public int Port { get; }
-    public string ClientId { get; }
-    public int ResponseBufferSize { get; }
-    public int RequestBufferSize { get; }
-
-    public bool CheckCrcs { get; set; } = false;
-    public bool RequestApiVersionsOnOpen { get; set; } = true;
-
-    public string? SaslMechanism { get; set; }
-    public string? SaslUsername { get; set; }
-    public string? SaslPassword { get; set; }
-    public string? SslCaCertPath { get; set; }
-
-    public ConnectionConfig(
-        string protocol,
-        string host,
-        int port,
-        string clientId,
-        int responseBufferSize = 512 * 1024,
-        int requestBufferSize = 512 * 1024)
-    {
-        Protocol = protocol;
-        Host = host;
-        Port = port;
-        ClientId = clientId;
-        ResponseBufferSize = responseBufferSize;
-        RequestBufferSize = requestBufferSize;
-    }
-
     private static readonly Regex _connectionStringRegex = new(
         @"^(?<proto>\S+)\:\/\/(?<host>\S+)\:(?<port>\S+)$", RegexOptions.Compiled);
-    public ConnectionConfig(
+
+    public static ConnectionConfig FromConnectionString(
         string connectionString,
         string clientId,
         int responseBufferSize = 512 * 1024,
@@ -48,15 +33,16 @@ public class ConnectionConfig
         {
             throw new ArgumentException($"Invalid connection string '{connectionString}'");
         }
-        Protocol = match.Groups["proto"].Value;
-        Host = match.Groups["host"].Value;
-        if (!int.TryParse(match.Groups["port"].Value, out int port))
+        if (!int.TryParse(match.Groups["port"].Value, out var port))
         {
             throw new ArgumentException($"Invalid port '{match.Groups["port"].Value}'");
         }
-        Port = port;
-        ClientId = clientId;
-        ResponseBufferSize = responseBufferSize;
-        RequestBufferSize = requestBufferSize;
+        return new ConnectionConfig(
+            match.Groups["proto"].Value,
+            match.Groups["host"].Value,
+            port,
+            clientId,
+            responseBufferSize,
+            requestBufferSize);
     }
 }
