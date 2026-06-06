@@ -766,16 +766,17 @@ var coordinatorConfig = new ConnectionConfig(
         return response;
     }
 
-    [Test]
+   [Test]
     public async Task SaslHandshake_ShouldReturnSupportedMechanisms()
     {
-var config = new ConnectionConfig(
-             "SASL_SSL",
-             SaslBootstrapHost,
-             SaslBootstrapPort,
-             "nKafka.Client.IntegrationTests",
-             Ssl: new SslConfig(SaslMechanism, SaslUsername, SaslPassword, SslCaCertPath),
-             RequestApiVersionsOnOpen: false);
+ var config = new ConnectionConfig(
+              "SASL_SSL",
+              SaslBootstrapHost,
+              SaslBootstrapPort,
+              "nKafka.Client.IntegrationTests",
+              Ssl: new SslConfig(SaslMechanism, SaslUsername, SaslPassword, SslCaCertPath),
+              RequestApiVersionsOnOpen: false,
+              SkipSaslAuthOnOpen: true);
 
         await using var connection = new Connection(config, TestLoggerFactory.Instance);
         await connection.OpenAsync(CancellationToken.None);

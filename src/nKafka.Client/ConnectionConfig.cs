@@ -17,7 +17,8 @@ public sealed record ConnectionConfig(
     int RequestBufferSize = 512 * 1024,
     SslConfig? Ssl = null,
     bool CheckCrcs = false,
-    bool RequestApiVersionsOnOpen = true)
+    bool RequestApiVersionsOnOpen = true,
+    bool SkipSaslAuthOnOpen = false)
 {
     private static readonly Regex _connectionStringRegex = new(
         @"^(?<proto>\S+)\:\/\/(?<host>\S+)\:(?<port>\S+)$", RegexOptions.Compiled);

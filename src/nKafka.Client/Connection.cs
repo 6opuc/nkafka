@@ -62,7 +62,10 @@ public class Connection : IConnection
         using var _ = BeginDefaultLoggingScope();
         await OpenSocketAsync(cancellationToken);
         await AuthenticateTlsAsync(cancellationToken);
-        await AuthenticateSaslAsync(cancellationToken);
+        if (!_config.SkipSaslAuthOnOpen)
+        {
+            await AuthenticateSaslAsync(cancellationToken);
+        }
         StartReceiving();
         await RequestApiVersionsAsync(cancellationToken);
     }
