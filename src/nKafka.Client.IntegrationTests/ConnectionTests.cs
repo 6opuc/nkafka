@@ -34,136 +34,17 @@ public class ConnectionTests
         }
     }
 
-    public static IEnumerable OpenableProtocols
-    {
-        get { yield return "PLAINTEXT"; yield return "SASL_SSL"; }
-    }
+    public static IEnumerable OpenableProtocols => KafkaTestCases.ProtocolVersions;
 
-    public static IEnumerable VersionedApiTests
-    {
-        get
-        {
-            foreach (var protocol in OpenableProtocols)
-            {
-                foreach (var version in new[] { (short)0, (short)1, (short)2, (short)3, (short)4 })
-                {
-                    yield return new object[] { protocol, version };
-                }
-            }
-        }
-    }
-
-    public static IEnumerable FindCoordinatorVersions
-    {
-        get
-        {
-            foreach (var protocol in OpenableProtocols)
-            {
-                foreach (var version in new[] { (short)0, (short)1, (short)2, (short)3, (short)4, (short)5, (short)6 })
-                {
-                    yield return new object[] { protocol, version };
-                }
-            }
-        }
-    }
-
-    public static IEnumerable MetadataVersions
-    {
-        get
-        {
-            foreach (var protocol in OpenableProtocols)
-            {
-                foreach (var version in new[] { (short)0, (short)1, (short)2, (short)3, (short)4, (short)5, (short)6, (short)7, (short)8, (short)9, (short)10, (short)11, (short)12, (short)13 })
-                {
-                    yield return new object[] { protocol, version };
-                }
-            }
-        }
-    }
-
-    public static IEnumerable JoinGroupVersions
-    {
-        get
-        {
-            foreach (var protocol in OpenableProtocols)
-            {
-                foreach (var version in new[] { (short)0, (short)1, (short)2, (short)3, (short)4, (short)5, (short)6, (short)7, (short)8, (short)9 })
-                {
-                    yield return new object[] { protocol, version };
-                }
-            }
-        }
-    }
-
-    public static IEnumerable LeaveGroupVersions
-    {
-        get
-        {
-            foreach (var protocol in OpenableProtocols)
-            {
-                foreach (var version in new[] { (short)0, (short)1, (short)2, (short)3, (short)4, (short)5 })
-                {
-                    yield return new object[] { protocol, version };
-                }
-            }
-        }
-    }
-
-    public static IEnumerable SyncGroupVersions
-    {
-        get
-        {
-            foreach (var protocol in OpenableProtocols)
-            {
-                foreach (var version in new[] { (short)0, (short)1, (short)2, (short)3, (short)4, (short)5 })
-                {
-                    yield return new object[] { protocol, version };
-                }
-            }
-        }
-    }
-
-    public static IEnumerable HeartbeatVersions
-    {
-        get
-        {
-            foreach (var protocol in OpenableProtocols)
-            {
-                foreach (var version in new[] { (short)0, (short)1, (short)2, (short)3, (short)4 })
-                {
-                    yield return new object[] { protocol, version };
-                }
-            }
-        }
-    }
-
-    public static IEnumerable FetchVersions
-    {
-        get
-        {
-            foreach (var protocol in OpenableProtocols)
-            {
-                foreach (var version in new[] { (short)4, (short)5, (short)6, (short)7, (short)8, (short)9, (short)10, (short)11, (short)12, (short)13, (short)14, (short)15, (short)16, (short)17, (short)18 })
-                {
-                    yield return new object[] { protocol, version };
-                }
-            }
-        }
-    }
-
-    public static IEnumerable OffsetFetchVersions
-    {
-        get
-        {
-            foreach (var protocol in OpenableProtocols)
-            {
-                foreach (var version in new[] { (short)1, (short)2, (short)3, (short)4, (short)5, (short)6, (short)7, (short)8, (short)9, (short)10 })
-                {
-                    yield return new object[] { protocol, version };
-                }
-            }
-        }
-    }
+    public static IEnumerable VersionedApiTests => KafkaTestCases.GetTestCases<ApiVersionsRequest>();
+    public static IEnumerable FindCoordinatorVersions => KafkaTestCases.GetTestCases<FindCoordinatorRequest>();
+    public static IEnumerable MetadataVersions => KafkaTestCases.GetTestCases<MetadataRequest>();
+    public static IEnumerable JoinGroupVersions => KafkaTestCases.GetTestCases<JoinGroupRequest>();
+    public static IEnumerable LeaveGroupVersions => KafkaTestCases.GetTestCases<LeaveGroupRequest>();
+    public static IEnumerable SyncGroupVersions => KafkaTestCases.GetTestCases<SyncGroupRequest>();
+    public static IEnumerable HeartbeatVersions => KafkaTestCases.GetTestCases<HeartbeatRequest>();
+    public static IEnumerable FetchVersions => KafkaTestCases.GetTestCases<FetchRequest>();
+    public static IEnumerable OffsetFetchVersions => KafkaTestCases.GetTestCases<OffsetFetchRequest>();
 
     [Test]
     [TestCaseSource(nameof(OpenableProtocols))]

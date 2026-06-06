@@ -8,6 +8,7 @@ public interface IRequest
 {
     ApiKey ApiKey { get; }
     short? FixedVersion { get; set; }
+    VersionRange ValidVersions { get; }
     VersionRange FlexibleVersions { get; }
 
     void SerializeRequest(ref BufferWriter writer, short version, ISerializationContext context);
