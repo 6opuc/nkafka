@@ -1,10 +1,4 @@
-using nKafka.Contracts.MessageDefinitions.ConsumerProtocolAssignmentNested;
-using nKafka.Contracts.MessageDefinitions.FetchRequestNested;
-using nKafka.Contracts.MessageDefinitions.JoinGroupRequestNested;
-using nKafka.Contracts.MessageDefinitions.LeaveGroupRequestNested;
-using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
-using nKafka.Contracts.MessageDefinitions.OffsetFetchRequestNested;
-using nKafka.Contracts.MessageDefinitions.SyncGroupRequestNested;
+using nKafka.Client;
 
 namespace nKafka.Client.IntegrationTests;
 
@@ -13,10 +7,10 @@ public static class TestHelpers
     public const string SaslMechanism = "SCRAM-SHA-512";
     public const string SaslUsername = "admin";
     public const string SaslPassword = "admin-secret";
-    public const string SaslBootstrapHost = "localhost";
+    public const string BootstrapHost = "localhost";
     public const int SaslBootstrapPort = 9192;
-    public const string PlainTextTopic = "test_p12_m1M_s4B";
-    public const string SaslTopic = "test_p12_m40K_s10KB";
+    public const int PlainTextBootstrapPort = 9193;
+    public const string Topic = "test_p12_m1M_s4B";
 
     private static readonly string SslCaCertPath = Path.Combine(
         TestContext.CurrentContext.TestDirectory,
@@ -39,23 +33,49 @@ public static class TestHelpers
 
     public static ConnectionConfig CreateConnectionConfig(
         string protocol,
-        string host,
-        int port,
-        string clientId,
+        int? port = null,
+        string clientId = "nKafka.Client.IntegrationTests",
         bool checkCrcs = false,
         int? responseBufferSize = null,
         int? requestBufferSize = null,
-        bool requestApiVersionsOnOpen = false)
+        bool requestApiVersionsOnOpen = false,
+        bool skipSaslAuthOnOpen = false)
     {
         return new ConnectionConfig(
             protocol,
-            host,
-            port,
+            BootstrapHost,
+            port ?? (protocol == "SASL_SSL" ? SaslBootstrapPort : PlainTextBootstrapPort),
             clientId!,
             responseBufferSize ?? 512 * 1024,
             requestBufferSize ?? 512 * 1024,
             CreateSslConfig(protocol),
             checkCrcs || protocol == "SASL_SSL",
-            requestApiVersionsOnOpen);
+            requestApiVersionsOnOpen,
+            skipSaslAuthOnOpen);
+    }
+
+    public static ConsumerConfig CreateConsumerConfig(
+        string clientId,
+        string groupId,
+        string instanceId,
+        string protocol,
+        string topics = Topic,
+        TimeSpan? maxWaitTime = null,
+        bool checkCrcs = false)
+    {
+        var servers = protocol == "SASL_SSL"
+            ? $"SASL_SSL://{BootstrapHost}:{SaslBootstrapPort}"
+            : $"PLAINTEXT://{BootstrapHost}:{PlainTextBootstrapPort},PLAINTEXT://{BootstrapHost}:{PlainTextBootstrapPort+100},PLAINTEXT://{BootstrapHost}:{PlainTextBootstrapPort+200}";
+
+        return new ConsumerConfig(
+            servers,
+            topics,
+            clientId,
+            groupId,
+            instanceId,
+            protocol,
+            CheckCrcs: checkCrcs || protocol == "SASL_SSL",
+            MaxWaitTime: maxWaitTime ?? TimeSpan.FromSeconds(1),
+            Ssl: CreateSslConfig(protocol));
     }
 }

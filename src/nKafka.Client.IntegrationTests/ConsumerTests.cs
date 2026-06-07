@@ -24,8 +24,8 @@ public class ConsumerTests
     {
         get
         {
-            yield return new object[] { "PLAINTEXT", "PLAINTEXT://localhost:9193,PLAINTEXT://localhost:9293,PLAINTEXT://localhost:9393" };
-            yield return new object[] { "SASL_SSL", "SASL_SSL://" + TestHelpers.SaslBootstrapHost + ":" + TestHelpers.SaslBootstrapPort };
+            yield return new object[] { "PLAINTEXT", $"PLAINTEXT://{TestHelpers.BootstrapHost}:{TestHelpers.PlainTextBootstrapPort},PLAINTEXT://{TestHelpers.BootstrapHost}:{TestHelpers.PlainTextBootstrapPort + 100},PLAINTEXT://{TestHelpers.BootstrapHost}:{TestHelpers.PlainTextBootstrapPort + 200}" };
+            yield return new object[] { "SASL_SSL", $"SASL_SSL://{TestHelpers.BootstrapHost}:{TestHelpers.SaslBootstrapPort}" };
         }
     }
 
@@ -37,7 +37,7 @@ public class ConsumerTests
             "deadlock-test-client",
             $"deadlock-test-group-{Guid.NewGuid()}",
             $"deadlock-test-instance-{Guid.NewGuid()}",
-            servers, TestHelpers.PlainTextTopic, protocol);
+            protocol);
 
         var cts = new CancellationTokenSource(TestTimeout);
         var consumeTask = consumer.ConsumeAsync(cts.Token).AsTask();
@@ -52,7 +52,7 @@ public class ConsumerTests
         result.Should().BeNull("no messages exist at the high offset");
     }
 
-    [Test]
+   [Test]
     [TestCaseSource(nameof(ConsumerBootstrapServers))]
     public async Task ConsumeBatchAsync_WithHighOffset_ShouldNotDeadlock(string protocol, string servers)
     {
@@ -60,7 +60,7 @@ public class ConsumerTests
             "deadlock-batch-test-client",
             $"deadlock-batch-test-group-{Guid.NewGuid()}",
             $"deadlock-batch-test-instance-{Guid.NewGuid()}",
-            servers, TestHelpers.PlainTextTopic, protocol);
+            protocol);
 
         var cts = new CancellationTokenSource(TestTimeout);
         var consumeTask = consumer.ConsumeBatchAsync(cts.Token).AsTask();
@@ -76,17 +76,13 @@ public class ConsumerTests
     }
 
     private static async Task<Consumer<byte[]>> CreateConsumerAsync(string clientId, string consumerGroup,
-        string instanceId, string servers, string topic, string protocol)
+        string instanceId, string protocol)
     {
-        var config = new ConsumerConfig(
-            servers,
-            topic,
+        var config = TestHelpers.CreateConsumerConfig(
             clientId,
             consumerGroup,
             instanceId,
-            protocol,
-            MaxWaitTime: TimeSpan.FromSeconds(1),
-            Ssl: TestHelpers.CreateSslConfig(protocol));
+            protocol);
 
         var offsetStorage = new FixedOffsetStorage(OffsetPastEndOfTopic);
         var deserializer = new DummyDeserializer();
@@ -97,17 +93,15 @@ public class ConsumerTests
     }
 
     [Test]
-    public async Task ConsumeGroup_SaslSsl_ShouldConsumeMessagesWithFetchSessions()
+public async Task ConsumeGroup_SaslSsl_ShouldConsumeMessagesWithFetchSessions()
     {
-        var config = new ConsumerConfig(
-            "SASL_SSL://" + TestHelpers.SaslBootstrapHost + ":" + TestHelpers.SaslBootstrapPort,
-            TestHelpers.SaslTopic,
+        var config = TestHelpers.CreateConsumerConfig(
             $"sasl-fetch-session-test-{Guid.NewGuid()}",
             $"sasl-fetch-session-group-{Guid.NewGuid()}",
             $"sasl-fetch-session-instance-{Guid.NewGuid()}",
             "SASL_SSL",
-            MaxWaitTime: TimeSpan.FromSeconds(2),
-            Ssl: TestHelpers.CreateSslConfig("SASL_SSL"));
+            maxWaitTime: TimeSpan.FromSeconds(2),
+            checkCrcs: true);
 
         var offsetStorage = new FixedOffsetStorage(0);
         var deserializer = new DummyDeserializer();
@@ -141,17 +135,15 @@ public class ConsumerTests
     }
 
     [Test]
-    public async Task ConsumeGroup_SaslSsl_ShouldHaveFetchStats()
+public async Task ConsumeGroup_SaslSsl_ShouldHaveFetchStats()
     {
-        var config = new ConsumerConfig(
-            "SASL_SSL://" + TestHelpers.SaslBootstrapHost + ":" + TestHelpers.SaslBootstrapPort,
-            TestHelpers.SaslTopic,
+        var config = TestHelpers.CreateConsumerConfig(
             $"sasl-stats-test-{Guid.NewGuid()}",
             $"sasl-stats-group-{Guid.NewGuid()}",
             $"sasl-stats-instance-{Guid.NewGuid()}",
             "SASL_SSL",
-            MaxWaitTime: TimeSpan.FromSeconds(2),
-            Ssl: TestHelpers.CreateSslConfig("SASL_SSL"));
+            maxWaitTime: TimeSpan.FromSeconds(2),
+            checkCrcs: true);
 
         var offsetStorage = new FixedOffsetStorage(0);
         var deserializer = new DummyDeserializer();
