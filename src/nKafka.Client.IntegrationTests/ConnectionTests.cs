@@ -34,27 +34,17 @@ public class ConnectionTests
         }
     }
 
-    public static IEnumerable OpenableProtocols => KafkaTestCases.ProtocolVersions;
-
-    public static IEnumerable VersionedApiTests => KafkaTestCases.GetTestCases<ApiVersionsRequest>();
-    public static IEnumerable FindCoordinatorVersions => KafkaTestCases.GetTestCases<FindCoordinatorRequest>();
-    public static IEnumerable MetadataVersions => KafkaTestCases.GetTestCases<MetadataRequest>();
-    public static IEnumerable JoinGroupVersions => KafkaTestCases.GetTestCases<JoinGroupRequest>();
-    public static IEnumerable LeaveGroupVersions => KafkaTestCases.GetTestCases<LeaveGroupRequest>();
-    public static IEnumerable SyncGroupVersions => KafkaTestCases.GetTestCases<SyncGroupRequest>();
-    public static IEnumerable HeartbeatVersions => KafkaTestCases.GetTestCases<HeartbeatRequest>();
-    public static IEnumerable FetchVersions => KafkaTestCases.GetTestCases<FetchRequest>();
-    public static IEnumerable OffsetFetchVersions => KafkaTestCases.GetTestCases<OffsetFetchRequest>();
-
     [Test]
-    [TestCaseSource(nameof(OpenableProtocols))]
+    [TestCaseSource(nameof(OpenConnectionTestCases))]
     public async Task ConnectAsyncAndDisposeAsyncShouldNotThrow(string protocol)
     {
         await using var connection = await OpenConnection(protocol);
     }
 
+    public static IEnumerable OpenConnectionTestCases => KafkaTestCases.ProtocolVersions;
+
     [Test]
-    [TestCaseSource(nameof(VersionedApiTests))]
+    [TestCaseSource(nameof(ApiVersionsRequestTestCases))]
     public async Task SendAsync_ApiVersionsRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         await using var connection = await OpenConnection(protocol);
@@ -89,8 +79,10 @@ public class ConnectionTests
         });
     }
 
+    public static IEnumerable ApiVersionsRequestTestCases => KafkaTestCases.GetTestCases<ApiVersionsRequest>();
+
     [Test]
-    [TestCaseSource(nameof(FindCoordinatorVersions))]
+    [TestCaseSource(nameof(FindCoordinatorRequestTestCases))]
     public async Task SendAsync_FindCoordinatorRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         await using var connection = await OpenConnection(protocol);
@@ -128,8 +120,10 @@ public class ConnectionTests
         }
     }
 
+    public static IEnumerable FindCoordinatorRequestTestCases => KafkaTestCases.GetTestCases<FindCoordinatorRequest>();
+
     [Test]
-    [TestCaseSource(nameof(MetadataVersions))]
+    [TestCaseSource(nameof(MetadataRequestTestCases))]
     public async Task SendAsync_MetadataRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         await using var connection = await OpenConnection(protocol);
@@ -177,8 +171,10 @@ public class ConnectionTests
         });
     }
 
+    public static IEnumerable MetadataRequestTestCases => KafkaTestCases.GetTestCases<MetadataRequest>();
+
     [Test]
-    [TestCaseSource(nameof(JoinGroupVersions))]
+    [TestCaseSource(nameof(JoinGroupRequestTestCases))]
     public async Task SendAsync_JoinGroupRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         string consumerGroupId = Guid.NewGuid().ToString();
@@ -204,6 +200,8 @@ public class ConnectionTests
         var subscriptionMemberMetadata = subscriptionMember!.Metadata;
         subscriptionMemberMetadata.Should().BeEquivalentTo(subscriptionMemberMetadata);
     }
+
+    public static IEnumerable JoinGroupRequestTestCases => KafkaTestCases.GetTestCases<JoinGroupRequest>();
 
     private static async Task<IDisposableMessage<JoinGroupResponse>> JoinGroupAsync(
         Connection connection, short apiVersion, string consumerGroupId)
@@ -253,7 +251,7 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCaseSource(nameof(LeaveGroupVersions))]
+    [TestCaseSource(nameof(LeaveGroupRequestTestCases))]
     public async Task SendAsync_LeaveGroupRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         string consumerGroupId = Guid.NewGuid().ToString();
@@ -280,9 +278,11 @@ public class ConnectionTests
         response.Message.ErrorCode.Should().Be(0);
     }
 
+    public static IEnumerable LeaveGroupRequestTestCases => KafkaTestCases.GetTestCases<LeaveGroupRequest>();
+
 
     [Test]
-    [TestCaseSource(nameof(SyncGroupVersions))]
+    [TestCaseSource(nameof(SyncGroupRequestTestCases))]
     public async Task SendAsync_SyncGroupRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         string consumerGroupId = Guid.NewGuid().ToString();
@@ -328,8 +328,10 @@ public class ConnectionTests
         actualAssignment.Should().BeEquivalentTo(requestedAssignment);
     }
 
+    public static IEnumerable SyncGroupRequestTestCases => KafkaTestCases.GetTestCases<SyncGroupRequest>();
+
     [Test]
-    [TestCaseSource(nameof(HeartbeatVersions))]
+    [TestCaseSource(nameof(HeartbeatRequestTestCases))]
     public async Task SendAsync_HeartbeatRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         string consumerGroupId = Guid.NewGuid().ToString();
@@ -349,8 +351,10 @@ public class ConnectionTests
         response.Message.ErrorCode.Should().Be(0);
     }
 
+    public static IEnumerable HeartbeatRequestTestCases => KafkaTestCases.GetTestCases<HeartbeatRequest>();
+
     [Test]
-    [TestCaseSource(nameof(FetchVersions))]
+    [TestCaseSource(nameof(FetchRequestTestCases))]
     public async Task SendAsync_FetchRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         using var metadata = await RequestMetadata(protocol);
@@ -428,8 +432,10 @@ public class ConnectionTests
         }
     }
 
+    public static IEnumerable FetchRequestTestCases => KafkaTestCases.GetTestCases<FetchRequest>();
+
     [Test]
-    [TestCaseSource(nameof(FetchVersions))]
+    [TestCaseSource(nameof(FetchRequestTestCases))]
     public async Task SendAsync_FetchRequest_ShouldFetchAllRecords(string protocol, short apiVersion)
     {
         using var metadata = await RequestMetadata(protocol);
@@ -521,7 +527,7 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCaseSource(nameof(FetchVersions))]
+    [TestCaseSource(nameof(FetchRequestTestCases))]
     public async Task SendAsync_FetchRequestWithSeveralPartitions_ShouldFetchAllRecords(string protocol, short apiVersion)
     {
         using var metadata = await RequestMetadata(protocol);
@@ -632,7 +638,7 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCaseSource(nameof(OffsetFetchVersions))]
+    [TestCaseSource(nameof(OffsetFetchRequestTestCases))]
     public async Task SendAsync_OffsetFetchRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         var metadata = await RequestMetadata(protocol);
@@ -671,6 +677,8 @@ public class ConnectionTests
 
         response.Should().NotBeNull();
     }
+
+    public static IEnumerable OffsetFetchRequestTestCases => KafkaTestCases.GetTestCases<OffsetFetchRequest>();
 
     private async Task<Connection> OpenConnection(string protocol)
     {
