@@ -18,8 +18,8 @@ public sealed class SaslAuthenticator : IAuthenticator
 
     // SCRAM state
     private string? _clientNonce;
-    private string? _clientFirstMessageBare;
-    private string? _serverFirstMessage;
+    private byte[]? _clientFirstMessageBare;
+    private byte[]? _serverFirstMessage;
     private string? _clientFinalMessageWithoutProof;
     private byte[]? _saltedPassword;
 
@@ -88,15 +88,15 @@ public sealed class SaslAuthenticator : IAuthenticator
         // Round 1: Client-First -> Server-First
         _clientNonce = GenerateNonce();
         int bareLength = 5 + username.Length + _clientNonce!.Length;
-        char[] bareChars = new char[bareLength];
+        Span<char> bareChars = stackalloc char[bareLength];
         bareChars[0] = 'n';
         bareChars[1] = '=';
-        username.AsSpan().CopyTo(bareChars.AsSpan(2));
+        username.AsSpan().CopyTo(bareChars.Slice(2));
         bareChars[2 + username.Length] = ',';
         bareChars[3 + username.Length] = 'r';
         bareChars[4 + username.Length] = '=';
-        _clientNonce.AsSpan().CopyTo(bareChars.AsSpan(5 + username.Length));
-        _clientFirstMessageBare = new string(bareChars);
+        _clientNonce.AsSpan().CopyTo(bareChars.Slice(5 + username.Length));
+        _clientFirstMessageBare = Encoding.ASCII.GetBytes(new string(bareChars));
         byte[] clientFirstBytes = BuildClientFirstMessage();
         _logger.LogDebug("Sending SASL authenticate (client-first).");
         using var serverFirstResponse = await connection.SendAsync<SaslAuthenticateResponse>(
@@ -133,14 +133,14 @@ public sealed class SaslAuthenticator : IAuthenticator
         result[0] = (byte)'n';
         result[1] = (byte)',';
         result[2] = (byte)',';
-        Encoding.ASCII.GetBytes(_clientFirstMessageBare, 0, _clientFirstMessageBare.Length, result, 3);
+        _clientFirstMessageBare.CopyTo(result.AsSpan(3));
         return result;
     }
 
     private byte[] BuildClientFinalMessage(ReadOnlySpan<byte> serverFirstMessageSpan, byte[] passwordBytes, int hashSize)
     {
-        _serverFirstMessage = Encoding.ASCII.GetString(serverFirstMessageSpan);
-        ParseServerFirstMessage(_serverFirstMessage.AsSpan(), out byte[] salt, out int iterations, out string serverNonce);
+        _serverFirstMessage = serverFirstMessageSpan.ToArray();
+        ParseServerFirstMessage(_serverFirstMessage, out byte[] salt, out int iterations, out string serverNonce);
 
         _saltedPassword = PBKDF2(passwordBytes, salt, iterations, hashSize);
 
@@ -150,7 +150,7 @@ public sealed class SaslAuthenticator : IAuthenticator
 
         _clientFinalMessageWithoutProof = $"c=biws,r={serverNonce}";
 
-        byte[] authMessageBytes = BuildAuthMessageBytes(_clientFirstMessageBare!, _serverFirstMessage, _clientFinalMessageWithoutProof);
+        byte[] authMessageBytes = BuildAuthMessageBytes(_clientFirstMessageBare!, _serverFirstMessage!, _clientFinalMessageWithoutProof);
         string base64Proof = Convert.ToBase64String(XOR(clientKey, HMAC(storedKey, authMessageBytes)));
         int finalByteCount = _clientFinalMessageWithoutProof!.Length + 3 + base64Proof.Length;
         byte[] result = new byte[finalByteCount];
@@ -190,7 +190,7 @@ public sealed class SaslAuthenticator : IAuthenticator
     }
 
     private static void ParseServerFirstMessage(
-        ReadOnlySpan<char> message,
+        ReadOnlySpan<byte> message,
         out byte[] salt,
         out int iterations,
         out string nonce)
@@ -202,15 +202,15 @@ public sealed class SaslAuthenticator : IAuthenticator
         int start = 0;
         for (int i = 0; i <= message.Length; i++)
         {
-            if (i == message.Length || message[i] == ',')
+            if (i == message.Length || message[i] == (byte)',')
             {
-                ReadOnlySpan<char> part = message.Slice(start, i - start);
-                if (part.Length > 2 && part[0] == 'r' && part[1] == '=')
-                    nonce = part.Slice(2).ToString();
-                else if (part.Length > 2 && part[0] == 's' && part[1] == '=')
-                    salt = Convert.FromBase64String(part.Slice(2).ToString());
-                else if (part.Length > 2 && part[0] == 'i' && part[1] == '=')
-                    iterations = int.Parse(part.Slice(2));
+                ReadOnlySpan<byte> part = message.Slice(start, i - start);
+                if (part.Length > 2 && part[0] == (byte)'r' && part[1] == (byte)'=')
+                    nonce = Encoding.ASCII.GetString(part.Slice(2));
+                else if (part.Length > 2 && part[0] == (byte)'s' && part[1] == (byte)'=')
+                    salt = Convert.FromBase64String(Encoding.ASCII.GetString(part.Slice(2)));
+                else if (part.Length > 2 && part[0] == (byte)'i' && part[1] == (byte)'=')
+                    iterations = int.Parse(Encoding.ASCII.GetString(part.Slice(2)));
 
                 start = i + 1;
             }
@@ -232,7 +232,7 @@ public sealed class SaslAuthenticator : IAuthenticator
         {
             nonce[i] = chars[bytes[i] % chars.Length];
         }
-        return nonce.ToString();
+        return new string(nonce);
     }
 
     private static byte[] PBKDF2(byte[] passwordBytes, byte[] salt, int iterations, int outputLength)
@@ -257,18 +257,16 @@ public sealed class SaslAuthenticator : IAuthenticator
         return HMACSHA512.HashData(key, data);
     }
 
-    private static byte[] BuildAuthMessageBytes(string clientFirstMessageBare, string serverFirstMessage, string clientFinalMessageWithoutProof)
+    private static byte[] BuildAuthMessageBytes(ReadOnlySpan<byte> clientFirstMessageBare, ReadOnlySpan<byte> serverFirstMessage, string clientFinalMessageWithoutProof)
     {
-        int clientFirstBytes = Encoding.ASCII.GetByteCount(clientFirstMessageBare);
-        int serverFirstBytes = Encoding.ASCII.GetByteCount(serverFirstMessage);
         int clientFinalBytes = Encoding.ASCII.GetByteCount(clientFinalMessageWithoutProof);
-        int authMessageLength = clientFirstBytes + serverFirstBytes + clientFinalBytes + 2;
+        int authMessageLength = clientFirstMessageBare.Length + serverFirstMessage.Length + clientFinalBytes + 2;
         byte[] authMessage = new byte[authMessageLength];
-        Encoding.ASCII.GetBytes(clientFirstMessageBare, 0, clientFirstMessageBare.Length, authMessage, 0);
-        authMessage[clientFirstBytes] = (byte)',';
-        Encoding.ASCII.GetBytes(serverFirstMessage, 0, serverFirstMessage.Length, authMessage, clientFirstBytes + 1);
-        authMessage[clientFirstBytes + 1 + serverFirstBytes] = (byte)',';
-        Encoding.ASCII.GetBytes(clientFinalMessageWithoutProof, 0, clientFinalMessageWithoutProof.Length, authMessage, clientFirstBytes + 1 + serverFirstBytes + 1);
+        clientFirstMessageBare.CopyTo(authMessage);
+        authMessage[clientFirstMessageBare.Length] = (byte)',';
+        serverFirstMessage.CopyTo(authMessage.AsSpan(clientFirstMessageBare.Length + 1));
+        authMessage[clientFirstMessageBare.Length + 1 + serverFirstMessage.Length] = (byte)',';
+        Encoding.ASCII.GetBytes(clientFinalMessageWithoutProof, 0, clientFinalMessageWithoutProof.Length, authMessage, clientFirstMessageBare.Length + 1 + serverFirstMessage.Length + 1);
         return authMessage;
     }
 
