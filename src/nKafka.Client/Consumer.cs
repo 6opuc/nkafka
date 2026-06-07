@@ -172,7 +172,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 _config.ClientId,
                 _config.ResponseBufferSize,
                 _config.RequestBufferSize,
-                _config.Ssl is not null ? new SslConfig(_config.Ssl.SaslMechanism, _config.Ssl.SaslUsername, _config.Ssl.SaslPassword, _config.Ssl.SslCaCertPath) : null,
+                _config.Tls,
+                _config.Sasl,
                 _config.CheckCrcs);
             var connection = new Connection(connectionConfig, _loggerFactory);
             await connection.OpenAsync(cancellationToken);
@@ -196,7 +197,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 _config.ResponseBufferSize,
                 _config.RequestBufferSize)
                 with
-            { Ssl = _config.Ssl is not null ? new SslConfig(_config.Ssl.SaslMechanism, _config.Ssl.SaslUsername, _config.Ssl.SaslPassword, _config.Ssl.SslCaCertPath) : null, RequestApiVersionsOnOpen = false };
+            { Tls = _config.Tls, Sasl = _config.Sasl, RequestApiVersionsOnOpen = false };
             try
             {
                 var connection = new Connection(connectionConfig, _loggerFactory);
@@ -242,7 +243,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             _config.ClientId,
                             _config.ResponseBufferSize,
                             _config.RequestBufferSize,
-                            _config.Ssl is not null ? new SslConfig(_config.Ssl.SaslMechanism, _config.Ssl.SaslUsername, _config.Ssl.SaslPassword, _config.Ssl.SslCaCertPath) : null,
+                            _config.Tls,
+                            _config.Sasl,
                             _config.CheckCrcs);
         }
         else
@@ -266,7 +268,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 _config.ClientId,
                 _config.ResponseBufferSize,
                 _config.RequestBufferSize,
-                _config.Ssl is not null ? new SslConfig(_config.Ssl.SaslMechanism, _config.Ssl.SaslUsername, _config.Ssl.SaslPassword, _config.Ssl.SslCaCertPath) : null,
+                _config.Tls,
+                _config.Sasl,
                 _config.CheckCrcs);
         }
 

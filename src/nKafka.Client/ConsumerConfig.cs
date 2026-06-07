@@ -17,4 +17,5 @@ public sealed record ConsumerConfig(
     int MaxFetchRetries = 3,
     TimeSpan FetchRetryBaseDelay = default,
     int FetchPartitionMaxBytes = 1 * 1024 * 1024,
-    SslConfig? Ssl = null);
+    TlsConfig? Tls = null,
+    SaslConfig? Sasl = null);

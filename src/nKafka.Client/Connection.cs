@@ -1,30 +1,18 @@
 using System.Buffers;
 using System.Collections.Concurrent;
-using System.Net;
-using System.Net.Security;
-using System.Net.Sockets;
 using System.Runtime.CompilerServices;
-using System.Security.Authentication;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
-using nKafka.Client.Auth;
 using nKafka.Contracts;
 using nKafka.Contracts.Exceptions;
 using nKafka.Contracts.MessageDefinitions;
-using nKafka.Contracts.MessageSerializers;
 
 namespace nKafka.Client;
-
-public delegate void RequestWriterDelegate(ref BufferWriter writer, ISerializationContext context);
-public delegate TResponse ResponseReaderDelegate<TResponse>(ref BufferReader reader, short version, ISerializationContext context);
 
 public class Connection : IConnection
 {
     private readonly ILogger _logger;
-    private Socket? _socket;
-    private SslStream? _sslStream;
-    private Stream? _writeStream;
+    private readonly IStreamProvider _streamProvider;
+    private readonly SaslAuthenticator? _saslAuth;
     private readonly ConnectionConfig _config;
 
     private CancellationTokenSource? _stop;
@@ -47,6 +35,10 @@ public class Connection : IConnection
         _config = config;
         _bufferSize = Math.Max(_config.RequestBufferSize, _config.ResponseBufferSize);
         _logger = loggerFactory.CreateLogger<Connection>();
+        _streamProvider = new NetworkStreamProvider(config, loggerFactory);
+        _saslAuth = config.Sasl?.Mechanism is not null
+            ? new SaslAuthenticator(config, _streamProvider, loggerFactory)
+            : null;
         _serializationContext = new SerializationContext(_arrayPool, _bufferSize)
         {
             Config = new SerializationConfig
@@ -60,11 +52,10 @@ public class Connection : IConnection
     public async ValueTask OpenAsync(CancellationToken cancellationToken)
     {
         using var _ = BeginDefaultLoggingScope();
-        await OpenSocketAsync(cancellationToken);
-        await AuthenticateTlsAsync(cancellationToken);
-        if (_config.Ssl?.SaslMechanism is not null)
+        await _streamProvider.OpenAsync(cancellationToken);
+        if (_saslAuth != null)
         {
-            await AuthenticateSaslAsync(cancellationToken);
+            await _saslAuth.AuthenticateAsync(this, cancellationToken);
         }
         StartReceiving();
         await RequestApiVersionsAsync(cancellationToken);
@@ -75,350 +66,8 @@ public class Connection : IConnection
         return _logger.BeginScope($"{_config.Host}:{_config.Port}");
     }
 
-    private async ValueTask OpenSocketAsync(CancellationToken cancellationToken)
-    {
-        if (_config == null)
-        {
-            throw new InvalidOperationException("Connection is not configured.");
-        }
-        if (_socket != null)
-        {
-            throw new InvalidOperationException("Socket connection is already open.");
-        }
-
-        _logger.LogInformation("Opening socket connection.");
-
-        var ip = await Dns.GetHostAddressesAsync(_config.Host, cancellationToken);
-        if (ip.Length == 0)
-        {
-            throw new InvalidOperationException("Unable to resolve host.");
-        }
-        var endpoint = new IPEndPoint(ip.First(), _config.Port);
-        _socket = new Socket(endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-        _socket.ReceiveBufferSize = _config.ResponseBufferSize;
-        _socket.SendBufferSize = _config.RequestBufferSize;
-        _socket.NoDelay = true;
-        await _socket.ConnectAsync(endpoint, cancellationToken);
-    }
-
-    private async ValueTask AuthenticateTlsAsync(CancellationToken cancellationToken)
-    {
-        string protocol = _config.Protocol;
-        if (protocol != "SASL_SSL" && protocol != "SSL")
-        {
-            _writeStream = new NetworkStream(_socket!, false);
-            return;
-        }
-
-        _logger.LogInformation("Starting TLS handshake.");
-
-        X509Certificate2? caCert = null;
-        if (_config.Ssl?.SslCaCertPath is string certPath)
-        {
-            caCert = X509CertificateLoader.LoadCertificateFromFile(certPath);
-        }
-
-        _sslStream = new SslStream(
-            new NetworkStream(_socket!, false),
-            false,
-            (sender, certificate, chain, errors) =>
-            {
-                if (caCert == null)
-                {
-                    return true;
-                }
-
-                if (errors == SslPolicyErrors.None)
-                {
-                    return true;
-                }
-
-                using var x509Chain = new X509Chain();
-                x509Chain.ChainPolicy.ExtraStore.Add(caCert);
-                x509Chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-                x509Chain.ChainPolicy.VerificationFlags =
-                    X509VerificationFlags.AllowUnknownCertificateAuthority |
-                    X509VerificationFlags.IgnoreInvalidName;
-
-                return x509Chain.Build((X509Certificate2)certificate!);
-            });
-
-        var sslOptions = new SslClientAuthenticationOptions
-        {
-            TargetHost = _config.Host,
-            EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-            CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-        };
-
-        await _sslStream.AuthenticateAsClientAsync(sslOptions, cancellationToken);
-
-        _logger.LogInformation("TLS handshake complete. Protocol={Protocol}, Cipher={Cipher}",
-            _sslStream.SslProtocol, _sslStream.NegotiatedCipherSuite);
-
-        _writeStream = _sslStream;
-    }
-
-    private async ValueTask AuthenticateSaslAsync(CancellationToken cancellationToken)
-    {
-        string? mechanism = _config.Ssl?.SaslMechanism;
-        if (string.IsNullOrEmpty(mechanism))
-        {
-            return;
-        }
-
-        _logger.LogInformation("Starting SASL authentication with {Mechanism}.", mechanism);
-
-        // 1. SaslHandshake (inline — no receive loop yet)
-        _logger.LogDebug("Sending SaslHandshakeRequest.");
-        var handshakeResponse = await SendRequestInlineAsync(
-            requestWriter: (ref BufferWriter buf, ISerializationContext ctx) =>
-            {
-                SaslHandshakeRequestSerializer.Serialize(ref buf, new SaslHandshakeRequest { Mechanism = mechanism }, 0, ctx);
-            },
-            responseReader: (ref BufferReader buf, short version, ISerializationContext ctx) =>
-            {
-                return SaslHandshakeResponseSerializer.Deserialize(ref buf, version, ctx);
-            },
-            apiKey: 17,
-            cancellationToken,
-            apiVersion: 1);
-
-        if (handshakeResponse.ErrorCode != 0)
-        {
-            throw new Exception(
-                $"SASL handshake failed with error code {handshakeResponse.ErrorCode}");
-        }
-
-        var supportedMechanisms = handshakeResponse.Mechanisms;
-        if (supportedMechanisms == null ||
-            !supportedMechanisms.Any(m => m == mechanism))
-        {
-            string supported = supportedMechanisms != null
-                ? string.Join(", ", supportedMechanisms)
-                : "none";
-            throw new Exception(
-                $"Server does not support {mechanism}. Supported: {supported}");
-        }
-
-        // 2. SASL Authenticate (SCRAM-SHA-512 exchange)
-        HashAlgorithmName hashAlgorithm;
-        if (mechanism == "SCRAM-SHA-512")
-            hashAlgorithm = HashAlgorithmName.SHA512;
-        else if (mechanism == "SCRAM-SHA-256")
-            hashAlgorithm = HashAlgorithmName.SHA256;
-        else
-            throw new NotSupportedException($"SASL mechanism {mechanism} is not supported");
-
-        string? username = _config.Ssl!.SaslUsername;
-        string? password = _config.Ssl!.SaslPassword;
-        if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
-        {
-            throw new InvalidOperationException("SASL credentials (username, password) are required when SaslMechanism is configured.");
-        }
-
-        var scramClient = new ScramClient(username, password, hashAlgorithm);
-
-        // Round 1: Client-First → Server-First
-        byte[] clientFirstBytes = scramClient.GetClientFirstMessage();
-        _logger.LogDebug("Sending SASL authenticate (client-first).");
-        byte[] serverFirstBytes = await SendSaslAuthenticateAsync(
-            clientFirstBytes, cancellationToken);
-
-        // Round 2: Client-Final → Server-Final
-        byte[] clientFinalBytes = scramClient.GetClientFinalMessage(serverFirstBytes);
-        _logger.LogDebug("Sending SASL authenticate (client-final).");
-        byte[] serverFinalBytes = await SendSaslAuthenticateAsync(
-            clientFinalBytes, cancellationToken);
-
-        scramClient.VerifyServerFinalMessage(serverFinalBytes);
-        _logger.LogInformation("SASL authentication successful.");
-    }
-
-    private async Task<TResponse> SendRequestInlineAsync<TResponse>(
-        RequestWriterDelegate requestWriter,
-        ResponseReaderDelegate<TResponse> responseReader,
-        short apiKey,
-        CancellationToken cancellationToken,
-        short apiVersion = 0)
-    {
-        int correlationId = IdGenerator.Next();
-        bool isFlexible = apiVersion >= 2;
-        short requestHeaderVersion = isFlexible ? (short)2 : (short)1;
-        short responseHeaderVersion = isFlexible ? (short)1 : (short)0;
-        var requestHeader = new RequestHeader
-        {
-            RequestApiKey = apiKey,
-            RequestApiVersion = apiVersion,
-            CorrelationId = correlationId,
-            ClientId = _config.ClientId,
-        };
-
-        var writer = new BufferWriter(_arrayPool, _config.RequestBufferSize);
-        try
-        {
-            int start = writer.Position;
-            writer.WriteInt(0);
-
-            RequestHeaderSerializer.Serialize(ref writer, requestHeader, requestHeaderVersion, _serializationContext);
-            requestWriter(ref writer, _serializationContext);
-
-            int end = writer.Position;
-            int size = end - start - 4;
-            writer.Position = start;
-            writer.WriteInt(size);
-            writer.Position = end;
-
-            await _writeStream!.WriteAsync(writer.Memory.Slice(0, writer.Position), cancellationToken);
-            await _writeStream.FlushAsync(cancellationToken);
-            _logger.LogDebug("Handshake request written ({PayloadSize} bytes). Hex: {Hex}",
-                writer.Position, Convert.ToHexString(writer.Memory.Span.Slice(0, writer.Position)));
-
-            byte[] sizeBuf = new byte[4];
-            var stream = GetReadStream();
-            _logger.LogDebug("Reading handshake response size...");
-            await stream.ReadAtLeastAsync(sizeBuf, 4, true, cancellationToken);
-            int responseSize = (sizeBuf[0] << 24) | (sizeBuf[1] << 16) | (sizeBuf[2] << 8) | sizeBuf[3];
-            _logger.LogDebug("Handshake response size: {ResponseSize}", responseSize);
-
-            byte[] responseBuffer = _arrayPool.Rent(responseSize);
-            try
-            {
-                await stream.ReadAtLeastAsync(
-                    responseBuffer, responseSize, true, cancellationToken);
-
-                var buffer = new Memory<byte>(responseBuffer, 0, responseSize);
-                var reader = new BufferReader(buffer);
-                var responseHeader = ResponseHeaderSerializer.Deserialize(ref reader, responseHeaderVersion, _serializationContext);
-
-                if (responseHeader.CorrelationId != correlationId)
-                {
-                    throw new Exception(
-                        $"Correlation ID mismatch: expected {correlationId}, got {responseHeader.CorrelationId}");
-                }
-
-                return responseReader(ref reader, apiVersion, _serializationContext);
-            }
-            finally
-            {
-                _arrayPool.Return(responseBuffer);
-            }
-        }
-        finally
-        {
-            writer.Dispose();
-        }
-    }
-
-    private async Task<byte[]> SendSaslAuthenticateAsync(
-        byte[] authBytes, CancellationToken cancellationToken)
-    {
-        _logger.LogDebug("SASL authenticate payload ({Len} bytes): {Hex}",
-            authBytes.Length, Convert.ToHexString(authBytes));
-        var request = new SaslAuthenticateRequest
-        {
-            AuthBytes = authBytes,
-        };
-
-        int correlationId = IdGenerator.Next();
-        short apiVersion = _apiVersions.GetValueOrDefault((ApiKey)36, (short)0);
-
-        short effectiveApiVersion = (short)0;
-        bool isFlexible = effectiveApiVersion >= 2;
-        short requestHeaderVersion = isFlexible ? (short)2 : (short)1;
-        short responseHeaderVersion = isFlexible ? (short)1 : (short)0;
-        var requestHeader = new RequestHeader
-        {
-            RequestApiKey = 36,
-            RequestApiVersion = effectiveApiVersion,
-            CorrelationId = correlationId,
-            ClientId = _config.ClientId,
-        };
-
-        var writer = new BufferWriter(_arrayPool, _config.RequestBufferSize);
-        try
-        {
-            int start = writer.Position;
-            writer.WriteInt(0);
-
-            RequestHeaderSerializer.Serialize(ref writer, requestHeader, requestHeaderVersion, _serializationContext);
-            SaslAuthenticateRequestSerializer.Serialize(ref writer, request, apiVersion, _serializationContext);
-
-            int end = writer.Position;
-            int size = end - start - 4;
-            writer.Position = start;
-            writer.WriteInt(size);
-            writer.Position = end;
-
-            await _writeStream!.WriteAsync(writer.Memory.Slice(0, writer.Position), cancellationToken);
-            await _writeStream.FlushAsync(cancellationToken);
-            _logger.LogDebug("Auth request written ({PayloadSize} bytes). Hex: {Hex}",
-                writer.Position, Convert.ToHexString(writer.Memory.Span.Slice(0, writer.Position)));
-
-            // Read response: size prefix + header + body
-            byte[] sizeBuf = new byte[4];
-            var stream = GetReadStream();
-            _logger.LogDebug("Reading auth response size...");
-            try
-            {
-                await stream.ReadAtLeastAsync(sizeBuf, 4, true, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to read response size. Stream canRead={CanRead}, canWrite={CanWrite}",
-                    stream.CanRead, stream.CanWrite);
-                throw;
-            }
-            int responseSize = (sizeBuf[0] << 24) | (sizeBuf[1] << 16) | (sizeBuf[2] << 8) | sizeBuf[3];
-
-            byte[] responseBuffer = _arrayPool.Rent(responseSize);
-            try
-            {
-                await stream.ReadAtLeastAsync(
-                    responseBuffer, responseSize, true, cancellationToken);
-
-                var buffer = new Memory<byte>(responseBuffer, 0, responseSize);
-                var reader = new BufferReader(buffer);
-                var responseHeader = ResponseHeaderSerializer.Deserialize(ref reader, responseHeaderVersion, _serializationContext);
-
-                if (responseHeader.CorrelationId != correlationId)
-                {
-                    throw new Exception(
-                        $"Correlation ID mismatch: expected {correlationId}, got {responseHeader.CorrelationId}");
-                }
-
-                var response = SaslAuthenticateResponseSerializer.Deserialize(ref reader, apiVersion, _serializationContext);
-
-                if (response.ErrorCode != 0)
-                {
-                    string errorMsg = response.ErrorMessage ?? $"Error code {response.ErrorCode}";
-                    throw new Exception($"SASL authentication failed: {errorMsg}");
-                }
-
-                return response.AuthBytes?.ToArray() ?? [];
-            }
-            finally
-            {
-                _arrayPool.Return(responseBuffer);
-            }
-        }
-        finally
-        {
-            writer.Dispose();
-        }
-    }
-
-    private Stream GetReadStream()
-    {
-        return _sslStream ?? (Stream)new NetworkStream(_socket!, false);
-    }
-
     private void StartReceiving()
     {
-        if (_socket == null)
-        {
-            return;
-        }
-
         _stop = new CancellationTokenSource();
         var cancellationToken = _stop.Token;
 
@@ -429,7 +78,7 @@ public class Connection : IConnection
             {
                 try
                 {
-                    var stream = GetReadStream();
+                    var stream = _streamProvider.ReadStream;
                     while (!cancellationToken.IsCancellationRequested)
                     {
                         int bytesRead = await stream.ReadAtLeastAsync(
@@ -611,11 +260,6 @@ public class Connection : IConnection
         IRequest<TResponse> request,
         CancellationToken cancellationToken)
     {
-        if (_writeStream == null)
-        {
-            throw new InvalidOperationException("Socket connection is not open.");
-        }
-
         using (BeginDefaultLoggingScope())
         {
             var completionPromise = new TaskCompletionSource<MessageWithPooledPayload>();
@@ -643,7 +287,7 @@ public class Connection : IConnection
                     pendingRequest.SerializeRequest(ref writer, _serializationContext);
 
                     _logger.LogDebug("Sending {@size} bytes.", writer.Position);
-                    await _writeStream!.WriteAsync(
+                    await _streamProvider.WriteStream.WriteAsync(
                         writer.Memory.Slice(0, writer.Position),
                         pendingRequest.CancellationToken);
                     _logger.LogDebug("Sent.");
@@ -677,14 +321,7 @@ public class Connection : IConnection
 
     public async ValueTask DisposeAsync()
     {
-        if (_socket == null)
-        {
-            return;
-        }
-
         using var _ = BeginDefaultLoggingScope();
-
-        _logger.LogInformation("Closing socket connection.");
 
         if (_stop != null)
         {
@@ -695,19 +332,7 @@ public class Connection : IConnection
             await _receiveBackgroundTask;
         }
 
-        if (_writeStream != null)
-        {
-            await _writeStream.DisposeAsync();
-        }
-
-        if (_sslStream != null)
-        {
-            await _sslStream.DisposeAsync();
-        }
-
-        _socket.Shutdown(SocketShutdown.Both);
-        _socket.Dispose();
-        _socket = null;
+        await _streamProvider.DisposeAsync();
     }
 
     private class SerializationContext(ArrayPool<byte> arrayPool, int bufferSize) : ISerializationContext

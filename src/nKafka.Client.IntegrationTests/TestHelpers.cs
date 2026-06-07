@@ -16,11 +16,16 @@ public static class TestHelpers
         TestContext.CurrentContext.TestDirectory,
         "../../../../../infra/secrets/ca-cert.pem");
 
-    public static SslConfig? CreateSslConfig(string protocol)
+    public static TlsConfig? CreateTlsConfig(string protocol)
     {
         if (protocol != "SASL_SSL")
             return null;
-        return new SslConfig(SaslMechanism, SaslUsername, SaslPassword, SslCaCertPath);
+        return new TlsConfig(SslCaCertPath);
+    }
+
+    public static SaslConfig? CreateSaslConfig()
+    {
+        return new SaslConfig(SaslMechanism, SaslUsername, SaslPassword);
     }
 
     public static void ValidateSslInfrastructure()
@@ -41,15 +46,16 @@ public static class TestHelpers
         bool requestApiVersionsOnOpen = false)
     {
         return new ConnectionConfig(
-            protocol,
-            BootstrapHost,
-            port ?? (protocol == "SASL_SSL" ? SaslBootstrapPort : PlainTextBootstrapPort),
-            clientId!,
-            responseBufferSize ?? 512 * 1024,
-            requestBufferSize ?? 512 * 1024,
-            CreateSslConfig(protocol),
-            checkCrcs || protocol == "SASL_SSL",
-            requestApiVersionsOnOpen);
+               protocol,
+               BootstrapHost,
+               port ?? (protocol == "SASL_SSL" ? SaslBootstrapPort : PlainTextBootstrapPort),
+               clientId!,
+               responseBufferSize ?? 512 * 1024,
+               requestBufferSize ?? 512 * 1024,
+               CreateTlsConfig(protocol),
+               protocol == "SASL_SSL" ? CreateSaslConfig() : null,
+               checkCrcs || protocol == "SASL_SSL",
+               requestApiVersionsOnOpen);
     }
 
     public static ConsumerConfig CreateConsumerConfig(
@@ -74,6 +80,7 @@ public static class TestHelpers
             protocol,
             CheckCrcs: checkCrcs || protocol == "SASL_SSL",
             MaxWaitTime: maxWaitTime ?? TimeSpan.FromSeconds(1),
-            Ssl: CreateSslConfig(protocol));
+            Tls: CreateTlsConfig(protocol),
+            Sasl: protocol == "SASL_SSL" ? CreateSaslConfig() : null);
     }
 }

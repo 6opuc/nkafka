@@ -9,7 +9,8 @@ public sealed record ConnectionConfig(
     string ClientId,
     int ResponseBufferSize = 512 * 1024,
     int RequestBufferSize = 512 * 1024,
-    SslConfig? Ssl = null,
+    TlsConfig? Tls = null,
+    SaslConfig? Sasl = null,
     bool CheckCrcs = false,
     bool RequestApiVersionsOnOpen = true)
 {

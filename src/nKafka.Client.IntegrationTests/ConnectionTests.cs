@@ -356,7 +356,8 @@ public class ConnectionTests
                 broker.Host!,
                 broker.Port!.Value,
                 "nKafka.Client.IntegrationTests",
-                Ssl: TestHelpers.CreateSslConfig(protocol),
+                Tls: TestHelpers.CreateTlsConfig(protocol),
+                Sasl: protocol == "SASL_SSL" ? TestHelpers.CreateSaslConfig() : null,
                 CheckCrcs: protocol == "SASL_SSL",
                 RequestApiVersionsOnOpen: false);
             await using var connection = new Connection(config, TestLoggerFactory.Instance);
@@ -434,7 +435,8 @@ public class ConnectionTests
                 broker.Host!,
                 broker.Port!.Value,
                 "nKafka.Client.IntegrationTests",
-                Ssl: TestHelpers.CreateSslConfig(protocol),
+                Tls: TestHelpers.CreateTlsConfig(protocol),
+                Sasl: protocol == "SASL_SSL" ? TestHelpers.CreateSaslConfig() : null,
                 CheckCrcs: protocol == "SASL_SSL",
                 RequestApiVersionsOnOpen: false);
             await using var connection = new Connection(config, NullLoggerFactory.Instance);
@@ -524,7 +526,8 @@ public class ConnectionTests
                 "nKafka.Client.IntegrationTests",
                 10 * 512 * 1024,
                 512 * 1024,
-                Ssl: TestHelpers.CreateSslConfig(protocol),
+                Tls: TestHelpers.CreateTlsConfig(protocol),
+                Sasl: protocol == "SASL_SSL" ? TestHelpers.CreateSaslConfig() : null,
                 CheckCrcs: true,
                 RequestApiVersionsOnOpen: false);
             await using var connection = new Connection(config, NullLoggerFactory.Instance);
@@ -705,7 +708,8 @@ public class ConnectionTests
                      coordinator.Host!,
                      coordinator.Port!.Value,
                      "nKafka.Client.IntegrationTests",
-                     Ssl: TestHelpers.CreateSslConfig(protocol),
+               Tls: TestHelpers.CreateTlsConfig(protocol),
+                Sasl: protocol == "SASL_SSL" ? TestHelpers.CreateSaslConfig() : null,
                      CheckCrcs: protocol == "SASL_SSL",
                      RequestApiVersionsOnOpen: false);
         var coordinatorConnection = new Connection(coordinatorConfig, TestLoggerFactory.Instance);
@@ -753,12 +757,13 @@ public class ConnectionTests
     [Test]
     public async Task ConnectAsync_WrongPassword_ShouldFail()
     {
-        var sslConfig = new SslConfig(TestHelpers.SaslMechanism, TestHelpers.SaslUsername, "wrong-password", TestHelpers.CreateSslConfig("SASL_SSL")!.SslCaCertPath);
+        var tlsConfig = TestHelpers.CreateTlsConfig("SASL_SSL")!;
+        var saslConfig = new SaslConfig(TestHelpers.SaslMechanism, TestHelpers.SaslUsername, "wrong-password");
         var config = TestHelpers.CreateConnectionConfig(
-                     "SASL_SSL",
-                     clientId: "nKafka.Client.IntegrationTests",
-                     requestApiVersionsOnOpen: false);
-        config = config with { Ssl = sslConfig };
+                      "SASL_SSL",
+                      clientId: "nKafka.Client.IntegrationTests",
+                      requestApiVersionsOnOpen: false);
+        config = config with { Tls = tlsConfig, Sasl = saslConfig };
 
         var connection = new Connection(config, TestLoggerFactory.Instance);
 
@@ -770,12 +775,13 @@ public class ConnectionTests
     [Test]
     public async Task ConnectAsync_UnsupportedMechanism_ShouldFail()
     {
-        var sslConfig = new SslConfig("SCRAM-SHA-1", TestHelpers.SaslUsername, TestHelpers.SaslPassword, TestHelpers.CreateSslConfig("SASL_SSL")!.SslCaCertPath);
+        var tlsConfig = TestHelpers.CreateTlsConfig("SASL_SSL")!;
+        var saslConfig = new SaslConfig("SCRAM-SHA-1", TestHelpers.SaslUsername, TestHelpers.SaslPassword);
         var config = TestHelpers.CreateConnectionConfig(
-                     "SASL_SSL",
-                     clientId: "nKafka.Client.IntegrationTests",
-                     requestApiVersionsOnOpen: false);
-        config = config with { Ssl = sslConfig };
+                      "SASL_SSL",
+                      clientId: "nKafka.Client.IntegrationTests",
+                      requestApiVersionsOnOpen: false);
+        config = config with { Tls = tlsConfig, Sasl = saslConfig };
 
         var connection = new Connection(config, TestLoggerFactory.Instance);
 

@@ -30,7 +30,7 @@ internal static class BenchmarkHelper
     {
         if (protocol == "SASL_SSL")
         {
-            return config with { Ssl = new SslConfig("SCRAM-SHA-512", "admin", "admin-secret", CACertPath), CheckCrcs = false };
+            return config with { Tls = new TlsConfig(CACertPath), Sasl = new SaslConfig("SCRAM-SHA-512", "admin", "admin-secret"), CheckCrcs = false };
         }
         return config;
     }
@@ -39,7 +39,7 @@ internal static class BenchmarkHelper
     {
         if (protocol == "SASL_SSL")
         {
-            return config with { Ssl = new SslConfig("SCRAM-SHA-512", "admin", "admin-secret", CACertPath) };
+            return config with { Tls = new TlsConfig(CACertPath), Sasl = new SaslConfig("SCRAM-SHA-512", "admin", "admin-secret") };
         }
         return config;
     }
