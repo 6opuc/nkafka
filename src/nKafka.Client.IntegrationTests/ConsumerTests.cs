@@ -43,7 +43,7 @@ public class ConsumerTests
         result.Should().BeNull("no messages exist at the high offset");
     }
 
-  [Test]
+    [Test]
     [TestCaseSource(nameof(Protocols))]
     public async Task ConsumeBatchAsync_WithHighOffset_ShouldNotDeadlock(string protocol)
     {
@@ -84,13 +84,14 @@ public class ConsumerTests
     }
 
     [Test]
-public async Task ConsumeGroup_SaslSsl_ShouldConsumeMessagesWithFetchSessions()
+    [TestCaseSource(nameof(Protocols))]
+    public async Task ConsumeAsync_WithMessages_ShouldConsumeWithFetchSessions(string protocol)
     {
         var config = TestHelpers.CreateConsumerConfig(
-            $"sasl-fetch-session-test-{Guid.NewGuid()}",
-            $"sasl-fetch-session-group-{Guid.NewGuid()}",
-            $"sasl-fetch-session-instance-{Guid.NewGuid()}",
-            "SASL_SSL",
+            $"fetch-session-test-{Guid.NewGuid()}",
+            $"fetch-session-group-{Guid.NewGuid()}",
+            $"fetch-session-instance-{Guid.NewGuid()}",
+            protocol,
             maxWaitTime: TimeSpan.FromSeconds(2),
             checkCrcs: true);
 
@@ -121,18 +122,19 @@ public async Task ConsumeGroup_SaslSsl_ShouldConsumeMessagesWithFetchSessions()
 
         stopwatch.Stop();
 
-        consumed.Should().BeGreaterThan(0, "Should consume messages from SASL_SSL topic");
+        consumed.Should().BeGreaterThan(0, $"Should consume messages from {protocol} topic");
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10), "Should complete within reasonable time with fetch sessions");
     }
 
     [Test]
-public async Task ConsumeGroup_SaslSsl_ShouldHaveFetchStats()
+    [TestCaseSource(nameof(Protocols))]
+    public async Task ConsumeBatchAsync_WithMessages_ShouldHaveFetchStats(string protocol)
     {
         var config = TestHelpers.CreateConsumerConfig(
-            $"sasl-stats-test-{Guid.NewGuid()}",
-            $"sasl-stats-group-{Guid.NewGuid()}",
-            $"sasl-stats-instance-{Guid.NewGuid()}",
-            "SASL_SSL",
+            $"stats-test-{Guid.NewGuid()}",
+            $"stats-group-{Guid.NewGuid()}",
+            $"stats-instance-{Guid.NewGuid()}",
+            protocol,
             maxWaitTime: TimeSpan.FromSeconds(2),
             checkCrcs: true);
 
