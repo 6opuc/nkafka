@@ -22,13 +22,13 @@ public class ConnectionTests
     }
 
     [Test]
-    [TestCaseSource(nameof(OpenConnectionTestCases))]
+    [TestCaseSource(nameof(TestProtocols))]
     public async Task ConnectAsyncAndDisposeAsyncShouldNotThrow(string protocol)
     {
         await using var connection = await OpenConnection(protocol);
     }
 
-    public static IEnumerable OpenConnectionTestCases => KafkaTestCases.ProtocolVersions;
+    private static IEnumerable TestProtocols => new[] { "PLAINTEXT", "SASL_SSL" };
 
     [Test]
     [TestCaseSource(nameof(ApiVersionsRequestTestCases))]
