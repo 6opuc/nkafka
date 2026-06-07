@@ -20,18 +20,9 @@ public class ConsumerTests
         get { yield return "PLAINTEXT"; yield return "SASL_SSL"; }
     }
 
-    public static IEnumerable ConsumerBootstrapServers
-    {
-        get
-        {
-            yield return new object[] { "PLAINTEXT", $"PLAINTEXT://{TestHelpers.BootstrapHost}:{TestHelpers.PlainTextBootstrapPort},PLAINTEXT://{TestHelpers.BootstrapHost}:{TestHelpers.PlainTextBootstrapPort + 100},PLAINTEXT://{TestHelpers.BootstrapHost}:{TestHelpers.PlainTextBootstrapPort + 200}" };
-            yield return new object[] { "SASL_SSL", $"SASL_SSL://{TestHelpers.BootstrapHost}:{TestHelpers.SaslBootstrapPort}" };
-        }
-    }
-
     [Test]
-    [TestCaseSource(nameof(ConsumerBootstrapServers))]
-    public async Task ConsumeAsync_WithHighOffset_ShouldNotDeadlock(string protocol, string servers)
+    [TestCaseSource(nameof(Protocols))]
+    public async Task ConsumeAsync_WithHighOffset_ShouldNotDeadlock(string protocol)
     {
         await using var consumer = await CreateConsumerAsync(
             "deadlock-test-client",
@@ -52,9 +43,9 @@ public class ConsumerTests
         result.Should().BeNull("no messages exist at the high offset");
     }
 
-   [Test]
-    [TestCaseSource(nameof(ConsumerBootstrapServers))]
-    public async Task ConsumeBatchAsync_WithHighOffset_ShouldNotDeadlock(string protocol, string servers)
+  [Test]
+    [TestCaseSource(nameof(Protocols))]
+    public async Task ConsumeBatchAsync_WithHighOffset_ShouldNotDeadlock(string protocol)
     {
         await using var consumer = await CreateConsumerAsync(
             "deadlock-batch-test-client",
