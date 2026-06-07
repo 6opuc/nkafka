@@ -35,8 +35,9 @@
 - Remove redundant conditions (e.g., CRC check position validation)
 
 ### Formatting
-- **Do NOT fix formatting individually** during implementation
-- Final step: `dotnet format src/nKafka.sln`
+- **Always format touched code after making changes**: `dotnet format src/nKafka.sln`
+- The `.editorconfig` at the solution root defines all formatting rules (4-space indent, LF line endings, file-scoped namespaces, etc.)
+- Respect `.editorconfig` rules when writing new code — do not manually fix formatting, rely on `dotnet format`
 - Commit formatting changes separately if needed
 
 ### Performance
