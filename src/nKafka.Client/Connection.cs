@@ -12,7 +12,7 @@ public class Connection : IConnection
 {
     private readonly ILogger _logger;
     private readonly IStreamProvider _streamProvider;
-    private readonly SaslAuthenticator? _saslAuth;
+    private readonly IAuthenticator? _authenticator;
     private readonly ConnectionConfig _config;
 
     private CancellationTokenSource? _stop;
@@ -36,7 +36,7 @@ public class Connection : IConnection
         _bufferSize = Math.Max(_config.RequestBufferSize, _config.ResponseBufferSize);
         _logger = loggerFactory.CreateLogger<Connection>();
         _streamProvider = BuildStreamProvider(config, loggerFactory);
-        _saslAuth = config.Sasl?.Mechanism is not null
+        _authenticator = config.Sasl?.Mechanism is not null
             ? new SaslAuthenticator(config, loggerFactory)
             : null;
         _serializationContext = new SerializationContext(_arrayPool, _bufferSize)
@@ -63,11 +63,11 @@ public class Connection : IConnection
     {
         using var _ = BeginDefaultLoggingScope();
         await _streamProvider.OpenAsync(cancellationToken);
-        if (_saslAuth != null)
-        {
-            await _saslAuth.AuthenticateAsync(_streamProvider.WriteStream, cancellationToken);
-        }
         StartReceiving();
+        if (_authenticator != null)
+        {
+            await _authenticator.AuthenticateAsync(this, cancellationToken);
+        }
         await RequestApiVersionsAsync(cancellationToken);
     }
 

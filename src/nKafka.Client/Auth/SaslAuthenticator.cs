@@ -1,16 +1,13 @@
-using System.Buffers;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using nKafka.Client.Auth;
 using nKafka.Contracts;
 using nKafka.Contracts.MessageDefinitions;
-using nKafka.Contracts.MessageSerializers;
 
 namespace nKafka.Client;
 
 public sealed class SaslAuthenticator : IAuthenticator
 {
-    private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
     private readonly ILogger _logger;
     private readonly ConnectionConfig _config;
 
@@ -20,7 +17,7 @@ public sealed class SaslAuthenticator : IAuthenticator
         _logger = loggerFactory.CreateLogger<SaslAuthenticator>();
     }
 
-    public async ValueTask AuthenticateAsync(Stream stream, CancellationToken ct)
+    public async ValueTask AuthenticateAsync(IConnection connection, CancellationToken ct)
     {
         string? mechanism = _config.Sasl?.Mechanism;
         if (string.IsNullOrEmpty(mechanism))
@@ -32,15 +29,16 @@ public sealed class SaslAuthenticator : IAuthenticator
 
         // 1. SaslHandshake
         _logger.LogDebug("Sending SaslHandshakeRequest.");
-        SaslHandshakeResponse handshakeResponse = await SendSaslHandshakeAsync(stream, mechanism, ct);
+        using var handshakeResponse = await connection.SendAsync<SaslHandshakeResponse>(
+            new SaslHandshakeRequest { Mechanism = mechanism, FixedVersion = 1 }, ct);
 
-        if (handshakeResponse.ErrorCode != 0)
+        if (handshakeResponse.Message.ErrorCode != 0)
         {
             throw new InvalidOperationException(
-                $"SASL handshake failed with error code {handshakeResponse.ErrorCode}");
+                $"SASL handshake failed with error code {handshakeResponse.Message.ErrorCode}");
         }
 
-        var supportedMechanisms = handshakeResponse.Mechanisms;
+        var supportedMechanisms = handshakeResponse.Message.Mechanisms;
         if (supportedMechanisms == null ||
             !supportedMechanisms.Any(m => m == mechanism))
         {
@@ -72,194 +70,24 @@ public sealed class SaslAuthenticator : IAuthenticator
         // Round 1: Client-First -> Server-First
         byte[] clientFirstBytes = scramClient.GetClientFirstMessage();
         _logger.LogDebug("Sending SASL authenticate (client-first).");
-        byte[] serverFirstBytes = await SendSaslAuthenticateAsync(stream, clientFirstBytes, ct);
+        using var serverFirstResponse = await connection.SendAsync<SaslAuthenticateResponse>(
+            new SaslAuthenticateRequest { AuthBytes = clientFirstBytes }, ct);
+
+        byte[] serverFirstBytes = serverFirstResponse.Message.AuthBytes?.ToArray() ?? [];
 
         // Round 2: Client-Final -> Server-Final
         byte[] clientFinalBytes = scramClient.GetClientFinalMessage(serverFirstBytes);
         _logger.LogDebug("Sending SASL authenticate (client-final).");
-        byte[] serverFinalBytes = await SendSaslAuthenticateAsync(stream, clientFinalBytes, ct);
+        using var serverFinalResponse = await connection.SendAsync<SaslAuthenticateResponse>(
+            new SaslAuthenticateRequest { AuthBytes = clientFinalBytes }, ct);
 
-        scramClient.VerifyServerFinalMessage(serverFinalBytes);
+        if (serverFinalResponse.Message.ErrorCode != 0)
+        {
+            string errorMsg = serverFinalResponse.Message.ErrorMessage ?? $"Error code {serverFinalResponse.Message.ErrorCode}";
+            throw new InvalidOperationException($"SASL authentication failed: {errorMsg}");
+        }
+
+        scramClient.VerifyServerFinalMessage(serverFinalResponse.Message.AuthBytes?.ToArray() ?? []);
         _logger.LogInformation("SASL authentication successful.");
-    }
-
-    private async Task<SaslHandshakeResponse> SendSaslHandshakeAsync(
-        Stream stream, string mechanism, CancellationToken ct)
-    {
-        int correlationId = IdGenerator.Next();
-        short apiVersion = 1;
-        bool isFlexible = apiVersion >= 2;
-        short requestHeaderVersion = isFlexible ? (short)2 : (short)1;
-        short responseHeaderVersion = isFlexible ? (short)1 : (short)0;
-        var requestHeader = new RequestHeader
-        {
-            RequestApiKey = 17,
-            RequestApiVersion = apiVersion,
-            CorrelationId = correlationId,
-            ClientId = _config.ClientId,
-        };
-
-        var writer = new BufferWriter(_arrayPool, _config.RequestBufferSize);
-        try
-        {
-            int start = writer.Position;
-            writer.WriteInt(0);
-
-            var serializationContext = new SaslSerializationContext(_arrayPool, _config.RequestBufferSize)
-            {
-                Config = new SerializationConfig
-                {
-                    ClientId = _config.ClientId,
-                }
-            };
-
-            RequestHeaderSerializer.Serialize(ref writer, requestHeader, requestHeaderVersion, serializationContext);
-            SaslHandshakeRequestSerializer.Serialize(ref writer, new SaslHandshakeRequest { Mechanism = mechanism }, 0, serializationContext);
-
-            int end = writer.Position;
-            int size = end - start - 4;
-            writer.Position = start;
-            writer.WriteInt(size);
-            writer.Position = end;
-
-            await stream.WriteAsync(writer.Memory.Slice(0, writer.Position), ct);
-            await stream.FlushAsync(ct);
-            _logger.LogDebug("SASL handshake request written ({PayloadSize} bytes).", writer.Position);
-
-            byte[] sizeBuf = new byte[4];
-            await ReadAtLeastAsync(stream, sizeBuf, 4, ct);
-            int responseSize = (sizeBuf[0] << 24) | (sizeBuf[1] << 16) | (sizeBuf[2] << 8) | sizeBuf[3];
-
-            byte[] responseBuffer = _arrayPool.Rent(responseSize);
-            try
-            {
-                await ReadAtLeastAsync(stream, responseBuffer, responseSize, ct);
-
-                var buffer = new Memory<byte>(responseBuffer, 0, responseSize);
-                var reader = new BufferReader(buffer);
-                var responseHeader = ResponseHeaderSerializer.Deserialize(ref reader, responseHeaderVersion, serializationContext);
-
-                if (responseHeader.CorrelationId != correlationId)
-                {
-                    throw new InvalidOperationException(
-                        $"Correlation ID mismatch: expected {correlationId}, got {responseHeader.CorrelationId}");
-                }
-
-                return SaslHandshakeResponseSerializer.Deserialize(ref reader, apiVersion, serializationContext);
-            }
-            finally
-            {
-                _arrayPool.Return(responseBuffer);
-            }
-        }
-        finally
-        {
-            writer.Dispose();
-        }
-    }
-
-    private async Task<byte[]> SendSaslAuthenticateAsync(
-        Stream stream, byte[] authBytes, CancellationToken ct)
-    {
-        _logger.LogDebug("SASL authenticate payload ({Len} bytes).", authBytes.Length);
-        var request = new SaslAuthenticateRequest
-        {
-            AuthBytes = authBytes,
-        };
-
-        int correlationId = IdGenerator.Next();
-
-        short effectiveApiVersion = 0;
-        bool isFlexible = effectiveApiVersion >= 2;
-        short requestHeaderVersion = isFlexible ? (short)2 : (short)1;
-        short responseHeaderVersion = isFlexible ? (short)1 : (short)0;
-        var requestHeader = new RequestHeader
-        {
-            RequestApiKey = 36,
-            RequestApiVersion = effectiveApiVersion,
-            CorrelationId = correlationId,
-            ClientId = _config.ClientId,
-        };
-
-        var writer = new BufferWriter(_arrayPool, _config.RequestBufferSize);
-        try
-        {
-            int start = writer.Position;
-            writer.WriteInt(0);
-
-            var serializationContext = new SaslSerializationContext(_arrayPool, _config.RequestBufferSize)
-            {
-                Config = new SerializationConfig
-                {
-                    ClientId = _config.ClientId,
-                }
-            };
-
-            RequestHeaderSerializer.Serialize(ref writer, requestHeader, requestHeaderVersion, serializationContext);
-            SaslAuthenticateRequestSerializer.Serialize(ref writer, request, effectiveApiVersion, serializationContext);
-
-            int end = writer.Position;
-            int size = end - start - 4;
-            writer.Position = start;
-            writer.WriteInt(size);
-            writer.Position = end;
-
-            await stream.WriteAsync(writer.Memory.Slice(0, writer.Position), ct);
-            await stream.FlushAsync(ct);
-            _logger.LogDebug("SASL auth request written ({PayloadSize} bytes).", writer.Position);
-
-            byte[] sizeBuf = new byte[4];
-            await ReadAtLeastAsync(stream, sizeBuf, 4, ct);
-            int responseSize = (sizeBuf[0] << 24) | (sizeBuf[1] << 16) | (sizeBuf[2] << 8) | sizeBuf[3];
-
-            byte[] responseBuffer = _arrayPool.Rent(responseSize);
-            try
-            {
-                await ReadAtLeastAsync(stream, responseBuffer, responseSize, ct);
-
-                var buffer = new Memory<byte>(responseBuffer, 0, responseSize);
-                var reader = new BufferReader(buffer);
-                var responseHeader = ResponseHeaderSerializer.Deserialize(ref reader, responseHeaderVersion, serializationContext);
-
-                if (responseHeader.CorrelationId != correlationId)
-                {
-                    throw new InvalidOperationException(
-                        $"Correlation ID mismatch: expected {correlationId}, got {responseHeader.CorrelationId}");
-                }
-
-                var response = SaslAuthenticateResponseSerializer.Deserialize(ref reader, effectiveApiVersion, serializationContext);
-
-                if (response.ErrorCode != 0)
-                {
-                    string errorMsg = response.ErrorMessage ?? $"Error code {response.ErrorCode}";
-                    throw new InvalidOperationException($"SASL authentication failed: {errorMsg}");
-                }
-
-                return response.AuthBytes?.ToArray() ?? [];
-            }
-            finally
-            {
-                _arrayPool.Return(responseBuffer);
-            }
-        }
-        finally
-        {
-            writer.Dispose();
-        }
-    }
-
-    private static async Task ReadAtLeastAsync(Stream stream, byte[] buffer, int minimumBytes, CancellationToken ct)
-    {
-        await stream.ReadAtLeastAsync(buffer, minimumBytes, true, ct);
-    }
-
-    private class SaslSerializationContext(ArrayPool<byte> arrayPool, int bufferSize) : ISerializationContext
-    {
-        public required SerializationConfig Config { get; init; }
-
-        public BufferWriter CreateWriter()
-        {
-            return new BufferWriter(arrayPool, bufferSize);
-        }
     }
 }
