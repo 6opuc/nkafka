@@ -1,7 +1,5 @@
 using System.Buffers;
 using System.Collections.Concurrent;
-using System.Net;
-using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using nKafka.Contracts;
@@ -13,10 +11,10 @@ namespace nKafka.Client;
 public class Connection : IConnection
 {
     private readonly ILogger _logger;
-    private Socket? _socket;
+    private readonly IStreamProvider _streamProvider;
+    private readonly IAuthenticator? _authenticator;
     private readonly ConnectionConfig _config;
 
-    private SocketWriterStream? _writerStream;
     private CancellationTokenSource? _stop;
 
     private Task _receiveBackgroundTask = default!;
@@ -37,6 +35,10 @@ public class Connection : IConnection
         _config = config;
         _bufferSize = Math.Max(_config.RequestBufferSize, _config.ResponseBufferSize);
         _logger = loggerFactory.CreateLogger<Connection>();
+        _streamProvider = BuildStreamProvider(config, loggerFactory);
+        _authenticator = config.Sasl?.Mechanism is not null
+            ? new SaslAuthenticator(config, loggerFactory)
+            : null;
         _serializationContext = new SerializationContext(_arrayPool, _bufferSize)
         {
             Config = new SerializationConfig
@@ -47,11 +49,25 @@ public class Connection : IConnection
         };
     }
 
+    private static IStreamProvider BuildStreamProvider(ConnectionConfig config, ILoggerFactory loggerFactory)
+    {
+        var networkProvider = new NetworkStreamProvider(
+            config.Host, config.Port, config.ResponseBufferSize, config.RequestBufferSize, loggerFactory);
+
+        return config.Protocol is "SASL_SSL" or "SSL" && config.Tls != null
+            ? new TlsStreamProvider(networkProvider, config.Host, config.Tls, loggerFactory)
+            : networkProvider;
+    }
+
     public async ValueTask OpenAsync(CancellationToken cancellationToken)
     {
         using var _ = BeginDefaultLoggingScope();
-        await OpenSocketAsync(cancellationToken);
+        await _streamProvider.OpenAsync(cancellationToken);
         StartReceiving();
+        if (_authenticator != null)
+        {
+            await _authenticator.AuthenticateAsync(this, cancellationToken);
+        }
         await RequestApiVersionsAsync(cancellationToken);
     }
 
@@ -60,40 +76,8 @@ public class Connection : IConnection
         return _logger.BeginScope($"{_config.Host}:{_config.Port}");
     }
 
-    private async ValueTask OpenSocketAsync(CancellationToken cancellationToken)
-    {
-        if (_config == null)
-        {
-            throw new InvalidOperationException("Connection is not configured.");
-        }
-        if (_socket != null)
-        {
-            throw new InvalidOperationException("Socket connection is already open.");
-        }
-
-        _logger.LogInformation("Opening socket connection.");
-
-        var ip = await Dns.GetHostAddressesAsync(_config.Host, cancellationToken);
-        if (ip.Length == 0)
-        {
-            throw new InvalidOperationException("Unable to resolve host.");
-        }
-        var endpoint = new IPEndPoint(ip.First(), _config.Port);
-        _socket = new Socket(endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-        _socket.ReceiveBufferSize = _config.ResponseBufferSize;
-        _socket.SendBufferSize = _config.RequestBufferSize;
-        _socket.NoDelay = true;
-        await _socket.ConnectAsync(endpoint, cancellationToken);
-        _writerStream = new SocketWriterStream(_socket);
-    }
-
     private void StartReceiving()
     {
-        if (_socket == null)
-        {
-            return;
-        }
-
         _stop = new CancellationTokenSource();
         var cancellationToken = _stop.Token;
 
@@ -104,7 +88,7 @@ public class Connection : IConnection
             {
                 try
                 {
-                    await using var stream = new NetworkStream(_socket);
+                    var stream = _streamProvider.ReadStream;
                     while (!cancellationToken.IsCancellationRequested)
                     {
                         int bytesRead = await stream.ReadAtLeastAsync(
@@ -272,15 +256,20 @@ public class Connection : IConnection
         }
     }
 
+    public bool SupportsApiKeyVersion(ApiKey apiKey, short minVersion)
+    {
+        if (_apiVersions.TryGetValue(apiKey, out short maxVersion))
+        {
+            return maxVersion >= minVersion;
+        }
+
+        return false;
+    }
+
     public async ValueTask<IDisposableMessage<TResponse>> SendAsync<TResponse>(
         IRequest<TResponse> request,
         CancellationToken cancellationToken)
     {
-        if (_writerStream == null)
-        {
-            throw new InvalidOperationException("Socket connection is not open.");
-        }
-
         using (BeginDefaultLoggingScope())
         {
             var completionPromise = new TaskCompletionSource<MessageWithPooledPayload>();
@@ -308,7 +297,8 @@ public class Connection : IConnection
                     pendingRequest.SerializeRequest(ref writer, _serializationContext);
 
                     _logger.LogDebug("Sending {@size} bytes.", writer.Position);
-                    await _writerStream.WriteAsync(writer.Memory.Slice(0, writer.Position),
+                    await _streamProvider.WriteStream.WriteAsync(
+                        writer.Memory.Slice(0, writer.Position),
                         pendingRequest.CancellationToken);
                     _logger.LogDebug("Sent.");
                 }
@@ -341,29 +331,18 @@ public class Connection : IConnection
 
     public async ValueTask DisposeAsync()
     {
-        if (_socket == null)
-        {
-            return;
-        }
-
         using var _ = BeginDefaultLoggingScope();
-
-        _logger.LogInformation("Closing socket connection.");
 
         if (_stop != null)
         {
             await _stop.CancelAsync();
         }
-        await _receiveBackgroundTask;
-
-        if (_writerStream != null)
+        if (_receiveBackgroundTask != null)
         {
-            await _writerStream.DisposeAsync();
+            await _receiveBackgroundTask;
         }
 
-        _socket.Shutdown(SocketShutdown.Both);
-        _socket.Dispose();
-        _socket = null;
+        await _streamProvider.DisposeAsync();
     }
 
     private class SerializationContext(ArrayPool<byte> arrayPool, int bufferSize) : ISerializationContext

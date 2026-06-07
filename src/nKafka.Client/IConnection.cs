@@ -9,4 +9,6 @@ public interface IConnection : IAsyncDisposable
     ValueTask<IDisposableMessage<TResponse>> SendAsync<TResponse>(
         IRequest<TResponse> request,
         CancellationToken cancellationToken);
+
+    bool SupportsApiKeyVersion(ApiKey apiKey, short minVersion);
 }

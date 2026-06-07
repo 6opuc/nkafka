@@ -28,18 +28,18 @@ for (int t = 0; t < tasks.Capacity; t++)
                 string id = $"[{t1}:{i}]";
                 var stopwatchInner = Stopwatch.StartNew();
                 //await ConfluentConsumeBytesTest.Test(scenario);
-                //await NKafkaFetchBytesSeqSinglePartTest.Test(scenario);
-                //await NKafkaFetchBytesSeqMultiPartTest.Test(scenario);
-                //await NKafkaFetchBytesParallelMultiPartTest.Test(scenario);
-                //await NKafkaConsumeBytesTest.Test(scenario);
-                await NKafkaBatchConsumeBytesTest.Test(scenario);
+                //await NKafkaFetchBytesSeqSinglePartTest.Test(scenario, "SASL_SSL");
+                //await NKafkaFetchBytesSeqMultiPartTest.Test(scenario, "SASL_SSL");
+                //await NKafkaFetchBytesParallelMultiPartTest.Test(scenario, "SASL_SSL");
+                //await NKafkaConsumeBytesTest.Test(scenario, "SASL_SSL");
+                await NKafkaBatchConsumeBytesTest.Test(scenario, "SASL_SSL");
 
                 //await ConfluentIdleTest.Test(scenario);
                 //await NKafkaIdleTest.Test(scenario);
 
                 //await ConfluentConsumeStringTest.Test(scenario);
-                //await NKafkaFetchStringParallelMultiPartTest.Test(scenario);
-                //await NKafkaConsumeStringTest.Test(scenario);
+                //await NKafkaFetchStringParallelMultiPartTest.Test(scenario, "SASL_SSL");
+                //await NKafkaConsumeStringTest.Test(scenario, "SASL_SSL");
 
                 stopwatchInner.Stop();
                 Console.WriteLine($"{DateTime.UtcNow}: {id}: {stopwatchInner.ElapsedMilliseconds}ms");

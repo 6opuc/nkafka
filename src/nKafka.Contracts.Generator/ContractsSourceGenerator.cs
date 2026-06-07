@@ -165,6 +165,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
                       {
                           public ApiKey ApiKey => ApiKey.{{Enum.GetName(typeof(ApiKey), pair.Request.ApiKey!)}};
                           public short? FixedVersion { get; set; }
+                          public VersionRange ValidVersions { get; } = {{pair.Request.ValidVersions.ToLiteral()}};
                            public VersionRange FlexibleVersions { get; } = {{pair.Request.FlexibleVersions.ToLiteral()}};
                            
                            public void SerializeRequest(ref BufferWriter writer, short version, ISerializationContext context)

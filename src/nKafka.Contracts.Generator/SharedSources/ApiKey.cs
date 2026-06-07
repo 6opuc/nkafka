@@ -23,4 +23,5 @@ public enum ApiKey : short
     ApiVersions = 18,
     CreateTopics = 19,
     DeleteTopics = 20,
+    SaslAuthenticate = 36,
 }

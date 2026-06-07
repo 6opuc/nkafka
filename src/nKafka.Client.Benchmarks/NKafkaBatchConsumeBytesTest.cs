@@ -4,15 +4,16 @@ namespace nKafka.Client.Benchmarks;
 
 public static class NKafkaBatchConsumeBytesTest
 {
-    public static async Task Test(FetchScenario scenario)
+    public static async Task Test(FetchScenario scenario, string protocol)
     {
         var consumerConfig = new ConsumerConfig(
-            "PLAINTEXT://localhost:9192, PLAINTEXT://localhost:9292, PLAINTEXT://localhost:9392",
+            BenchmarkHelper.BootstrapServers(protocol),
             scenario.TopicName,
-            "test-consumer-group",
             $"testapp-{DateTime.UtcNow.Date:yyyyMMdd}-{Guid.NewGuid():N}",
-            "PLAINTEXT",
-            "nKafka.Client.Benchmarks");
+            $"test-consumer-group-{Guid.NewGuid():N}",
+            $"test-instance-{Guid.NewGuid():N}",
+            protocol)
+            .ConfigureProtocol(protocol);
 
         await using var consumer = new Consumer<Memory<byte>?>(
             consumerConfig,

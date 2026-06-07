@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
@@ -41,6 +42,18 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private IDisposableMessage<FetchResponse>? _fetchResponse => _fetchResult?.Response;
     private IEnumerator<MessageDeserializationContext>? _messageDeserializeEnumerator = null;
 
+    private readonly Stopwatch _totalStopwatch = new();
+    private readonly Stopwatch _connectStopwatch = new();
+    private readonly Stopwatch _metadataStopwatch = new();
+    private readonly Stopwatch _joinGroupStopwatch = new();
+    private readonly Stopwatch _syncGroupStopwatch = new();
+    private readonly Stopwatch _fetchStopwatch = new();
+    private readonly Stopwatch _deserializeStopwatch = new();
+    private readonly Stopwatch _commitStopwatch = new();
+    private readonly Stopwatch _heartbeatStopwatch = new();
+    private int _heartbeatCount;
+
+    public ConsumerStatistics Statistics { get; } = new();
 
     public Consumer(
         ConsumerConfig config,
@@ -63,10 +76,23 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     public async ValueTask JoinGroupAsync(CancellationToken cancellationToken)
     {
         _stop = new CancellationTokenSource();
+        _totalStopwatch.Start();
         using var _ = BeginDefaultLoggingScope();
+
+        _connectStopwatch.Start();
         await OpenConnectionsAsync(cancellationToken);
+        _connectStopwatch.Stop();
+        Statistics.ConnectTime = _connectStopwatch.Elapsed;
+
+        _metadataStopwatch.Start();
         var connection = GetCoordinatorConnection();
+        _metadataStopwatch.Stop();
+        Statistics.MetadataTime = _metadataStopwatch.Elapsed;
+
+        _joinGroupStopwatch.Start();
         using var joinGroupResponse = await JoinGroupRequestAsync(connection, cancellationToken);
+        _joinGroupStopwatch.Stop();
+        Statistics.JoinGroupTime = _joinGroupStopwatch.Elapsed;
         _groupMembership = new GroupMembership
         {
             MemberId = joinGroupResponse.Message.MemberId!,
@@ -90,7 +116,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _logger.LogInformation("Promoted as a leader.");
             assignments = ReassignGroup();
         }
+
+        _syncGroupStopwatch.Start();
         await SyncGroup(connection, assignments, cancellationToken);
+        _syncGroupStopwatch.Stop();
+        Statistics.SyncGroupTime = _syncGroupStopwatch.Elapsed;
 
         StartSendingHeartbeats();
     }
@@ -141,10 +171,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 broker.Port!.Value,
                 _config.ClientId,
                 _config.ResponseBufferSize,
-                _config.RequestBufferSize)
-            {
-                CheckCrcs = _config.CheckCrcs,
-            };
+                _config.RequestBufferSize,
+                _config.Tls,
+                _config.Sasl,
+                _config.CheckCrcs);
             var connection = new Connection(connectionConfig, _loggerFactory);
             await connection.OpenAsync(cancellationToken);
             _connections[broker.NodeId!.Value] = connection;
@@ -161,14 +191,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         foreach (string connectionString in connectionStrings)
         {
-            var connectionConfig = new ConnectionConfig(
+            var connectionConfig = ConnectionConfig.FromConnectionString(
                 connectionString,
                 _config.ClientId,
-                _config.RequestBufferSize,
+                _config.ResponseBufferSize,
                 _config.RequestBufferSize)
-            {
-                RequestApiVersionsOnOpen = false,
-            };
+                with
+            { Tls = _config.Tls, Sasl = _config.Sasl, RequestApiVersionsOnOpen = false };
             try
             {
                 var connection = new Connection(connectionConfig, _loggerFactory);
@@ -208,15 +237,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             }
 
             coordinatorConnectionConfig = new ConnectionConfig(
-                _config.Protocol,
-                response.Message.Host!,
-                response.Message.Port!.Value,
-                _config.ClientId,
-                _config.ResponseBufferSize,
-                _config.RequestBufferSize)
-            {
-                CheckCrcs = _config.CheckCrcs,
-            };
+                            _config.Protocol,
+                            response.Message.Host!,
+                            response.Message.Port!.Value,
+                            _config.ClientId,
+                            _config.ResponseBufferSize,
+                            _config.RequestBufferSize,
+                            _config.Tls,
+                            _config.Sasl,
+                            _config.CheckCrcs);
         }
         else
         {
@@ -238,10 +267,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 coordinator.Port!.Value,
                 _config.ClientId,
                 _config.ResponseBufferSize,
-                _config.RequestBufferSize)
-            {
-                CheckCrcs = _config.CheckCrcs,
-            };
+                _config.RequestBufferSize,
+                _config.Tls,
+                _config.Sasl,
+                _config.CheckCrcs);
         }
 
         var coordinatorConnection = new Connection(coordinatorConnectionConfig, _loggerFactory);
@@ -459,6 +488,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 {
                     try
                     {
+                        _heartbeatStopwatch.Start();
                         var connection = GetCoordinatorConnection();
 
                         var request = new HeartbeatRequest
@@ -469,6 +499,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             GroupInstanceId = null, // ???
                         };
                         using var response = await connection.SendAsync(request, CancellationToken.None);
+                        var hbElapsed = _heartbeatStopwatch.Elapsed;
+                        _heartbeatStopwatch.Stop();
+                        Interlocked.Increment(ref _heartbeatCount);
+                        Statistics.IncrementHeartbeats(1);
+                        Statistics.AddHeartbeatTime(hbElapsed);
 
                         if (response.Message.ErrorCode == 0)
                         {
@@ -511,7 +546,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         var cancellationToken = _stop!.Token;
 
-        var fetchRequests = new Dictionary<int, FetchRequest>(_connections.Count);
+        var topicPartitionOffsets = new List<(string Topic, int Partition, long Offset, int NodeId)>();
+        var sessionManagers = new Dictionary<int, FetchSessionManager>(_connections.Count);
+
         foreach (var topicAssignment in assignedPartitions)
         {
             if (_topicsMetadata?.TryGetValue(topicAssignment.Key, out var topicMetadata) != true ||
@@ -528,97 +565,64 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     continue;
                 }
 
-                var connection = _connections[partitionMetadata.LeaderId!.Value];
+                int nodeId = partitionMetadata.LeaderId!.Value;
+                var connection = _connections[nodeId];
+
+                if (!sessionManagers.TryGetValue(nodeId, out var sessionManager))
+                {
+                    bool useSessions = connection.SupportsApiKeyVersion(ApiKey.Fetch, 4);
+                    sessionManager = new FetchSessionManager(0, 0, useSessions);
+                    sessionManagers[nodeId] = sessionManager;
+                }
+
                 long offset = await _offsetStorage.GetAsync(
                     connection,
                     _config.GroupId,
                     topicAssignment.Key,
                     partition,
                     cancellationToken);
-                var fetchPartition = new FetchPartition
-                {
-                    Partition = partition,
-                    CurrentLeaderEpoch = -1, // ???
-                    FetchOffset = offset, // ???
-                    LastFetchedEpoch = -1, // ???
-                    LogStartOffset = -1, // ???
-                    PartitionMaxBytes = 512 * 1024, // !!!
-                    ReplicaDirectoryId = Guid.Empty, // ???
-                };
-                if (!fetchRequests.TryGetValue(partitionMetadata.LeaderId!.Value, out var fetchRequest))
-                {
-                    fetchRequest = new FetchRequest
-                    {
-                        ClusterId = null, // ???
-                        ReplicaId = -1, // ???
-                        ReplicaState = null, // ???
-                        MaxWaitMs = (int)_config.MaxWaitTime.TotalMilliseconds,
-                        MinBytes = 1, // ???
-                        MaxBytes = 0x7fffffff,
-                        IsolationLevel = 0, // !!!
-                        SessionId = 0, // ???
-                        SessionEpoch = -1, // ???
-                        Topics =
-                        [
-                            new FetchTopic
-                            {
-                                Topic = topicMetadata.Name,
-                                TopicId = topicMetadata.TopicId,
-                                Partitions =
-                                [
-                                    fetchPartition,
-                                ]
-                            },
-                        ],
-                        ForgottenTopicsData = [], // ???
-                        RackId = string.Empty, // ???
-                    };
-                    fetchRequests[partitionMetadata.LeaderId!.Value] = fetchRequest;
-                }
-                else
-                {
-                    var fetchRequestTopic = fetchRequest.Topics!.FirstOrDefault(x =>
-                        x.Topic == topicMetadata.Name ||
-                        x.TopicId == topicMetadata.TopicId);
-                    if (fetchRequestTopic == null)
-                    {
-                        fetchRequestTopic = new FetchTopic
-                        {
-                            Topic = topicMetadata.Name,
-                            TopicId = topicMetadata.TopicId,
-                            Partitions =
-                            [
-                                fetchPartition,
-                            ]
-                        };
-                        fetchRequest.Topics!.Add(fetchRequestTopic);
-                    }
-                    else
-                    {
-                        fetchRequestTopic.Partitions!.Add(fetchPartition);
-                    }
-                }
+                topicPartitionOffsets.Add((topicAssignment.Key, partition, offset, nodeId));
             }
         }
 
-        _fetchTasks = new List<Task>(fetchRequests.Count);
-        foreach (var pair in fetchRequests)
+        var nodeTopics = new Dictionary<int, Dictionary<string, List<(int Partition, long Offset)>>>();
+        foreach (var (topic, partition, offset, nodeId) in topicPartitionOffsets)
         {
-            var fetchTask = Task.Run(() => FetchLoopAsync(pair.Key, pair.Value, cancellationToken), cancellationToken);
+            if (!nodeTopics.TryGetValue(nodeId, out var topicMap))
+            {
+                topicMap = new Dictionary<string, List<(int Partition, long Offset)>>();
+                nodeTopics[nodeId] = topicMap;
+            }
+
+            if (!topicMap.TryGetValue(topic, out var partitions))
+            {
+                partitions = new List<(int Partition, long Offset)>();
+                topicMap[topic] = partitions;
+            }
+            partitions.Add((partition, offset));
+        }
+
+        _fetchTasks = new List<Task>(sessionManagers.Count);
+        foreach (var pair in sessionManagers)
+        {
+            int nodeId = pair.Key;
+            var sessionManager = pair.Value;
+            var topicMap = nodeTopics.GetValueOrDefault(nodeId, new Dictionary<string, List<(int Partition, long Offset)>>());
+            var fetchTask = Task.Run(() => FetchLoopAsync(nodeId, topicMap, sessionManager, cancellationToken), cancellationToken);
             _fetchTasks.Add(fetchTask);
         }
     }
 
-    private async Task FetchLoopAsync(int nodeId, FetchRequest request, CancellationToken cancellationToken)
+    private async Task FetchLoopAsync(int nodeId, Dictionary<string, List<(int Partition, long Offset)>> topicMap, FetchSessionManager sessionManager, CancellationToken cancellationToken)
     {
         var context = new StringBuilder();
-        foreach (var topic in request.Topics!)
+        foreach (var topic in topicMap)
         {
-            context.Append(topic.Topic);
+            context.Append(topic.Key);
             context.Append("[");
-            foreach (var partition in topic.Partitions!)
+            foreach (var p in topic.Value)
             {
-                context.Append(partition.Partition);
+                context.Append(p.Partition);
                 context.Append(",");
             }
             context.Append("] ");
@@ -627,14 +631,39 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             _logger.LogInformation("Fetching started.");
             int consecutiveErrors = 0;
+            bool firstRequest = true;
+            var connection = _connections[nodeId];
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
-                    var connection = _connections[nodeId];
-                    var response = await connection.SendAsync(request, cancellationToken);
+                    var fetchRequest = CreateFetchRequest(sessionManager, topicMap, firstRequest);
+                    firstRequest = false;
+
+                    _fetchStopwatch.Start();
+                    var response = await connection.SendAsync(fetchRequest, cancellationToken);
+                    var fetchElapsed = _fetchStopwatch.Elapsed;
+                    _fetchStopwatch.Stop();
+                    Statistics.RecordFetchRoundTrip(fetchElapsed);
+                    Statistics.AddFetchTime(fetchElapsed);
+
+                    if (response.Message.SessionId != null)
+                    {
+                        sessionManager.OnResponseReceived(response.Message);
+                    }
+
                     if (response.Message.ErrorCode != 0)
                     {
+                        if (response.Message.ErrorCode == (short)ErrorCode.FetchSessionIdNotFound ||
+                            response.Message.ErrorCode == (short)ErrorCode.InvalidFetchSessionEpoch)
+                        {
+                            sessionManager.OnError(response.Message.ErrorCode.Value);
+                            _logger.LogWarning("Fetch session error: {@errorCode}. Reinitializing session.", response.Message.ErrorCode);
+                            firstRequest = true;
+                            continue;
+                        }
+
                         _logger.LogError(
                             "Error in fetch response: {@errorCode}.",
                             response.Message.ErrorCode);
@@ -642,33 +671,50 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     else
                     {
                         _logger.LogDebug("Fetch response was received.");
+                        long responseBytes = 0;
+                        long responseMessages = 0;
 
                         foreach (var topicResponse in response.Message.Responses!)
                         {
-                            var topicRequest = request.Topics!.FirstOrDefault(x =>
-                                x.Topic == topicResponse.Topic ||
-                                x.TopicId == topicResponse.TopicId);
-                            if (topicRequest == null)
+                            string? topicName = topicResponse.Topic;
+                            if (string.IsNullOrEmpty(topicName) && topicResponse.TopicId != null)
+                            {
+                                if (_topicsMetadataById!.TryGetValue(topicResponse.TopicId.Value, out var topicMetadata))
+                                {
+                                    topicName = topicMetadata.Name;
+                                }
+                            }
+
+                            if (string.IsNullOrEmpty(topicName) || !topicMap.TryGetValue(topicName, out var topicPartitions))
                             {
                                 continue;
                             }
 
-                            foreach (var partitionResponse in topicResponse.Partitions!)
+                            for (int pi = 0; pi < topicPartitions.Count; pi++)
                             {
-                                var partitionRequest = topicRequest.Partitions!.FirstOrDefault(
-                                    x => x.Partition == partitionResponse.PartitionIndex);
-                                if (partitionRequest == null)
+                                var partitionResponse = topicResponse.Partitions!.FirstOrDefault(
+                                    x => x.PartitionIndex == topicPartitions[pi].Partition);
+                                if (partitionResponse == null)
                                 {
                                     continue;
+                                }
+
+                                if (partitionResponse.Records != null)
+                                {
+                                    responseBytes += partitionResponse.Records.SizeInBytes;
+                                    responseMessages += partitionResponse.Records.RecordCount;
                                 }
 
                                 long? lastOffset = partitionResponse.Records?.LastOffset;
                                 if (lastOffset.HasValue)
                                 {
-                                    partitionRequest.FetchOffset = lastOffset.Value + 1;
+                                    topicPartitions[pi] = (topicPartitions[pi].Partition, lastOffset.Value + 1);
                                 }
                             }
                         }
+
+                        Statistics.AddBytesReceived(responseBytes);
+                        Statistics.AddMessagesConsumed(responseMessages);
                     }
 
                     consecutiveErrors = 0;
@@ -680,13 +726,25 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
                 catch (Exception exception)
                 {
+                    if (_fetchStopwatch.IsRunning)
+                    {
+                        _fetchStopwatch.Stop();
+                    }
+                    sessionManager.OnError(0);
                     consecutiveErrors++;
 
                     if (consecutiveErrors >= _config.MaxFetchRetries)
                     {
                         _logger.LogError(exception,
                             "Fetch loop failed after {retries} retries. Writing error to channel.", consecutiveErrors);
-                        await _consumeChannel.Writer.WriteAsync(new FetchResult(exception), cancellationToken);
+                        try
+                        {
+                            await _consumeChannel.Writer.WriteAsync(new FetchResult(exception), cancellationToken);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // Channel was closed during cancellation, that's fine
+                        }
                         break;
                     }
 
@@ -710,6 +768,51 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
     }
 
+    private FetchRequest CreateFetchRequest(FetchSessionManager sessionManager, Dictionary<string, List<(int Partition, long Offset)>> topicMap, bool isFirstRequest)
+    {
+        if (!sessionManager.IsActive || isFirstRequest)
+        {
+            var fetchTopics = new List<FetchTopic>();
+            foreach (var topicEntry in topicMap)
+            {
+                string topicName = topicEntry.Key;
+                if (!_topicsMetadata!.TryGetValue(topicName, out var topicMetadata))
+                {
+                    continue;
+                }
+
+                var partitions = topicEntry.Value.Select(p => new FetchPartition
+                {
+                    Partition = p.Partition,
+                    CurrentLeaderEpoch = -1,
+                    FetchOffset = p.Offset,
+                    LastFetchedEpoch = -1,
+                    LogStartOffset = -1,
+                    PartitionMaxBytes = _config.FetchPartitionMaxBytes,
+                    ReplicaDirectoryId = Guid.Empty,
+                }).ToList();
+
+                fetchTopics.Add(new FetchTopic
+                {
+                    Topic = topicName,
+                    TopicId = topicMetadata.TopicId,
+                    Partitions = partitions,
+                });
+            }
+
+            return sessionManager.CreateInitialRequest(
+                (int)_config.MaxWaitTime.TotalMilliseconds,
+                1,
+                0x7fffffff,
+                fetchTopics);
+        }
+
+        return sessionManager.CreateSubsequentRequest(
+            (int)_config.MaxWaitTime.TotalMilliseconds,
+            1,
+            0x7fffffff);
+    }
+
     public async ValueTask<ConsumeResult<TMessage>?> ConsumeAsync(
         CancellationToken cancellationToken)
     {
@@ -729,6 +832,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             throw new InvalidOperationException("Fetch loop failed.", ex);
         }
 
+        _deserializeStopwatch.Restart();
         _messageDeserializeEnumerator = GetMessageEnumerator();
 
         return ConsumeFromBuffer();
@@ -753,6 +857,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 Timestamp = deserializationContext.Timestamp,
                 Message = message,
             };
+        }
+
+        if (_deserializeStopwatch.IsRunning)
+        {
+            _deserializeStopwatch.Stop();
+            Statistics.RecordDeserializeTime(_deserializeStopwatch.Elapsed);
+            Statistics.AddDeserializeTime(_deserializeStopwatch.Elapsed);
         }
 
         _messageDeserializeEnumerator.Dispose();
@@ -852,7 +963,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
     }
 
-    public ValueTask CommitAsync(ConsumeResult<TMessage> consumeResult, CancellationToken cancellationToken)
+    public async ValueTask CommitAsync(ConsumeResult<TMessage> consumeResult, CancellationToken cancellationToken)
     {
         if (_topicsMetadata?.TryGetValue(consumeResult.Topic, out var topicMetadata) != true ||
             topicMetadata == null)
@@ -862,7 +973,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 consumeResult.Topic,
                 consumeResult.Partition,
                 consumeResult.Offset);
-            return ValueTask.CompletedTask;
+            return;
         }
 
         var partitionMetadata = topicMetadata!.Partitions?.FirstOrDefault(x => x.PartitionIndex == consumeResult.Partition);
@@ -873,22 +984,27 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 consumeResult.Topic,
                 consumeResult.Partition,
                 consumeResult.Offset);
-            return ValueTask.CompletedTask;
+            return;
         }
 
         var connection = _connections[partitionMetadata.LeaderId!.Value];
-        return _offsetStorage.SetAsync(
+        _commitStopwatch.Start();
+        await _offsetStorage.SetAsync(
             connection,
             _config.GroupId,
             consumeResult.Topic,
             consumeResult.Partition,
             consumeResult.Offset,
             cancellationToken);
+        _commitStopwatch.Stop();
+        Statistics.AddCommitTime(_commitStopwatch.Elapsed);
     }
 
     public async ValueTask DisposeAsync()
     {
         using var _ = BeginDefaultLoggingScope();
+
+        _totalStopwatch.Stop();
 
         await StopFetchingAsync();
 
@@ -901,6 +1017,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         await LeaveGroupAsync(CancellationToken.None);
 
         await CloseConnectionsAsync();
+
+        Statistics.TotalElapsed = _totalStopwatch.Elapsed;
+        Statistics.SetHeartbeatCount(_heartbeatCount);
     }
 
     private async ValueTask StopFetchingAsync()
@@ -909,8 +1028,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             return;
         }
-
-        _consumeChannel.Writer.TryComplete();
 
         await _stop.CancelAsync();
 
@@ -932,7 +1049,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _messageDeserializeEnumerator = null;
         }
 
-#warning cleanup the consume channel
+        _consumeChannel.Writer.TryComplete();
     }
 
     private async ValueTask LeaveGroupAsync(CancellationToken cancellationToken)
