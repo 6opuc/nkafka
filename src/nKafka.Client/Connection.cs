@@ -35,9 +35,9 @@ public class Connection : IConnection
         _config = config;
         _bufferSize = Math.Max(_config.RequestBufferSize, _config.ResponseBufferSize);
         _logger = loggerFactory.CreateLogger<Connection>();
-        _streamProvider = new NetworkStreamProvider(config, loggerFactory);
+        _streamProvider = BuildStreamProvider(config, loggerFactory);
         _saslAuth = config.Sasl?.Mechanism is not null
-            ? new SaslAuthenticator(config, _streamProvider, loggerFactory)
+            ? new SaslAuthenticator(config, loggerFactory)
             : null;
         _serializationContext = new SerializationContext(_arrayPool, _bufferSize)
         {
@@ -49,13 +49,23 @@ public class Connection : IConnection
         };
     }
 
+    private static IStreamProvider BuildStreamProvider(ConnectionConfig config, ILoggerFactory loggerFactory)
+    {
+        var networkProvider = new NetworkStreamProvider(
+            config.Host, config.Port, config.ResponseBufferSize, config.RequestBufferSize, loggerFactory);
+
+        return config.Protocol is "SASL_SSL" or "SSL" && config.Tls != null
+            ? new TlsStreamProvider(networkProvider, config.Host, config.Tls, loggerFactory)
+            : networkProvider;
+    }
+
     public async ValueTask OpenAsync(CancellationToken cancellationToken)
     {
         using var _ = BeginDefaultLoggingScope();
         await _streamProvider.OpenAsync(cancellationToken);
         if (_saslAuth != null)
         {
-            await _saslAuth.AuthenticateAsync(this, cancellationToken);
+            await _saslAuth.AuthenticateAsync(_streamProvider.WriteStream, cancellationToken);
         }
         StartReceiving();
         await RequestApiVersionsAsync(cancellationToken);

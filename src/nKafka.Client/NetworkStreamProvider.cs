@@ -1,8 +1,5 @@
 using System.Net;
-using System.Net.Security;
 using System.Net.Sockets;
-using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 
 namespace nKafka.Client;
@@ -10,20 +7,29 @@ namespace nKafka.Client;
 public sealed class NetworkStreamProvider : IStreamProvider
 {
     private readonly ILogger _logger;
-    private readonly ConnectionConfig _config;
+    private readonly string _host;
+    private readonly int _port;
+    private readonly int _responseBufferSize;
+    private readonly int _requestBufferSize;
     private Socket? _socket;
-    private SslStream? _sslStream;
-    private Stream? _readStream;
-    private Stream? _writeStream;
+    private Stream? _networkStream;
 
-    public NetworkStreamProvider(ConnectionConfig config, ILoggerFactory loggerFactory)
+    public NetworkStreamProvider(
+        string host,
+        int port,
+        int responseBufferSize,
+        int requestBufferSize,
+        ILoggerFactory loggerFactory)
     {
-        _config = config;
+        _host = host;
+        _port = port;
+        _responseBufferSize = responseBufferSize;
+        _requestBufferSize = requestBufferSize;
         _logger = loggerFactory.CreateLogger<NetworkStreamProvider>();
     }
 
-    public Stream ReadStream => _readStream!;
-    public Stream WriteStream => _writeStream!;
+    public Stream ReadStream => _networkStream!;
+    public Stream WriteStream => _networkStream!;
 
     public async ValueTask OpenAsync(CancellationToken ct)
     {
@@ -32,76 +38,23 @@ public sealed class NetworkStreamProvider : IStreamProvider
             throw new InvalidOperationException("Stream provider is already open.");
         }
 
-        _logger.LogInformation("Opening socket connection.");
+        _logger.LogInformation("Opening socket connection to {Host}:{Port}.", _host, _port);
 
-        var ip = await Dns.GetHostAddressesAsync(_config.Host, ct);
+        var ip = await Dns.GetHostAddressesAsync(_host, ct);
         if (ip.Length == 0)
         {
             throw new InvalidOperationException("Unable to resolve host.");
         }
 
-        var endpoint = new IPEndPoint(ip.First(), _config.Port);
+        var endpoint = new IPEndPoint(ip.First(), _port);
         _socket = new Socket(endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-        _socket.ReceiveBufferSize = _config.ResponseBufferSize;
-        _socket.SendBufferSize = _config.RequestBufferSize;
+        _socket.ReceiveBufferSize = _responseBufferSize;
+        _socket.SendBufferSize = _requestBufferSize;
         _socket.NoDelay = true;
         await _socket.ConnectAsync(endpoint, ct);
 
-        string protocol = _config.Protocol;
-        if (protocol != "SASL_SSL" && protocol != "SSL")
-        {
-            _readStream = new NetworkStream(_socket!, false);
-            _writeStream = _readStream;
-            return;
-        }
-
-        _logger.LogInformation("Starting TLS handshake.");
-
-        X509Certificate2? caCert = null;
-        if (_config.Tls?.CaCertPath is string certPath)
-        {
-            caCert = X509CertificateLoader.LoadCertificateFromFile(certPath);
-        }
-
-        _sslStream = new SslStream(
-            new NetworkStream(_socket!, false),
-            false,
-            (sender, certificate, chain, errors) =>
-            {
-                if (caCert == null)
-                {
-                    return true;
-                }
-
-                if (errors == SslPolicyErrors.None)
-                {
-                    return true;
-                }
-
-                using var x509Chain = new X509Chain();
-                x509Chain.ChainPolicy.ExtraStore.Add(caCert);
-                x509Chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-                x509Chain.ChainPolicy.VerificationFlags =
-                    X509VerificationFlags.AllowUnknownCertificateAuthority |
-                    X509VerificationFlags.IgnoreInvalidName;
-
-                return x509Chain.Build((X509Certificate2)certificate!);
-            });
-
-        var sslOptions = new SslClientAuthenticationOptions
-        {
-            TargetHost = _config.Host,
-            EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-            CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-        };
-
-        await _sslStream.AuthenticateAsClientAsync(sslOptions, ct);
-
-        _logger.LogInformation("TLS handshake complete. Protocol={Protocol}, Cipher={Cipher}",
-            _sslStream.SslProtocol, _sslStream.NegotiatedCipherSuite);
-
-        _readStream = _sslStream;
-        _writeStream = _sslStream;
+        _networkStream = new NetworkStream(_socket, true);
+        _logger.LogInformation("Socket connected.");
     }
 
     public async ValueTask DisposeAsync()
@@ -113,17 +66,19 @@ public sealed class NetworkStreamProvider : IStreamProvider
 
         _logger.LogInformation("Closing socket connection.");
 
-        if (_writeStream != null)
+        if (_networkStream != null)
         {
-            await _writeStream.DisposeAsync();
+            await _networkStream.DisposeAsync();
         }
 
-        if (_sslStream != null)
+        try
         {
-            await _sslStream.DisposeAsync();
+            _socket.Shutdown(SocketShutdown.Both);
         }
-
-        _socket.Shutdown(SocketShutdown.Both);
+        catch
+        {
+            // Socket may already be closed
+        }
         _socket.Dispose();
         _socket = null;
     }

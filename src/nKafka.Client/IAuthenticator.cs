@@ -2,5 +2,5 @@ namespace nKafka.Client;
 
 public interface IAuthenticator
 {
-    ValueTask AuthenticateAsync(IConnection connection, CancellationToken ct);
+    ValueTask AuthenticateAsync(Stream stream, CancellationToken ct);
 }

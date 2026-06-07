@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using nKafka.Client.Auth;
@@ -14,16 +13,14 @@ public sealed class SaslAuthenticator : IAuthenticator
     private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Shared;
     private readonly ILogger _logger;
     private readonly ConnectionConfig _config;
-    private readonly IStreamProvider _streamProvider;
 
-    public SaslAuthenticator(ConnectionConfig config, IStreamProvider streamProvider, ILoggerFactory loggerFactory)
+    public SaslAuthenticator(ConnectionConfig config, ILoggerFactory loggerFactory)
     {
         _config = config;
-        _streamProvider = streamProvider;
         _logger = loggerFactory.CreateLogger<SaslAuthenticator>();
     }
 
-    public async ValueTask AuthenticateAsync(IConnection connection, CancellationToken ct)
+    public async ValueTask AuthenticateAsync(Stream stream, CancellationToken ct)
     {
         string? mechanism = _config.Sasl?.Mechanism;
         if (string.IsNullOrEmpty(mechanism))
@@ -33,9 +30,9 @@ public sealed class SaslAuthenticator : IAuthenticator
 
         _logger.LogInformation("Starting SASL authentication with {Mechanism}.", mechanism);
 
-        // 1. SaslHandshake (raw stream — receive loop not started yet)
+        // 1. SaslHandshake
         _logger.LogDebug("Sending SaslHandshakeRequest.");
-        SaslHandshakeResponse handshakeResponse = await SendSaslHandshakeAsync(mechanism, ct);
+        SaslHandshakeResponse handshakeResponse = await SendSaslHandshakeAsync(stream, mechanism, ct);
 
         if (handshakeResponse.ErrorCode != 0)
         {
@@ -72,21 +69,22 @@ public sealed class SaslAuthenticator : IAuthenticator
 
         var scramClient = new ScramClient(username, password, hashAlgorithm);
 
-        // Round 1: Client-First → Server-First
+        // Round 1: Client-First -> Server-First
         byte[] clientFirstBytes = scramClient.GetClientFirstMessage();
         _logger.LogDebug("Sending SASL authenticate (client-first).");
-        byte[] serverFirstBytes = await SendSaslAuthenticateAsync(clientFirstBytes, ct);
+        byte[] serverFirstBytes = await SendSaslAuthenticateAsync(stream, clientFirstBytes, ct);
 
-        // Round 2: Client-Final → Server-Final
+        // Round 2: Client-Final -> Server-Final
         byte[] clientFinalBytes = scramClient.GetClientFinalMessage(serverFirstBytes);
         _logger.LogDebug("Sending SASL authenticate (client-final).");
-        byte[] serverFinalBytes = await SendSaslAuthenticateAsync(clientFinalBytes, ct);
+        byte[] serverFinalBytes = await SendSaslAuthenticateAsync(stream, clientFinalBytes, ct);
 
         scramClient.VerifyServerFinalMessage(serverFinalBytes);
         _logger.LogInformation("SASL authentication successful.");
     }
 
-    private async Task<SaslHandshakeResponse> SendSaslHandshakeAsync(string mechanism, CancellationToken ct)
+    private async Task<SaslHandshakeResponse> SendSaslHandshakeAsync(
+        Stream stream, string mechanism, CancellationToken ct)
     {
         int correlationId = IdGenerator.Next();
         short apiVersion = 1;
@@ -124,18 +122,18 @@ public sealed class SaslAuthenticator : IAuthenticator
             writer.WriteInt(size);
             writer.Position = end;
 
-            await _streamProvider.ReadStream.WriteAsync(writer.Memory.Slice(0, writer.Position), ct);
-            await _streamProvider.ReadStream.FlushAsync(ct);
+            await stream.WriteAsync(writer.Memory.Slice(0, writer.Position), ct);
+            await stream.FlushAsync(ct);
             _logger.LogDebug("SASL handshake request written ({PayloadSize} bytes).", writer.Position);
 
             byte[] sizeBuf = new byte[4];
-            await ReadAtLeastAsync(sizeBuf, 4, ct);
+            await ReadAtLeastAsync(stream, sizeBuf, 4, ct);
             int responseSize = (sizeBuf[0] << 24) | (sizeBuf[1] << 16) | (sizeBuf[2] << 8) | sizeBuf[3];
 
             byte[] responseBuffer = _arrayPool.Rent(responseSize);
             try
             {
-                await ReadAtLeastAsync(responseBuffer, responseSize, ct);
+                await ReadAtLeastAsync(stream, responseBuffer, responseSize, ct);
 
                 var buffer = new Memory<byte>(responseBuffer, 0, responseSize);
                 var reader = new BufferReader(buffer);
@@ -160,8 +158,8 @@ public sealed class SaslAuthenticator : IAuthenticator
         }
     }
 
-    private async ValueTask<byte[]> SendSaslAuthenticateAsync(
-        byte[] authBytes, CancellationToken ct)
+    private async Task<byte[]> SendSaslAuthenticateAsync(
+        Stream stream, byte[] authBytes, CancellationToken ct)
     {
         _logger.LogDebug("SASL authenticate payload ({Len} bytes).", authBytes.Length);
         var request = new SaslAuthenticateRequest
@@ -206,18 +204,18 @@ public sealed class SaslAuthenticator : IAuthenticator
             writer.WriteInt(size);
             writer.Position = end;
 
-            await _streamProvider.ReadStream.WriteAsync(writer.Memory.Slice(0, writer.Position), ct);
-            await _streamProvider.ReadStream.FlushAsync(ct);
+            await stream.WriteAsync(writer.Memory.Slice(0, writer.Position), ct);
+            await stream.FlushAsync(ct);
             _logger.LogDebug("SASL auth request written ({PayloadSize} bytes).", writer.Position);
 
             byte[] sizeBuf = new byte[4];
-            await ReadAtLeastAsync(sizeBuf, 4, ct);
+            await ReadAtLeastAsync(stream, sizeBuf, 4, ct);
             int responseSize = (sizeBuf[0] << 24) | (sizeBuf[1] << 16) | (sizeBuf[2] << 8) | sizeBuf[3];
 
             byte[] responseBuffer = _arrayPool.Rent(responseSize);
             try
             {
-                await ReadAtLeastAsync(responseBuffer, responseSize, ct);
+                await ReadAtLeastAsync(stream, responseBuffer, responseSize, ct);
 
                 var buffer = new Memory<byte>(responseBuffer, 0, responseSize);
                 var reader = new BufferReader(buffer);
@@ -250,9 +248,9 @@ public sealed class SaslAuthenticator : IAuthenticator
         }
     }
 
-    private async Task ReadAtLeastAsync(byte[] buffer, int minimumBytes, CancellationToken ct)
+    private static async Task ReadAtLeastAsync(Stream stream, byte[] buffer, int minimumBytes, CancellationToken ct)
     {
-        await _streamProvider.ReadStream.ReadAtLeastAsync(buffer, minimumBytes, true, ct);
+        await stream.ReadAtLeastAsync(buffer, minimumBytes, true, ct);
     }
 
     private class SaslSerializationContext(ArrayPool<byte> arrayPool, int bufferSize) : ISerializationContext
