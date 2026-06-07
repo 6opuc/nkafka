@@ -121,11 +121,14 @@ public class ScramClient
 
     private static string GenerateNonce()
     {
-        byte[] bytes = RandomNumberGenerator.GetBytes(24);
-        return Convert.ToBase64String(bytes)
-            .TrimEnd('=')
-            .Replace('+', 'A')
-            .Replace('/', 'B');
+        byte[] bytes = RandomNumberGenerator.GetBytes(30);
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        char[] nonce = new char[bytes.Length];
+        for (int i = 0; i < bytes.Length; i++)
+        {
+            nonce[i] = chars[bytes[i] % chars.Length];
+        }
+        return new string(nonce);
     }
 
     private static byte[] PBKDF2(string password, byte[] salt, int iterations, int outputLength)
