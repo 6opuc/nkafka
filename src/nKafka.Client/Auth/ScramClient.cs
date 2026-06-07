@@ -11,7 +11,7 @@ public class ScramClient
     private static readonly byte[] ServerKeyBytes = Encoding.ASCII.GetBytes(ServerKeyConst);
 
     private readonly string _username;
-    private readonly string _password;
+    private readonly byte[] _passwordBytes;
     private readonly HashAlgorithmName _hashAlgorithm;
 
     private string? _clientNonce;
@@ -23,7 +23,7 @@ public class ScramClient
     public ScramClient(string username, string password, HashAlgorithmName hashAlgorithm)
     {
         _username = username;
-        _password = password;
+        _passwordBytes = Encoding.UTF8.GetBytes(password);
         _hashAlgorithm = hashAlgorithm;
     }
 
@@ -38,54 +38,60 @@ public class ScramClient
     {
         _clientNonce = GenerateNonce();
         _clientFirstMessageBare = $"n={_username},r={_clientNonce}";
-        string gs2Header = "n,,";
-        return Encoding.ASCII.GetBytes(gs2Header + _clientFirstMessageBare);
+        byte[] result = new byte[3 + _clientFirstMessageBare.Length];
+        result[0] = (byte)'n';
+        result[1] = (byte)',';
+        result[2] = (byte)',';
+        Encoding.ASCII.GetBytes(_clientFirstMessageBare, 0, _clientFirstMessageBare.Length, result, 3);
+        return result;
     }
 
     public byte[] GetClientFinalMessage(ReadOnlySpan<byte> serverFirstMessageSpan)
     {
         _serverFirstMessage = Encoding.ASCII.GetString(serverFirstMessageSpan);
-        ParseServerFirstMessage(_serverFirstMessage, out string? saltBase64, out int iterations, out string? serverNonce);
+        ParseServerFirstMessage(_serverFirstMessage.AsSpan(), out string? saltBase64, out int iterations, out string? serverNonce);
 
         byte[] salt = Convert.FromBase64String(saltBase64);
         int hashSize = HashSize(_hashAlgorithm);
 
-        _saltedPassword = PBKDF2(_password, salt, iterations, hashSize);
+        _saltedPassword = PBKDF2(_passwordBytes, salt, iterations, hashSize);
 
         byte[] clientKey = HMAC(_saltedPassword, ClientKeyBytes);
         byte[] storedKey = Hash(clientKey);
         byte[] serverKey = HMAC(_saltedPassword, ServerKeyBytes);
 
         _clientFinalMessageWithoutProof = $"c=biws,r={serverNonce}";
-        string authMessage = $"{_clientFirstMessageBare},{_serverFirstMessage},{_clientFinalMessageWithoutProof}";
 
-        byte[] clientSignature = HMAC(storedKey, authMessage);
-        byte[] clientProof = XOR(clientKey, clientSignature);
-
-        string clientFinalMessage = $"{_clientFinalMessageWithoutProof},p={Convert.ToBase64String(clientProof)}";
-        return Encoding.ASCII.GetBytes(clientFinalMessage);
+        string base64Proof = Convert.ToBase64String(XOR(clientKey, HMAC(storedKey, $"{_clientFirstMessageBare},{_serverFirstMessage},{_clientFinalMessageWithoutProof}")));
+        int finalByteCount = _clientFinalMessageWithoutProof.Length + 3 + base64Proof.Length;
+        byte[] result = new byte[finalByteCount];
+        Encoding.ASCII.GetBytes(_clientFinalMessageWithoutProof, 0, _clientFinalMessageWithoutProof.Length, result, 0);
+        result[_clientFinalMessageWithoutProof.Length] = (byte)',';
+        result[_clientFinalMessageWithoutProof.Length + 1] = (byte)'p';
+        result[_clientFinalMessageWithoutProof.Length + 2] = (byte)'=';
+        Encoding.ASCII.GetBytes(base64Proof, 0, base64Proof.Length, result, _clientFinalMessageWithoutProof.Length + 3);
+        return result;
     }
 
     public void VerifyServerFinalMessage(ReadOnlySpan<byte> serverFinalMessageSpan)
     {
-        string serverFinalMessage = Encoding.ASCII.GetString(serverFinalMessageSpan);
-        if (serverFinalMessage.StartsWith("e="))
+        ReadOnlySpan<char> serverFinal = Encoding.ASCII.GetString(serverFinalMessageSpan);
+        if (serverFinal.StartsWith("e="))
         {
-            string error = serverFinalMessage[2..];
-            throw new InvalidOperationException($"SCRAM authentication failed: {error}");
+            throw new InvalidOperationException($"SCRAM authentication failed: {serverFinal.Slice(2)}");
         }
 
-        if (!serverFinalMessage.StartsWith("v="))
+        ReadOnlySpan<char> signatureSpan = serverFinal[2..];
+        if (!serverFinal.StartsWith("v="))
         {
             throw new InvalidOperationException(
-                $"Invalid SCRAM server-final message: {serverFinalMessage}");
+                $"Invalid SCRAM server-final message: {serverFinal}");
         }
 
-        byte[] expectedSignature = Convert.FromBase64String(serverFinalMessage[2..]);
+        byte[] expectedSignature = Convert.FromBase64String(signatureSpan.ToString());
 
-        string authMessage = $"{_clientFirstMessageBare},{_serverFirstMessage},{_clientFinalMessageWithoutProof}";
         byte[] serverKey = HMAC(_saltedPassword!, ServerKeyBytes);
-        byte[] serverSignature = HMAC(serverKey, authMessage);
+        byte[] serverSignature = HMAC(serverKey, $"{_clientFirstMessageBare},{_serverFirstMessage},{_clientFinalMessageWithoutProof}");
 
         if (!ConstantTimeEquals(expectedSignature, serverSignature))
         {
@@ -94,7 +100,7 @@ public class ScramClient
     }
 
     private static void ParseServerFirstMessage(
-        string message,
+        ReadOnlySpan<char> message,
         out string salt,
         out int iterations,
         out string nonce)
@@ -103,14 +109,21 @@ public class ScramClient
         iterations = 4096;
         nonce = "";
 
-        foreach (string part in message.Split(','))
+        int start = 0;
+        for (int i = 0; i <= message.Length; i++)
         {
-            if (part.StartsWith("r="))
-                nonce = part[2..];
-            else if (part.StartsWith("s="))
-                salt = part[2..];
-            else if (part.StartsWith("i="))
-                iterations = int.Parse(part[2..]);
+            if (i == message.Length || message[i] == ',')
+            {
+                ReadOnlySpan<char> part = message.Slice(start, i - start);
+                if (part.Length > 2 && part[0] == 'r' && part[1] == '=')
+                    nonce = part.Slice(2).ToString();
+                else if (part.Length > 2 && part[0] == 's' && part[1] == '=')
+                    salt = part.Slice(2).ToString();
+                else if (part.Length > 2 && part[0] == 'i' && part[1] == '=')
+                    iterations = int.Parse(part.Slice(2));
+
+                start = i + 1;
+            }
         }
 
         if (string.IsNullOrEmpty(salt))
@@ -132,10 +145,10 @@ public class ScramClient
         return nonce.ToString();
     }
 
-    private static byte[] PBKDF2(string password, byte[] salt, int iterations, int outputLength)
+    private static byte[] PBKDF2(byte[] passwordBytes, byte[] salt, int iterations, int outputLength)
     {
         return Rfc2898DeriveBytes.Pbkdf2(
-            Encoding.UTF8.GetBytes(password),
+            passwordBytes,
             salt,
             iterations,
             HashAlgorithmName.SHA512,

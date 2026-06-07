@@ -73,6 +73,12 @@ public sealed class SaslAuthenticator : IAuthenticator
         using var serverFirstResponse = await connection.SendAsync<SaslAuthenticateResponse>(
             new SaslAuthenticateRequest { AuthBytes = clientFirstBytes }, ct);
 
+        if (serverFirstResponse.Message.ErrorCode != 0)
+        {
+            string errorMsg = serverFirstResponse.Message.ErrorMessage ?? $"Error code {serverFirstResponse.Message.ErrorCode}";
+            throw new InvalidOperationException($"SASL authentication failed at server-first: {errorMsg}");
+        }
+
         ReadOnlySpan<byte> serverFirstSpan = serverFirstResponse.Message.AuthBytes is { } first ? first.Span : ReadOnlySpan<byte>.Empty;
 
         // Round 2: Client-Final -> Server-Final
