@@ -65,7 +65,7 @@ public static class TestHelpers
     {
         var servers = protocol == "SASL_SSL"
             ? $"SASL_SSL://{BootstrapHost}:{SaslBootstrapPort}"
-            : $"PLAINTEXT://{BootstrapHost}:{PlainTextBootstrapPort},PLAINTEXT://{BootstrapHost}:{PlainTextBootstrapPort+100},PLAINTEXT://{BootstrapHost}:{PlainTextBootstrapPort+200}";
+            : $"PLAINTEXT://{BootstrapHost}:{PlainTextBootstrapPort}";
 
         return new ConsumerConfig(
             servers,
