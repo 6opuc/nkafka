@@ -73,10 +73,10 @@ public sealed class SaslAuthenticator : IAuthenticator
         using var serverFirstResponse = await connection.SendAsync<SaslAuthenticateResponse>(
             new SaslAuthenticateRequest { AuthBytes = clientFirstBytes }, ct);
 
-        byte[] serverFirstBytes = serverFirstResponse.Message.AuthBytes?.ToArray() ?? [];
+        ReadOnlySpan<byte> serverFirstSpan = serverFirstResponse.Message.AuthBytes is { } first ? first.Span : ReadOnlySpan<byte>.Empty;
 
         // Round 2: Client-Final -> Server-Final
-        byte[] clientFinalBytes = scramClient.GetClientFinalMessage(serverFirstBytes);
+        byte[] clientFinalBytes = scramClient.GetClientFinalMessage(serverFirstSpan);
         _logger.LogDebug("Sending SASL authenticate (client-final).");
         using var serverFinalResponse = await connection.SendAsync<SaslAuthenticateResponse>(
             new SaslAuthenticateRequest { AuthBytes = clientFinalBytes }, ct);
@@ -87,7 +87,8 @@ public sealed class SaslAuthenticator : IAuthenticator
             throw new InvalidOperationException($"SASL authentication failed: {errorMsg}");
         }
 
-        scramClient.VerifyServerFinalMessage(serverFinalResponse.Message.AuthBytes?.ToArray() ?? []);
+        ReadOnlySpan<byte> serverFinalSpan = serverFinalResponse.Message.AuthBytes is { } final ? final.Span : ReadOnlySpan<byte>.Empty;
+        scramClient.VerifyServerFinalMessage(serverFinalSpan);
         _logger.LogInformation("SASL authentication successful.");
     }
 }

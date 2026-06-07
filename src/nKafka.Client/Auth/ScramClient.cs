@@ -42,9 +42,9 @@ public class ScramClient
         return Encoding.ASCII.GetBytes(gs2Header + _clientFirstMessageBare);
     }
 
-    public byte[] GetClientFinalMessage(byte[] serverFirstMessageBytes)
+    public byte[] GetClientFinalMessage(ReadOnlySpan<byte> serverFirstMessageSpan)
     {
-        _serverFirstMessage = Encoding.ASCII.GetString(serverFirstMessageBytes);
+        _serverFirstMessage = Encoding.ASCII.GetString(serverFirstMessageSpan);
         ParseServerFirstMessage(_serverFirstMessage, out string? saltBase64, out int iterations, out string? serverNonce);
 
         byte[] salt = Convert.FromBase64String(saltBase64);
@@ -66,9 +66,9 @@ public class ScramClient
         return Encoding.ASCII.GetBytes(clientFinalMessage);
     }
 
-    public void VerifyServerFinalMessage(byte[] serverFinalMessageBytes)
+    public void VerifyServerFinalMessage(ReadOnlySpan<byte> serverFinalMessageSpan)
     {
-        string serverFinalMessage = Encoding.ASCII.GetString(serverFinalMessageBytes);
+        string serverFinalMessage = Encoding.ASCII.GetString(serverFinalMessageSpan);
         if (serverFinalMessage.StartsWith("e="))
         {
             string error = serverFinalMessage[2..];
