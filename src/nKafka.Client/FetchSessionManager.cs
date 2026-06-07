@@ -148,7 +148,7 @@ public class FetchSessionManager
 
         foreach (var topicToRemove in topics)
         {
-            var topicIndex = _currentTopics.FindIndex(t => t.Topic == topicToRemove.Topic || t.TopicId == topicToRemove.TopicId);
+            int topicIndex = _currentTopics.FindIndex(t => t.Topic == topicToRemove.Topic || t.TopicId == topicToRemove.TopicId);
             if (topicIndex >= 0)
             {
                 _currentTopics.RemoveAt(topicIndex);

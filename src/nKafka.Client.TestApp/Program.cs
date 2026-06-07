@@ -33,7 +33,7 @@ for (int t = 0; t < tasks.Capacity; t++)
                 //await NKafkaFetchBytesParallelMultiPartTest.Test(scenario, "SASL_SSL");
                 //await NKafkaConsumeBytesTest.Test(scenario, "SASL_SSL");
                 await NKafkaBatchConsumeBytesTest.Test(scenario, "SASL_SSL");
-                
+
                 //await ConfluentIdleTest.Test(scenario);
                 //await NKafkaIdleTest.Test(scenario);
 

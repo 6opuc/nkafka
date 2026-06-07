@@ -9,7 +9,7 @@ public static class NKafkaConsumeStringTest
     private static ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder
         .SetMinimumLevel(LogLevel.Debug)
         .AddSimpleConsole(o => o.IncludeScopes = true));
-    
+
     public static async Task Test(FetchScenario scenario, string protocol)
     {
         var consumerConfig = new ConsumerConfig(
@@ -20,7 +20,7 @@ public static class NKafkaConsumeStringTest
             $"test-instance-{Guid.NewGuid():N}",
             protocol)
             .ConfigureProtocol(protocol);
-        
+
         await using var consumer = new Consumer<string>(
             consumerConfig,
             new DummyStringMessageDeserializer(),

@@ -195,7 +195,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 _config.ClientId,
                 _config.ResponseBufferSize,
                 _config.RequestBufferSize)
-                with { Ssl = _config.Ssl is not null ? new SslConfig(_config.Ssl.SaslMechanism, _config.Ssl.SaslUsername, _config.Ssl.SaslPassword, _config.Ssl.SslCaCertPath) : null, RequestApiVersionsOnOpen = false };
+                with
+            { Ssl = _config.Ssl is not null ? new SslConfig(_config.Ssl.SaslMechanism, _config.Ssl.SaslUsername, _config.Ssl.SaslPassword, _config.Ssl.SslCaCertPath) : null, RequestApiVersionsOnOpen = false };
             try
             {
                 var connection = new Connection(connectionConfig, _loggerFactory);
@@ -234,15 +235,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 throw new ProtocolException($"Failed to find group coordinator. Error code {response.Message.ErrorCode}");
             }
 
-coordinatorConnectionConfig = new ConnectionConfig(
-                _config.Protocol,
-                response.Message.Host!,
-                response.Message.Port!.Value,
-                _config.ClientId,
-                _config.ResponseBufferSize,
-                _config.RequestBufferSize,
-                _config.Ssl is not null ? new SslConfig(_config.Ssl.SaslMechanism, _config.Ssl.SaslUsername, _config.Ssl.SaslPassword, _config.Ssl.SslCaCertPath) : null,
-                _config.CheckCrcs);
+            coordinatorConnectionConfig = new ConnectionConfig(
+                            _config.Protocol,
+                            response.Message.Host!,
+                            response.Message.Port!.Value,
+                            _config.ClientId,
+                            _config.ResponseBufferSize,
+                            _config.RequestBufferSize,
+                            _config.Ssl is not null ? new SslConfig(_config.Ssl.SaslMechanism, _config.Ssl.SaslUsername, _config.Ssl.SaslPassword, _config.Ssl.SslCaCertPath) : null,
+                            _config.CheckCrcs);
         }
         else
         {
@@ -538,7 +539,7 @@ coordinatorConnectionConfig = new ConnectionConfig(
             }, cancellationToken);
     }
 
-  private async Task StartFetchingAsync(IDictionary<string, TopicPartition> assignedPartitions)
+    private async Task StartFetchingAsync(IDictionary<string, TopicPartition> assignedPartitions)
     {
         var cancellationToken = _stop!.Token;
 
@@ -561,12 +562,12 @@ coordinatorConnectionConfig = new ConnectionConfig(
                     continue;
                 }
 
-                var nodeId = partitionMetadata.LeaderId!.Value;
+                int nodeId = partitionMetadata.LeaderId!.Value;
                 var connection = _connections[nodeId];
 
                 if (!sessionManagers.TryGetValue(nodeId, out var sessionManager))
                 {
-                    var useSessions = connection.SupportsApiKeyVersion(ApiKey.Fetch, 4);
+                    bool useSessions = connection.SupportsApiKeyVersion(ApiKey.Fetch, 4);
                     sessionManager = new FetchSessionManager(0, 0, useSessions);
                     sessionManagers[nodeId] = sessionManager;
                 }
@@ -601,7 +602,7 @@ coordinatorConnectionConfig = new ConnectionConfig(
         _fetchTasks = new List<Task>(sessionManagers.Count);
         foreach (var pair in sessionManagers)
         {
-            var nodeId = pair.Key;
+            int nodeId = pair.Key;
             var sessionManager = pair.Value;
             var topicMap = nodeTopics.GetValueOrDefault(nodeId, new Dictionary<string, List<(int Partition, long Offset)>>());
             var fetchTask = Task.Run(() => FetchLoopAsync(nodeId, topicMap, sessionManager, cancellationToken), cancellationToken);
@@ -649,7 +650,7 @@ coordinatorConnectionConfig = new ConnectionConfig(
                         sessionManager.OnResponseReceived(response.Message);
                     }
 
-                   if (response.Message.ErrorCode != 0)
+                    if (response.Message.ErrorCode != 0)
                     {
                         if (response.Message.ErrorCode == (short)ErrorCode.FetchSessionIdNotFound ||
                             response.Message.ErrorCode == (short)ErrorCode.InvalidFetchSessionEpoch)
@@ -672,7 +673,7 @@ coordinatorConnectionConfig = new ConnectionConfig(
 
                         foreach (var topicResponse in response.Message.Responses!)
                         {
-                            var topicName = topicResponse.Topic;
+                            string? topicName = topicResponse.Topic;
                             if (string.IsNullOrEmpty(topicName) && topicResponse.TopicId != null)
                             {
                                 if (_topicsMetadataById!.TryGetValue(topicResponse.TopicId.Value, out var topicMetadata))
@@ -771,7 +772,7 @@ coordinatorConnectionConfig = new ConnectionConfig(
             var fetchTopics = new List<FetchTopic>();
             foreach (var topicEntry in topicMap)
             {
-                var topicName = topicEntry.Key;
+                string topicName = topicEntry.Key;
                 if (!_topicsMetadata!.TryGetValue(topicName, out var topicMetadata))
                 {
                     continue;
@@ -834,7 +835,7 @@ coordinatorConnectionConfig = new ConnectionConfig(
         return ConsumeFromBuffer();
     }
 
-  private ConsumeResult<TMessage>? ConsumeFromBuffer()
+    private ConsumeResult<TMessage>? ConsumeFromBuffer()
     {
         if (_messageDeserializeEnumerator == null)
         {
@@ -1018,7 +1019,7 @@ coordinatorConnectionConfig = new ConnectionConfig(
         Statistics.SetHeartbeatCount(_heartbeatCount);
     }
 
-  private async ValueTask StopFetchingAsync()
+    private async ValueTask StopFetchingAsync()
     {
         if (_stop == null)
         {

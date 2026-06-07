@@ -45,40 +45,40 @@ public class ScramClient
     {
         _clientNonce = GenerateNonce();
         _clientFirstMessageBare = $"n={_username},r={_clientNonce}";
-        var gs2Header = "n,,";
+        string gs2Header = "n,,";
         return Encoding.ASCII.GetBytes(gs2Header + _clientFirstMessageBare);
     }
 
     public byte[] GetClientFinalMessage(byte[] serverFirstMessageBytes)
     {
         _serverFirstMessage = Encoding.ASCII.GetString(serverFirstMessageBytes);
-        ParseServerFirstMessage(_serverFirstMessage, out var saltBase64, out var iterations, out var serverNonce);
+        ParseServerFirstMessage(_serverFirstMessage, out string? saltBase64, out int iterations, out string? serverNonce);
 
-        var salt = Convert.FromBase64String(saltBase64);
-        var hashSize = HashSize(_hashAlgorithm);
+        byte[] salt = Convert.FromBase64String(saltBase64);
+        int hashSize = HashSize(_hashAlgorithm);
 
         _saltedPassword = PBKDF2(_password, salt, iterations, hashSize);
 
-        var clientKey = HMAC(_saltedPassword, ClientKeyBytes);
-        var storedKey = Hash(clientKey);
-        var serverKey = HMAC(_saltedPassword, ServerKeyBytes);
+        byte[] clientKey = HMAC(_saltedPassword, ClientKeyBytes);
+        byte[] storedKey = Hash(clientKey);
+        byte[] serverKey = HMAC(_saltedPassword, ServerKeyBytes);
 
         _clientFinalMessageWithoutProof = $"c=biws,r={serverNonce}";
-        var authMessage = $"{_clientFirstMessageBare},{_serverFirstMessage},{_clientFinalMessageWithoutProof}";
+        string authMessage = $"{_clientFirstMessageBare},{_serverFirstMessage},{_clientFinalMessageWithoutProof}";
 
-        var clientSignature = HMAC(storedKey, authMessage);
-        var clientProof = XOR(clientKey, clientSignature);
+        byte[] clientSignature = HMAC(storedKey, authMessage);
+        byte[] clientProof = XOR(clientKey, clientSignature);
 
-        var clientFinalMessage = $"{_clientFinalMessageWithoutProof},p={Convert.ToBase64String(clientProof)}";
+        string clientFinalMessage = $"{_clientFinalMessageWithoutProof},p={Convert.ToBase64String(clientProof)}";
         return Encoding.ASCII.GetBytes(clientFinalMessage);
     }
 
     public void VerifyServerFinalMessage(byte[] serverFinalMessageBytes)
     {
-        var serverFinalMessage = Encoding.ASCII.GetString(serverFinalMessageBytes);
+        string serverFinalMessage = Encoding.ASCII.GetString(serverFinalMessageBytes);
         if (serverFinalMessage.StartsWith("e="))
         {
-            var error = serverFinalMessage[2..];
+            string error = serverFinalMessage[2..];
             throw new InvalidOperationException($"SCRAM authentication failed: {error}");
         }
 
@@ -88,11 +88,11 @@ public class ScramClient
                 $"Invalid SCRAM server-final message: {serverFinalMessage}");
         }
 
-        var expectedSignature = Convert.FromBase64String(serverFinalMessage[2..]);
+        byte[] expectedSignature = Convert.FromBase64String(serverFinalMessage[2..]);
 
-        var authMessage = $"{_clientFirstMessageBare},{_serverFirstMessage},{_clientFinalMessageWithoutProof}";
-        var serverKey = HMAC(_saltedPassword!, ServerKeyBytes);
-        var serverSignature = HMAC(serverKey, authMessage);
+        string authMessage = $"{_clientFirstMessageBare},{_serverFirstMessage},{_clientFinalMessageWithoutProof}";
+        byte[] serverKey = HMAC(_saltedPassword!, ServerKeyBytes);
+        byte[] serverSignature = HMAC(serverKey, authMessage);
 
         if (!ConstantTimeEquals(expectedSignature, serverSignature))
         {
@@ -110,7 +110,7 @@ public class ScramClient
         iterations = 4096;
         nonce = "";
 
-        foreach (var part in message.Split(','))
+        foreach (string part in message.Split(','))
         {
             if (part.StartsWith("r="))
                 nonce = part[2..];
@@ -128,7 +128,7 @@ public class ScramClient
 
     private static string GenerateNonce()
     {
-        var bytes = RandomNumberGenerator.GetBytes(24);
+        byte[] bytes = RandomNumberGenerator.GetBytes(24);
         return Convert.ToBase64String(bytes)
             .TrimEnd('=')
             .Replace('+', 'A')
@@ -162,8 +162,8 @@ public class ScramClient
 
     private static byte[] XOR(byte[] a, byte[] b)
     {
-        var result = new byte[a.Length];
-        for (var i = 0; i < a.Length; i++)
+        byte[] result = new byte[a.Length];
+        for (int i = 0; i < a.Length; i++)
             result[i] = (byte)(a[i] ^ b[i]);
         return result;
     }

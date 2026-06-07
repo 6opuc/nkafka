@@ -4,7 +4,7 @@ namespace nKafka.Client;
 
 public class ConsumerStatistics
 {
-   private readonly ConcurrentBag<TimeSpan> _fetchRoundTrips = new();
+    private readonly ConcurrentBag<TimeSpan> _fetchRoundTrips = new();
     private readonly ConcurrentBag<TimeSpan> _deserializeTimes = new();
     private long _fetchCount;
     private long _heartbeatCount;
@@ -54,7 +54,7 @@ public class ConsumerStatistics
         {
             var times = _fetchRoundTrips.ToList();
             if (times.Count == 0) return 0;
-            var total = times.Sum(t => t.TotalMilliseconds);
+            double total = times.Sum(t => t.TotalMilliseconds);
             return total / times.Count;
         }
     }
@@ -85,7 +85,7 @@ public class ConsumerStatistics
         {
             var times = _deserializeTimes.ToList();
             if (times.Count == 0) return 0;
-            var total = times.Sum(t => t.TotalMilliseconds);
+            double total = times.Sum(t => t.TotalMilliseconds);
             return total / times.Count;
         }
     }
@@ -169,7 +169,7 @@ public class ConsumerStatistics
         var times = _fetchRoundTrips.ToList();
         if (times.Count == 0) return 0;
         times.Sort((a, b) => a.CompareTo(b));
-        var index = (int)Math.Ceiling(percentile * times.Count) - 1;
+        int index = (int)Math.Ceiling(percentile * times.Count) - 1;
         index = Math.Clamp(index, 0, times.Count - 1);
         return times[index].TotalMilliseconds;
     }
@@ -179,7 +179,7 @@ public class ConsumerStatistics
         var times = _deserializeTimes.ToList();
         if (times.Count == 0) return 0;
         times.Sort((a, b) => a.CompareTo(b));
-        var index = (int)Math.Ceiling(percentile * times.Count) - 1;
+        int index = (int)Math.Ceiling(percentile * times.Count) - 1;
         index = Math.Clamp(index, 0, times.Count - 1);
         return times[index].TotalMilliseconds;
     }

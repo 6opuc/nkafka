@@ -63,7 +63,7 @@ public static class TestHelpers
         TimeSpan? maxWaitTime = null,
         bool checkCrcs = false)
     {
-        var servers = protocol == "SASL_SSL"
+        string servers = protocol == "SASL_SSL"
             ? $"SASL_SSL://{BootstrapHost}:{SaslBootstrapPort}"
             : $"PLAINTEXT://{BootstrapHost}:{PlainTextBootstrapPort}";
 

@@ -1,5 +1,5 @@
-using nKafka.Contracts;
 using System.Collections;
+using nKafka.Contracts;
 
 namespace nKafka.Client.IntegrationTests;
 
@@ -10,9 +10,9 @@ public static class KafkaTestCases
     public static IEnumerable GetTestCases<TRequest>() where TRequest : IRequest, new()
     {
         var request = new TRequest();
-        foreach (var protocol in Protocols)
+        foreach (string protocol in Protocols)
         {
-            foreach (var version in request.ValidVersions)
+            foreach (short version in request.ValidVersions)
             {
                 yield return new object[] { protocol, version };
             }

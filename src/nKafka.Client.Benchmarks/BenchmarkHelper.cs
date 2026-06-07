@@ -72,7 +72,7 @@ internal static class BenchmarkHelper
 
     internal static string BootstrapServers(string protocol)
     {
-        var port = BootstrapPort(protocol);
+        int port = BootstrapPort(protocol);
         return $"{protocol}://localhost:{port}, {protocol}://localhost:{port + 100}, {protocol}://localhost:{port + 200}";
     }
 

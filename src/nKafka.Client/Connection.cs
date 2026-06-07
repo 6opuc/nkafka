@@ -103,7 +103,7 @@ public class Connection : IConnection
 
     private async ValueTask AuthenticateTlsAsync(CancellationToken cancellationToken)
     {
-        var protocol = _config.Protocol;
+        string protocol = _config.Protocol;
         if (protocol != "SASL_SSL" && protocol != "SSL")
         {
             _writeStream = new NetworkStream(_socket!, false);
@@ -160,7 +160,7 @@ public class Connection : IConnection
 
     private async ValueTask AuthenticateSaslAsync(CancellationToken cancellationToken)
     {
-        var mechanism = _config.Ssl?.SaslMechanism;
+        string? mechanism = _config.Ssl?.SaslMechanism;
         if (string.IsNullOrEmpty(mechanism))
         {
             return;
@@ -193,7 +193,7 @@ public class Connection : IConnection
         if (supportedMechanisms == null ||
             !supportedMechanisms.Any(m => m == mechanism))
         {
-            var supported = supportedMechanisms != null
+            string supported = supportedMechanisms != null
                 ? string.Join(", ", supportedMechanisms)
                 : "none";
             throw new Exception(
@@ -215,15 +215,15 @@ public class Connection : IConnection
             hashAlgorithm);
 
         // Round 1: Client-First → Server-First
-        var clientFirstBytes = scramClient.GetClientFirstMessage();
+        byte[] clientFirstBytes = scramClient.GetClientFirstMessage();
         _logger.LogDebug("Sending SASL authenticate (client-first).");
-        var serverFirstBytes = await SendSaslAuthenticateAsync(
+        byte[] serverFirstBytes = await SendSaslAuthenticateAsync(
             clientFirstBytes, cancellationToken);
 
         // Round 2: Client-Final → Server-Final
-        var clientFinalBytes = scramClient.GetClientFinalMessage(serverFirstBytes);
+        byte[] clientFinalBytes = scramClient.GetClientFinalMessage(serverFirstBytes);
         _logger.LogDebug("Sending SASL authenticate (client-final).");
-        var serverFinalBytes = await SendSaslAuthenticateAsync(
+        byte[] serverFinalBytes = await SendSaslAuthenticateAsync(
             clientFinalBytes, cancellationToken);
 
         scramClient.VerifyServerFinalMessage(serverFinalBytes);
@@ -237,10 +237,10 @@ public class Connection : IConnection
         CancellationToken cancellationToken,
         short apiVersion = 0)
     {
-        var correlationId = IdGenerator.Next();
-        var isFlexible = apiVersion >= 2;
-        var requestHeaderVersion = isFlexible ? (short)2 : (short)1;
-        var responseHeaderVersion = isFlexible ? (short)1 : (short)0;
+        int correlationId = IdGenerator.Next();
+        bool isFlexible = apiVersion >= 2;
+        short requestHeaderVersion = isFlexible ? (short)2 : (short)1;
+        short responseHeaderVersion = isFlexible ? (short)1 : (short)0;
         var requestHeader = new RequestHeader
         {
             RequestApiKey = apiKey,
@@ -269,14 +269,14 @@ public class Connection : IConnection
             _logger.LogDebug("Handshake request written ({PayloadSize} bytes). Hex: {Hex}",
                 writer.Position, Convert.ToHexString(writer.Memory.Span.Slice(0, writer.Position)));
 
-            var sizeBuf = new byte[4];
+            byte[] sizeBuf = new byte[4];
             var stream = GetReadStream();
             _logger.LogDebug("Reading handshake response size...");
             await stream.ReadAtLeastAsync(sizeBuf, 4, true, cancellationToken);
-            var responseSize = (sizeBuf[0] << 24) | (sizeBuf[1] << 16) | (sizeBuf[2] << 8) | sizeBuf[3];
+            int responseSize = (sizeBuf[0] << 24) | (sizeBuf[1] << 16) | (sizeBuf[2] << 8) | sizeBuf[3];
             _logger.LogDebug("Handshake response size: {ResponseSize}", responseSize);
 
-            var responseBuffer = _arrayPool.Rent(responseSize);
+            byte[] responseBuffer = _arrayPool.Rent(responseSize);
             try
             {
                 await stream.ReadAtLeastAsync(
@@ -315,13 +315,13 @@ public class Connection : IConnection
             AuthBytes = authBytes,
         };
 
-        var correlationId = IdGenerator.Next();
-        var apiVersion = _apiVersions.GetValueOrDefault((ApiKey)36, (short)0);
+        int correlationId = IdGenerator.Next();
+        short apiVersion = _apiVersions.GetValueOrDefault((ApiKey)36, (short)0);
 
-        var effectiveApiVersion = (short)0;
-        var isFlexible = effectiveApiVersion >= 2;
-        var requestHeaderVersion = isFlexible ? (short)2 : (short)1;
-        var responseHeaderVersion = isFlexible ? (short)1 : (short)0;
+        short effectiveApiVersion = (short)0;
+        bool isFlexible = effectiveApiVersion >= 2;
+        short requestHeaderVersion = isFlexible ? (short)2 : (short)1;
+        short responseHeaderVersion = isFlexible ? (short)1 : (short)0;
         var requestHeader = new RequestHeader
         {
             RequestApiKey = 36,
@@ -351,7 +351,7 @@ public class Connection : IConnection
                 writer.Position, Convert.ToHexString(writer.Memory.Span.Slice(0, writer.Position)));
 
             // Read response: size prefix + header + body
-            var sizeBuf = new byte[4];
+            byte[] sizeBuf = new byte[4];
             var stream = GetReadStream();
             _logger.LogDebug("Reading auth response size...");
             try
@@ -364,9 +364,9 @@ public class Connection : IConnection
                     stream.CanRead, stream.CanWrite);
                 throw;
             }
-            var responseSize = (sizeBuf[0] << 24) | (sizeBuf[1] << 16) | (sizeBuf[2] << 8) | sizeBuf[3];
+            int responseSize = (sizeBuf[0] << 24) | (sizeBuf[1] << 16) | (sizeBuf[2] << 8) | sizeBuf[3];
 
-            var responseBuffer = _arrayPool.Rent(responseSize);
+            byte[] responseBuffer = _arrayPool.Rent(responseSize);
             try
             {
                 await stream.ReadAtLeastAsync(
@@ -386,7 +386,7 @@ public class Connection : IConnection
 
                 if (response.ErrorCode != 0)
                 {
-                    var errorMsg = response.ErrorMessage ?? $"Error code {response.ErrorCode}";
+                    string errorMsg = response.ErrorMessage ?? $"Error code {response.ErrorCode}";
                     throw new Exception($"SASL authentication failed: {errorMsg}");
                 }
 
@@ -418,7 +418,7 @@ public class Connection : IConnection
         _stop = new CancellationTokenSource();
         var cancellationToken = _stop.Token;
 
-        var sizeBuffer = new byte[4];
+        byte[] sizeBuffer = new byte[4];
 
         _receiveBackgroundTask = Task.Run(
             async () =>
@@ -595,7 +595,7 @@ public class Connection : IConnection
 
     public bool SupportsApiKeyVersion(ApiKey apiKey, short minVersion)
     {
-        if (_apiVersions.TryGetValue(apiKey, out var maxVersion))
+        if (_apiVersions.TryGetValue(apiKey, out short maxVersion))
         {
             return maxVersion >= minVersion;
         }

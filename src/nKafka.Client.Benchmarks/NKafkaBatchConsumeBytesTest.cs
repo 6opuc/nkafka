@@ -14,7 +14,7 @@ public static class NKafkaBatchConsumeBytesTest
             $"test-instance-{Guid.NewGuid():N}",
             protocol)
             .ConfigureProtocol(protocol);
-        
+
         await using var consumer = new Consumer<Memory<byte>?>(
             consumerConfig,
             new DummyBytesMessageDeserializer(),

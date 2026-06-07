@@ -128,10 +128,10 @@ public static class NKafkaFetchBytesParallelMultiPartTest
 
     private static async Task<IDisposableMessage<MetadataResponse>> RequestMetadata(FetchScenario scenario, string protocol)
     {
-  var config = BenchmarkHelper.CreateConnectionConfig("localhost",
-             BenchmarkHelper.BootstrapPort(protocol), protocol,
-             BenchmarkHelper.ResponseBufferSize,
-             BenchmarkHelper.ResponseBufferSize);
+        var config = BenchmarkHelper.CreateConnectionConfig("localhost",
+                   BenchmarkHelper.BootstrapPort(protocol), protocol,
+                   BenchmarkHelper.ResponseBufferSize,
+                   BenchmarkHelper.ResponseBufferSize);
         await using var connection = new Connection(config, NullLoggerFactory.Instance);
 
         await connection.OpenAsync(CancellationToken.None);
