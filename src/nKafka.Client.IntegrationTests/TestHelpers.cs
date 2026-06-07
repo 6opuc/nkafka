@@ -38,8 +38,7 @@ public static class TestHelpers
         bool checkCrcs = false,
         int? responseBufferSize = null,
         int? requestBufferSize = null,
-        bool requestApiVersionsOnOpen = false,
-        bool skipSaslAuthOnOpen = false)
+        bool requestApiVersionsOnOpen = false)
     {
         return new ConnectionConfig(
             protocol,
@@ -50,8 +49,7 @@ public static class TestHelpers
             requestBufferSize ?? 512 * 1024,
             CreateSslConfig(protocol),
             checkCrcs || protocol == "SASL_SSL",
-            requestApiVersionsOnOpen,
-            skipSaslAuthOnOpen);
+            requestApiVersionsOnOpen);
     }
 
     public static ConsumerConfig CreateConsumerConfig(

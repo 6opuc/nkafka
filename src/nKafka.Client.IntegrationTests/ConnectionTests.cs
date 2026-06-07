@@ -738,26 +738,16 @@ public class ConnectionTests
     }
 
     [Test]
-    public async Task SaslHandshake_ShouldReturnSupportedMechanisms()
+    public async Task ConnectAsync_WithSaslSsl_ShouldOpenSuccessfully()
     {
         var config = TestHelpers.CreateConnectionConfig(
-                      "SASL_SSL",
-                      clientId: "nKafka.Client.IntegrationTests",
-                      requestApiVersionsOnOpen: false,
-                      skipSaslAuthOnOpen: true);
+            "SASL_SSL",
+            clientId: "nKafka.Client.IntegrationTests");
 
         await using var connection = new Connection(config, TestLoggerFactory.Instance);
         await connection.OpenAsync(CancellationToken.None);
 
-        var request = new SaslHandshakeRequest
-        {
-            Mechanism = TestHelpers.SaslMechanism,
-        };
-        using var response = await connection.SendAsync(request, CancellationToken.None);
-
-        response.Should().NotBeNull();
-        response.Message.ErrorCode.Should().Be(0);
-        response.Message.Mechanisms.Should().Contain(TestHelpers.SaslMechanism);
+        // If we got here, SASL auth succeeded during OpenAsync
     }
 
     [Test]

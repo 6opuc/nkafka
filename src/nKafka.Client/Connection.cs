@@ -62,7 +62,7 @@ public class Connection : IConnection
         using var _ = BeginDefaultLoggingScope();
         await OpenSocketAsync(cancellationToken);
         await AuthenticateTlsAsync(cancellationToken);
-        if (!_config.SkipSaslAuthOnOpen)
+        if (_config.Ssl?.SaslMechanism is not null)
         {
             await AuthenticateSaslAsync(cancellationToken);
         }
@@ -209,10 +209,14 @@ public class Connection : IConnection
         else
             throw new NotSupportedException($"SASL mechanism {mechanism} is not supported");
 
-        var scramClient = new ScramClient(
-            _config.Ssl!.SaslUsername,
-            _config.Ssl!.SaslPassword,
-            hashAlgorithm);
+        string? username = _config.Ssl!.SaslUsername;
+        string? password = _config.Ssl!.SaslPassword;
+        if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+        {
+            throw new InvalidOperationException("SASL credentials (username, password) are required when SaslMechanism is configured.");
+        }
+
+        var scramClient = new ScramClient(username, password, hashAlgorithm);
 
         // Round 1: Client-First → Server-First
         byte[] clientFirstBytes = scramClient.GetClientFirstMessage();
