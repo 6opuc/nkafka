@@ -6,29 +6,13 @@ namespace nKafka.Client.IntegrationTests;
 
 public class ConsumerTests
 {
-    private const string SaslBootstrapHost = "localhost";
-    private const int SaslBootstrapPort = 9192;
-    private const string SaslMechanism = "SCRAM-SHA-512";
-    private const string SaslUsername = "admin";
-    private const string SaslPassword = "admin-secret";
-
-    private const string PlainTextTopic = "test_p12_m1M_s4B";
-    private const string SaslTopic = "test_p12_m40K_s10KB";
-
     private const long OffsetPastEndOfTopic = 1_000_000;
     private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(10);
-
-    private static readonly string SslCaCertPath = Path.Combine(
-        TestContext.CurrentContext.TestDirectory,
-        "../../../../../infra/secrets/ca-cert.pem");
 
     [SetUp]
     public void SetUp()
     {
-        if (!File.Exists(SslCaCertPath))
-        {
-            Assert.Ignore($"SASL/SSL infrastructure not available: CA cert not found at '{SslCaCertPath}'. Run 'infra/gen-certs.sh' and 'infra/init-cluster.sh' first.");
-        }
+        TestHelpers.ValidateSslInfrastructure();
     }
 
     public static IEnumerable Protocols
@@ -41,7 +25,7 @@ public class ConsumerTests
         get
         {
             yield return new object[] { "PLAINTEXT", "PLAINTEXT://localhost:9193,PLAINTEXT://localhost:9293,PLAINTEXT://localhost:9393" };
-            yield return new object[] { "SASL_SSL", $"SASL_SSL://{SaslBootstrapHost}:{SaslBootstrapPort}" };
+            yield return new object[] { "SASL_SSL", "SASL_SSL://" + TestHelpers.SaslBootstrapHost + ":" + TestHelpers.SaslBootstrapPort };
         }
     }
 
@@ -53,7 +37,7 @@ public class ConsumerTests
             "deadlock-test-client",
             $"deadlock-test-group-{Guid.NewGuid()}",
             $"deadlock-test-instance-{Guid.NewGuid()}",
-            servers, PlainTextTopic, protocol);
+            servers, TestHelpers.PlainTextTopic, protocol);
 
         var cts = new CancellationTokenSource(TestTimeout);
         var consumeTask = consumer.ConsumeAsync(cts.Token).AsTask();
@@ -76,7 +60,7 @@ public class ConsumerTests
             "deadlock-batch-test-client",
             $"deadlock-batch-test-group-{Guid.NewGuid()}",
             $"deadlock-batch-test-instance-{Guid.NewGuid()}",
-            servers, PlainTextTopic, protocol);
+            servers, TestHelpers.PlainTextTopic, protocol);
 
         var cts = new CancellationTokenSource(TestTimeout);
         var consumeTask = consumer.ConsumeBatchAsync(cts.Token).AsTask();
@@ -102,7 +86,7 @@ public class ConsumerTests
             instanceId,
             protocol,
             MaxWaitTime: TimeSpan.FromSeconds(1),
-            Ssl: protocol == "SASL_SSL" ? new SslConfig(SaslMechanism, SaslUsername, SaslPassword, SslCaCertPath) : null);
+            Ssl: TestHelpers.CreateSslConfig(protocol));
 
         var offsetStorage = new FixedOffsetStorage(OffsetPastEndOfTopic);
         var deserializer = new DummyDeserializer();
@@ -116,14 +100,14 @@ public class ConsumerTests
     public async Task ConsumeGroup_SaslSsl_ShouldConsumeMessagesWithFetchSessions()
     {
         var config = new ConsumerConfig(
-            $"SASL_SSL://{SaslBootstrapHost}:{SaslBootstrapPort}",
-            SaslTopic,
+            "SASL_SSL://" + TestHelpers.SaslBootstrapHost + ":" + TestHelpers.SaslBootstrapPort,
+            TestHelpers.SaslTopic,
             $"sasl-fetch-session-test-{Guid.NewGuid()}",
             $"sasl-fetch-session-group-{Guid.NewGuid()}",
             $"sasl-fetch-session-instance-{Guid.NewGuid()}",
             "SASL_SSL",
             MaxWaitTime: TimeSpan.FromSeconds(2),
-            Ssl: new SslConfig(SaslMechanism, SaslUsername, SaslPassword, SslCaCertPath));
+            Ssl: TestHelpers.CreateSslConfig("SASL_SSL"));
 
         var offsetStorage = new FixedOffsetStorage(0);
         var deserializer = new DummyDeserializer();
@@ -160,14 +144,14 @@ public class ConsumerTests
     public async Task ConsumeGroup_SaslSsl_ShouldHaveFetchStats()
     {
         var config = new ConsumerConfig(
-            $"SASL_SSL://{SaslBootstrapHost}:{SaslBootstrapPort}",
-            SaslTopic,
+            "SASL_SSL://" + TestHelpers.SaslBootstrapHost + ":" + TestHelpers.SaslBootstrapPort,
+            TestHelpers.SaslTopic,
             $"sasl-stats-test-{Guid.NewGuid()}",
             $"sasl-stats-group-{Guid.NewGuid()}",
             $"sasl-stats-instance-{Guid.NewGuid()}",
             "SASL_SSL",
             MaxWaitTime: TimeSpan.FromSeconds(2),
-            Ssl: new SslConfig(SaslMechanism, SaslUsername, SaslPassword, SslCaCertPath));
+            Ssl: TestHelpers.CreateSslConfig("SASL_SSL"));
 
         var offsetStorage = new FixedOffsetStorage(0);
         var deserializer = new DummyDeserializer();
