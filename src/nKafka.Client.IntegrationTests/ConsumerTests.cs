@@ -66,31 +66,14 @@ public class ConsumerTests
         results.Should().BeEmpty("no messages exist at the high offset");
     }
 
-    private static async Task<Consumer<byte[]>> CreateConsumerAsync(string clientId, string consumerGroup,
-        string instanceId, string protocol)
-    {
-        var config = TestHelpers.CreateConsumerConfig(
-            clientId,
-            consumerGroup,
-            instanceId,
-            protocol);
-
-        var offsetStorage = new FixedOffsetStorage(OffsetPastEndOfTopic);
-        var deserializer = new DummyDeserializer();
-
-        var consumer = new Consumer<byte[]>(config, deserializer, offsetStorage, TestLoggerFactory.Instance);
-        await consumer.JoinGroupAsync(CancellationToken.None);
-        return consumer;
-    }
-
     [Test]
     [TestCaseSource(nameof(Protocols))]
-    public async Task ConsumeAsync_WithMessages_ShouldConsumeWithFetchSessions(string protocol)
+    public async Task ConsumeAsync_WithMessages_ShouldConsumeFromTopic(string protocol)
     {
         var config = TestHelpers.CreateConsumerConfig(
-            $"fetch-session-test-{Guid.NewGuid()}",
-            $"fetch-session-group-{Guid.NewGuid()}",
-            $"fetch-session-instance-{Guid.NewGuid()}",
+            $"consume-test-{Guid.NewGuid()}",
+            $"consume-group-{Guid.NewGuid()}",
+            $"consume-instance-{Guid.NewGuid()}",
             protocol,
             maxWaitTime: TimeSpan.FromSeconds(2),
             checkCrcs: true);
@@ -123,7 +106,7 @@ public class ConsumerTests
         stopwatch.Stop();
 
         consumed.Should().BeGreaterThan(0, $"Should consume messages from {protocol} topic");
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10), "Should complete within reasonable time with fetch sessions");
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10), "Should complete within reasonable time");
     }
 
     [Test]
@@ -165,5 +148,22 @@ public class ConsumerTests
         stats.P50FetchRoundTripMs.Should().BeGreaterThan(0, "Should have fetch RTT stats");
         stats.TotalBytesReceived.Should().BeGreaterThan(0, "Should have received bytes");
         stats.TotalMessagesConsumed.Should().BeGreaterThan(0, "Should have consumed messages");
+    }
+
+    private static async Task<Consumer<byte[]>> CreateConsumerAsync(string clientId, string consumerGroup,
+        string instanceId, string protocol)
+    {
+        var config = TestHelpers.CreateConsumerConfig(
+            clientId,
+            consumerGroup,
+            instanceId,
+            protocol);
+
+        var offsetStorage = new FixedOffsetStorage(OffsetPastEndOfTopic);
+        var deserializer = new DummyDeserializer();
+
+        var consumer = new Consumer<byte[]>(config, deserializer, offsetStorage, TestLoggerFactory.Instance);
+        await consumer.JoinGroupAsync(CancellationToken.None);
+        return consumer;
     }
 }
