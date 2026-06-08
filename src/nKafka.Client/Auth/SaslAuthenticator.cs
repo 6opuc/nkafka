@@ -16,6 +16,8 @@ public sealed class SaslAuthenticator : IAuthenticator
     private readonly ILogger _logger;
     private readonly ConnectionConfig _config;
 
+    private HashAlgorithmName _hashAlgorithmName;
+
     // SCRAM state
     private string? _clientNonce;
     private byte[]? _clientFirstMessageBare;
@@ -62,13 +64,12 @@ public sealed class SaslAuthenticator : IAuthenticator
         }
 
         // 2. SASL Authenticate (SCRAM-SHA exchange)
-        HashAlgorithmName hashAlgorithm;
-        if (mechanism == "SCRAM-SHA-512")
-            hashAlgorithm = HashAlgorithmName.SHA512;
-        else if (mechanism == "SCRAM-SHA-256")
-            hashAlgorithm = HashAlgorithmName.SHA256;
-        else
-            throw new NotSupportedException($"SASL mechanism {mechanism} is not supported");
+        _hashAlgorithmName = mechanism switch
+        {
+            "SCRAM-SHA-512" => HashAlgorithmName.SHA512,
+            "SCRAM-SHA-256" => HashAlgorithmName.SHA256,
+            _ => throw new NotSupportedException($"SASL mechanism {mechanism} is not supported")
+        };
 
         string? username = _config.Sasl!.Username;
         string? password = _config.Sasl!.Password;
@@ -78,7 +79,7 @@ public sealed class SaslAuthenticator : IAuthenticator
         }
 
         byte[] passwordBytes = Encoding.UTF8.GetBytes(password);
-        int hashSize = hashAlgorithm switch
+        int hashSize = _hashAlgorithmName switch
         {
             { Name: "SHA512" } => 64,
             { Name: "SHA256" } => 32,
@@ -145,7 +146,12 @@ public sealed class SaslAuthenticator : IAuthenticator
         _saltedPassword = PBKDF2(passwordBytes, salt, iterations, hashSize);
 
         byte[] clientKey = HMAC(_saltedPassword, ClientKeyBytes);
-        byte[] storedKey = SHA512.HashData(clientKey);
+        byte[] storedKey = _hashAlgorithmName.Name switch
+        {
+            "SHA256" => SHA256.HashData(clientKey),
+            "SHA512" => SHA512.HashData(clientKey),
+            _ => throw new NotSupportedException($"Unsupported hash algorithm: {_hashAlgorithmName}")
+        };
         byte[] serverKey = HMAC(_saltedPassword, ServerKeyBytes);
 
         _clientFinalMessageWithoutProof = $"c=biws,r={serverNonce}";
@@ -235,26 +241,36 @@ public sealed class SaslAuthenticator : IAuthenticator
         return new string(nonce);
     }
 
-    private static byte[] PBKDF2(byte[] passwordBytes, byte[] salt, int iterations, int outputLength)
+    private byte[] PBKDF2(byte[] passwordBytes, byte[] salt, int iterations, int outputLength)
     {
         return Rfc2898DeriveBytes.Pbkdf2(
             passwordBytes,
             salt,
             iterations,
-            HashAlgorithmName.SHA512,
+            _hashAlgorithmName,
             outputLength);
     }
 
-    private static byte[] HMAC(byte[] key, ReadOnlySpan<char> data)
+    private byte[] HMAC(byte[] key, ReadOnlySpan<char> data)
     {
         byte[] buffer = new byte[Encoding.ASCII.GetByteCount(data)];
         Encoding.ASCII.GetBytes(data, buffer);
-        return HMACSHA512.HashData(key, buffer);
+        return _hashAlgorithmName.Name switch
+        {
+            "SHA256" => HMACSHA256.HashData(key, buffer),
+            "SHA512" => HMACSHA512.HashData(key, buffer),
+            _ => throw new NotSupportedException($"Unsupported hash algorithm: {_hashAlgorithmName}")
+        };
     }
 
-    private static byte[] HMAC(byte[] key, byte[] data)
+    private byte[] HMAC(byte[] key, byte[] data)
     {
-        return HMACSHA512.HashData(key, data);
+        return _hashAlgorithmName.Name switch
+        {
+            "SHA256" => HMACSHA256.HashData(key, data),
+            "SHA512" => HMACSHA512.HashData(key, data),
+            _ => throw new NotSupportedException($"Unsupported hash algorithm: {_hashAlgorithmName}")
+        };
     }
 
     private static byte[] BuildAuthMessageBytes(ReadOnlySpan<byte> clientFirstMessageBare, ReadOnlySpan<byte> serverFirstMessage, string clientFinalMessageWithoutProof)
