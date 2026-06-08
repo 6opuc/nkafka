@@ -18,7 +18,7 @@ namespace nKafka.Client;
 public class Consumer<TMessage> : IConsumer<TMessage>
 {
     private readonly ConsumerConfig _config;
-    internal readonly IMessageDeserializer<TMessage> _deserializer;
+    private readonly IMessageDeserializer<TMessage> _deserializer;
     private readonly IOffsetStorage _offsetStorage;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
@@ -38,9 +38,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             SingleReader = true,
         });
-    internal FetchResult? _fetchResult;
+    private FetchResult? _fetchResult;
     private IDisposableMessage<FetchResponse>? _fetchResponse => _fetchResult?.Response;
-    internal IEnumerator<MessageDeserializationContext>? _messageDeserializeEnumerator = null;
+    private IEnumerator<MessageDeserializationContext>? _messageDeserializeEnumerator = null;
 
     private readonly Stopwatch _totalStopwatch = new();
     private readonly Stopwatch _connectStopwatch = new();
@@ -891,7 +891,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _messageDeserializeEnumerator = GetMessageEnumerator();
         }
 
-        return new ConsumerBatch<TMessage>(this);
+        return new ConsumerBatch(this);
     }
 
     private IEnumerator<MessageDeserializationContext> GetMessageEnumerator()
@@ -1076,5 +1076,56 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             await _coordinatorConnection.DisposeAsync();
             _coordinatorConnection = null;
         }
+    }
+
+    private sealed class ConsumerBatch(Consumer<TMessage> consumer) : IConsumerBatch<TMessage>
+    {
+        private readonly Consumer<TMessage> _consumer = consumer;
+        private IEnumerator<ConsumeResult<TMessage>>? _enumerator;
+        private bool _disposed;
+
+        public IEnumerator<ConsumeResult<TMessage>> GetEnumerator()
+        {
+            _enumerator = GetEnumeratorCore();
+            return _enumerator;
+        }
+
+        private IEnumerator<ConsumeResult<TMessage>> GetEnumeratorCore()
+        {
+            try
+            {
+                while (_consumer._messageDeserializeEnumerator?.MoveNext() == true)
+                {
+                    var deserializationContext = _consumer._messageDeserializeEnumerator.Current;
+                    var message = _consumer._deserializer.Deserialize(deserializationContext);
+                    yield return new ConsumeResult<TMessage>
+                    {
+                        Topic = deserializationContext.Topic,
+                        Partition = deserializationContext.Partition,
+                        Offset = deserializationContext.Offset,
+                        Timestamp = deserializationContext.Timestamp,
+                        Message = message,
+                    };
+                }
+            }
+            finally
+            {
+                Dispose();
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _enumerator?.Dispose();
+            _enumerator = null;
+            _consumer._messageDeserializeEnumerator?.Dispose();
+            _consumer._messageDeserializeEnumerator = null;
+            _consumer._fetchResult?.Dispose();
+            _consumer._fetchResult = null;
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }
