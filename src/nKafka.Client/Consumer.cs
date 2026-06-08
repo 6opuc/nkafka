@@ -122,7 +122,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         _syncGroupStopwatch.Stop();
         Statistics.SyncGroupTime = _syncGroupStopwatch.Elapsed;
 
-        StartSendingHeartbeats();
+        await StartSendingHeartbeats();
     }
 
     private IDisposable? BeginDefaultLoggingScope()
@@ -478,12 +478,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         await StartFetchingAsync(actualAssignments.AssignedPartitions!);
     }
 
-    private void StartSendingHeartbeats()
+    private async ValueTask StartSendingHeartbeats()
     {
-        if (_heartbeatsBackgroundTask != null && !_heartbeatsBackgroundTask.IsCompleted)
-        {
-            _heartbeatsBackgroundTask = null;
-        }
+        _heartbeatsBackgroundTask = null;
 
         var cancellationToken = _stop!.Token;
         _heartbeatsBackgroundTask = Task.Run(
@@ -544,7 +541,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
 
                 _logger.LogDebug("Heartbeats sending was stopped.");
-            }, cancellationToken);
+            });
     }
 
     private async Task StartFetchingAsync(IDictionary<string, TopicPartition> assignedPartitions)
