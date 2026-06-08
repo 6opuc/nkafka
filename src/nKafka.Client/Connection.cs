@@ -279,17 +279,32 @@ public class Connection : IConnection
                 cancellationToken,
                 IdGenerator.Next(),
                 _apiVersions.GetValueOrDefault(request.ApiKey, (short)0));
-            await using var cancellationRegistration = cancellationToken.Register(
+
+            using var timeoutCts = new CancellationTokenSource(_config.RequestTimeoutMs);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+            await using var cancellationRegistration = linkedCts.Token.Register(
                 () =>
                 {
-                    completionPromise.TrySetCanceled();
+                    if (timeoutCts.IsCancellationRequested)
+                    {
+                        completionPromise.TrySetException(
+                            new PendingRequestTimeoutException(
+                                pendingRequest.CorrelationId,
+                                request.ApiKey,
+                                _config.RequestTimeoutMs));
+                    }
+                    else
+                    {
+                        completionPromise.TrySetCanceled();
+                    }
                     _pendingRequests.TryRemove(pendingRequest.CorrelationId, out _);
                 });
 
+            _pendingRequests.TryAdd(pendingRequest.CorrelationId, pendingRequest);
+
             using (BeginRequestLoggingScope(pendingRequest))
             {
-                _pendingRequests.TryAdd(pendingRequest.CorrelationId, pendingRequest);
-
                 _logger.LogDebug("Serializing.");
                 var writer = new BufferWriter(_arrayPool, _config.RequestBufferSize);
                 try
@@ -299,8 +314,20 @@ public class Connection : IConnection
                     _logger.LogDebug("Sending {@size} bytes.", writer.Position);
                     await _streamProvider.WriteStream.WriteAsync(
                         writer.Memory.Slice(0, writer.Position),
-                        pendingRequest.CancellationToken);
+                        linkedCts.Token);
                     _logger.LogDebug("Sent.");
+                }
+                catch (OperationCanceledException)
+                {
+                    _pendingRequests.TryRemove(pendingRequest.CorrelationId, out _);
+                    if (timeoutCts.IsCancellationRequested)
+                    {
+                        throw new PendingRequestTimeoutException(
+                            pendingRequest.CorrelationId,
+                            request.ApiKey,
+                            _config.RequestTimeoutMs);
+                    }
+                    throw;
                 }
                 finally
                 {
@@ -308,8 +335,15 @@ public class Connection : IConnection
                 }
             }
 
-            var response = await completionPromise.Task;
-            return new DisposableMessage<TResponse>(response, pendingRequest.ApiVersion);
+            try
+            {
+                var response = await completionPromise.Task;
+                return new DisposableMessage<TResponse>(response, pendingRequest.ApiVersion);
+            }
+            finally
+            {
+                linkedCts.Cancel();
+            }
         }
     }
 
