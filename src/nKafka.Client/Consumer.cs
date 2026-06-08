@@ -480,6 +480,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     private void StartSendingHeartbeats()
     {
+        if (_heartbeatsBackgroundTask != null && !_heartbeatsBackgroundTask.IsCompleted)
+        {
+            _heartbeatsBackgroundTask = null;
+        }
+
         var cancellationToken = _stop!.Token;
         _heartbeatsBackgroundTask = Task.Run(
             async () =>

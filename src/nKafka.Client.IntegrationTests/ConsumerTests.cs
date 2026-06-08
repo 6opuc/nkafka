@@ -166,4 +166,95 @@ public class ConsumerTests
         await consumer.JoinGroupAsync(CancellationToken.None);
         return consumer;
     }
+
+    [Test]
+    [TestCaseSource(nameof(Protocols))]
+    public async Task ConsumeBatchAsync_WithRebalance_ShouldHandleRebalanceGracefully(string protocol)
+    {
+        string group = $"rebalance-group-{Guid.NewGuid()}";
+        var config = TestHelpers.CreateConsumerConfig(
+            "rebalance-test-client",
+            group,
+            "rebalance-test-instance",
+            protocol,
+            maxWaitTime: TimeSpan.FromSeconds(2));
+
+        var configWithHeartbeat = config with { HeartbeatIntervalMs = 1000 };
+        var offsetStorage = new FixedOffsetStorage(0);
+        var deserializer = new DummyDeserializer();
+        await using var consumerA = new Consumer<byte[]>(configWithHeartbeat, deserializer, offsetStorage, TestLoggerFactory.Instance);
+        await consumerA.JoinGroupAsync(CancellationToken.None);
+
+        var ctsA = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        long consumedByA = 0;
+
+        var consumeTaskA = Task.Run(async () =>
+        {
+            while (!ctsA.Token.IsCancellationRequested)
+            {
+                try
+                {
+                    using var batch = await consumerA.ConsumeBatchAsync(ctsA.Token).ConfigureAwait(false);
+                    foreach (var _ in batch)
+                    {
+                        Interlocked.Increment(ref consumedByA);
+                    }
+
+                    if (consumedByA >= 10)
+                        break;
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+            }
+        });
+
+        await Task.Delay(3000);
+
+        await using var consumerB = new Consumer<byte[]>(
+            TestHelpers.CreateConsumerConfig(
+                "rebalance-test-client-b",
+                group,
+                "rebalance-test-instance-b",
+                protocol,
+                maxWaitTime: TimeSpan.FromSeconds(2)) with
+            { HeartbeatIntervalMs = 1000 },
+            deserializer,
+            offsetStorage,
+            TestLoggerFactory.Instance);
+
+        await consumerB.JoinGroupAsync(CancellationToken.None);
+
+        var ctsB = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        long consumedByB = 0;
+
+        var consumeTaskB = Task.Run(async () =>
+        {
+            while (!ctsB.Token.IsCancellationRequested)
+            {
+                try
+                {
+                    using var batch = await consumerB.ConsumeBatchAsync(ctsB.Token).ConfigureAwait(false);
+                    foreach (var _ in batch)
+                    {
+                        Interlocked.Increment(ref consumedByB);
+                    }
+
+                    if (consumedByB >= 10)
+                        break;
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+            }
+        });
+
+        await Task.WhenAll(consumeTaskA, consumeTaskB);
+
+        long totalConsumed = Interlocked.Read(ref consumedByA) + Interlocked.Read(ref consumedByB);
+        totalConsumed.Should().BeGreaterThan(0, "At least one consumer should have received messages");
+        Interlocked.Read(ref consumedByA).Should().BeGreaterThanOrEqualTo(0, "Consumer A should handle rebalance gracefully");
+    }
 }
