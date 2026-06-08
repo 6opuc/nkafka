@@ -822,16 +822,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             return consumerResult;
         }
 
-        _fetchResult = await _consumeChannel.Reader.ReadAsync(cancellationToken);
-
-        if (!_fetchResult.IsSuccess)
-        {
-            var ex = _fetchResult.Exception;
-            _fetchResult.Dispose();
-            _fetchResult = null;
-            throw new InvalidOperationException("Fetch loop failed.", ex);
-        }
-
+        await EnsureEnumeratorAsync(cancellationToken);
         _deserializeStopwatch.Restart();
         _messageDeserializeEnumerator = GetMessageEnumerator();
 
@@ -876,22 +867,25 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     public async ValueTask<IConsumerBatch<TMessage>> ConsumeBatchAsync(CancellationToken cancellationToken)
     {
-        if (_messageDeserializeEnumerator == null)
+        await EnsureEnumeratorAsync(cancellationToken);
+        return new ConsumerBatch(this);
+    }
+
+    private async ValueTask EnsureEnumeratorAsync(CancellationToken cancellationToken)
+    {
+        if (_messageDeserializeEnumerator != null) return;
+
+        _fetchResult = await _consumeChannel.Reader.ReadAsync(cancellationToken);
+
+        if (!_fetchResult.IsSuccess)
         {
-            _fetchResult = await _consumeChannel.Reader.ReadAsync(cancellationToken);
-
-            if (!_fetchResult.IsSuccess)
-            {
-                var ex = _fetchResult.Exception;
-                _fetchResult.Dispose();
-                _fetchResult = null;
-                throw new InvalidOperationException("Fetch loop failed.", ex);
-            }
-
-            _messageDeserializeEnumerator = GetMessageEnumerator();
+            var ex = _fetchResult.Exception;
+            _fetchResult.Dispose();
+            _fetchResult = null;
+            throw new InvalidOperationException("Fetch loop failed.", ex);
         }
 
-        return new ConsumerBatch(this);
+        _messageDeserializeEnumerator = GetMessageEnumerator();
     }
 
     private IEnumerator<MessageDeserializationContext> GetMessageEnumerator()
