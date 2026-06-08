@@ -54,15 +54,15 @@ public class ConsumerTests
             protocol);
 
         var cts = new CancellationTokenSource(TestTimeout);
-        var consumeTask = consumer.ConsumeBatchAsync(cts.Token).AsTask();
+        var batchTask = consumer.ConsumeBatchAsync(cts.Token);
 
-        var completedTask = await Task.WhenAny(consumeTask,
+        var completedTask = await Task.WhenAny(batchTask.AsTask(),
             Task.Delay(TestTimeout + TimeSpan.FromSeconds(2), CancellationToken.None));
 
-        completedTask.Should().Be(consumeTask,
+        completedTask.Should().Be(batchTask.AsTask(),
             "ConsumeBatchAsync should complete within 10s when no messages are available.");
 
-        var results = await consumeTask;
+        using var results = await batchTask;
         results.Should().BeEmpty("no messages exist at the high offset");
     }
 
@@ -93,7 +93,7 @@ public class ConsumerTests
 
         while (!cts.Token.IsCancellationRequested)
         {
-            var batch = await consumer.ConsumeBatchAsync(cts.Token).ConfigureAwait(false);
+            using var batch = await consumer.ConsumeBatchAsync(cts.Token).ConfigureAwait(false);
             foreach (var record in batch)
             {
                 consumed++;
@@ -134,7 +134,7 @@ public class ConsumerTests
 
         while (!cts.Token.IsCancellationRequested)
         {
-            var batch = await consumer.ConsumeBatchAsync(cts.Token).ConfigureAwait(false);
+            using var batch = await consumer.ConsumeBatchAsync(cts.Token).ConfigureAwait(false);
             foreach (var record in batch)
             {
                 consumed++;

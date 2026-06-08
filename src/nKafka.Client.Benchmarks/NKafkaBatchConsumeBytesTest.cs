@@ -25,8 +25,8 @@ public static class NKafkaBatchConsumeBytesTest
         int counter = 0;
         while (counter < scenario.MessageCount)
         {
-            var consumeResults = await consumer.ConsumeBatchAsync(CancellationToken.None);
-            foreach (var consumeResult in consumeResults)
+            using var batch = await consumer.ConsumeBatchAsync(CancellationToken.None);
+            foreach (var consumeResult in batch)
             {
                 if (consumeResult.Message == null)
                 {

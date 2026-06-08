@@ -18,7 +18,7 @@ namespace nKafka.Client;
 public class Consumer<TMessage> : IConsumer<TMessage>
 {
     private readonly ConsumerConfig _config;
-    private readonly IMessageDeserializer<TMessage> _deserializer;
+    internal readonly IMessageDeserializer<TMessage> _deserializer;
     private readonly IOffsetStorage _offsetStorage;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
@@ -38,9 +38,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             SingleReader = true,
         });
-    private FetchResult? _fetchResult;
+    internal FetchResult? _fetchResult;
     private IDisposableMessage<FetchResponse>? _fetchResponse => _fetchResult?.Response;
-    private IEnumerator<MessageDeserializationContext>? _messageDeserializeEnumerator = null;
+    internal IEnumerator<MessageDeserializationContext>? _messageDeserializeEnumerator = null;
 
     private readonly Stopwatch _totalStopwatch = new();
     private readonly Stopwatch _connectStopwatch = new();
@@ -874,7 +874,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         return null;
     }
 
-    public async ValueTask<IEnumerable<ConsumeResult<TMessage>>> ConsumeBatchAsync(CancellationToken cancellationToken)
+    public async ValueTask<IConsumerBatch<TMessage>> ConsumeBatchAsync(CancellationToken cancellationToken)
     {
         if (_messageDeserializeEnumerator == null)
         {
@@ -891,34 +891,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _messageDeserializeEnumerator = GetMessageEnumerator();
         }
 
-        return ConsumeBatchFromBuffer();
-    }
-
-    private IEnumerable<ConsumeResult<TMessage>> ConsumeBatchFromBuffer()
-    {
-        if (_messageDeserializeEnumerator == null)
-        {
-            yield break;
-        }
-
-        while (_messageDeserializeEnumerator.MoveNext())
-        {
-            var deserializationContext = _messageDeserializeEnumerator.Current;
-            var message = _deserializer.Deserialize(deserializationContext);
-            yield return new ConsumeResult<TMessage>
-            {
-                Topic = deserializationContext.Topic,
-                Partition = deserializationContext.Partition,
-                Offset = deserializationContext.Offset,
-                Timestamp = deserializationContext.Timestamp,
-                Message = message,
-            };
-        }
-
-        _messageDeserializeEnumerator.Dispose();
-        _messageDeserializeEnumerator = null;
-        _fetchResult?.Dispose();
-        _fetchResult = null;
+        return new ConsumerBatch<TMessage>(this);
     }
 
     private IEnumerator<MessageDeserializationContext> GetMessageEnumerator()
