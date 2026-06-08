@@ -12,7 +12,8 @@ public sealed record ConnectionConfig(
     TlsConfig? Tls = null,
     SaslConfig? Sasl = null,
     bool CheckCrcs = false,
-    bool RequestApiVersionsOnOpen = true)
+    bool RequestApiVersionsOnOpen = true,
+    int RequestTimeoutMs = 60_000)
 {
     private static readonly Regex _connectionStringRegex = new(
         @"^(?<proto>\S+)\:\/\/(?<host>\S+)\:(?<port>\S+)$", RegexOptions.Compiled);
