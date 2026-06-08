@@ -6,7 +6,7 @@
 - Do not stage files with `git add` unless the user explicitly requests it.
 - Always confirm before making any git operation beyond status/diff/log.
 
-## Code Review Lessons Learned (PR #2)
+## Code Review Lessons Learned
 
 ### API Consistency
 - **Serialization**: Use `ref BufferWriter writer`
@@ -44,6 +44,7 @@
 - Change `Message.Key/Value` from `byte[]?` to `Memory<byte>?`
 - Eliminate `.ToArray()` allocations in deserializers
 - Use span-based APIs throughout
+- Prefer `BinaryPrimitives.WriteInt32BigEndian/WriteInt64BigEndian` over manual byte shifting in BufferWriter — reduces bounds checks from N to 1
 
 ### Documentation
 - Add XML comments for non-obvious patterns (e.g., temporary writer patterns)
@@ -77,7 +78,14 @@
 - Keep only `ReadOnlySpan<byte>` overloads
 - **Remove unused methods** before refactoring
 
-### Implementation Plan
-- All 18 PR #2 review comments analyzed and organized into 7 phases
-- Implementation plan: `~/projects/pr2-implementation-plan.md` (NOT in repository)
-- Wait for approval before implementing
+### Benchmarks
+- Project: `src/nKafka.Client.Benchmarks` (BenchmarkDotNet 0.15.8, compares nKafka vs Confluent.Kafka)
+- **Prerequisites:** Kafka cluster running via docker-compose (`infra/docker-compose.yaml`), benchmark topics created
+- **Create topics:** `bash infra/init-benchmark-topics.sh`
+- **Run all benchmarks:** `dotnet run --project src/nKafka.Client.Benchmarks -c Release`
+- **Run subset:** `dotnet run --project src/nKafka.Client.Benchmarks -c Release -- --filter 'nKafka.Client.Benchmarks.FetchBenchmarks.NKafkaFetchBytes*'`
+- **Filter format:** `--filter 'namespace.TypeName.MethodName'` (full names from `--list flat`)
+- **Outputs:** CSV, HTML, GitHub-flavored markdown in `BenchmarkDotNet.Artifacts/results/`
+- **Always run benchmarks before proposing a PR** for performance-sensitive changes
+- Compare against baseline: `--filter` only the changed method, run on same machine, same cluster state
+
