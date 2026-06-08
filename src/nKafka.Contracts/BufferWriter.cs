@@ -204,10 +204,8 @@ public struct BufferWriter : IDisposable
     public void WriteInt(int value)
     {
         EnsureSpace(4);
-        _buffer.Span[_pos++] = (byte)(value >> 24);
-        _buffer.Span[_pos++] = (byte)(value >> 16);
-        _buffer.Span[_pos++] = (byte)(value >> 8);
-        _buffer.Span[_pos++] = (byte)value;
+        BinaryPrimitives.WriteInt32BigEndian(_buffer.Span.Slice(_pos), value);
+        _pos += 4;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -223,9 +221,8 @@ public struct BufferWriter : IDisposable
     public void WriteLong(long value)
     {
         EnsureSpace(8);
-        ulong ui = (ulong)value;
-        for (int j = 7; j >= 0; j--)
-            _buffer.Span[_pos++] = (byte)(ui >> j * 8 & 0xff);
+        BinaryPrimitives.WriteInt64BigEndian(_buffer.Span.Slice(_pos), value);
+        _pos += 8;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
