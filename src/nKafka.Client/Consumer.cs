@@ -478,11 +478,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         await StartFetchingAsync(actualAssignments.AssignedPartitions!);
     }
 
-    private async ValueTask StartSendingHeartbeats()
+private async ValueTask StartSendingHeartbeats()
     {
-        _heartbeatsBackgroundTask = null;
+        if (_heartbeatsBackgroundTask != null && !_heartbeatsBackgroundTask.IsCompleted)
+        {
+            // Cancel _stop so the old heartbeat task exits via OperationCanceledException.
+            // This guarantees only one heartbeat task runs at a time.
+            _stop!.Cancel();
+        }
 
-        var cancellationToken = _stop!.Token;
+        var cancellationToken = _stop.Token;
         _heartbeatsBackgroundTask = Task.Run(
             async () =>
             {
@@ -1002,7 +1007,14 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         if (_fetchTasks != null)
         {
-            await Task.WhenAll(_fetchTasks);
+            try
+            {
+                await Task.WhenAll(_fetchTasks);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected — fetch tasks were cancelled by _stop.CancelAsync().
+            }
             _fetchTasks = null;
         }
 

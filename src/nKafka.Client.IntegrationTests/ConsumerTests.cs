@@ -217,11 +217,9 @@ public class ConsumerTests
             }
         });
 
-        // Wait a moment for consumer A to start consuming
-        await Task.Delay(1000);
-
-        // Start consumer B — Kafka's JoinGroupAsync takes ~1-2s for group
-        // coordination, triggering a rebalance that kicks consumer A out
+        // Start consumer B immediately — Kafka's JoinGroupAsync takes ~1-2s for group
+        // coordination, so consumer A will be actively fetching when rebalance triggers.
+        // This ensures consumer A doesn't finish before consumer B starts.
         await using var consumerB = new Consumer<byte[]>(
             TestHelpers.CreateConsumerConfig(
                 "rebalance-test-client-b",
