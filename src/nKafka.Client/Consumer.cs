@@ -122,7 +122,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         _syncGroupStopwatch.Stop();
         Statistics.SyncGroupTime = _syncGroupStopwatch.Elapsed;
 
-        await StartSendingHeartbeats();
+        StartSendingHeartbeats();
     }
 
     private IDisposable? BeginDefaultLoggingScope()
@@ -478,7 +478,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         await StartFetchingAsync(actualAssignments.AssignedPartitions!);
     }
 
-private async ValueTask StartSendingHeartbeats()
+    private void StartSendingHeartbeats()
     {
         if (_heartbeatsBackgroundTask != null && !_heartbeatsBackgroundTask.IsCompleted)
         {
