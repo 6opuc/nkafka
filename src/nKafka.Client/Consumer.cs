@@ -480,7 +480,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     private void StartSendingHeartbeats()
     {
-        var cancellationToken = _stop.Token;
+        var cancellationToken = _stop!.Token;
         _heartbeatsBackgroundTask = Task.Run(
             async () =>
             {
@@ -521,7 +521,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             await JoinGroupAsync(CancellationToken.None);
                             break;
                         }
-#warning error 25(UnknownMemberId) in non-leader consumer after leader left the group.
                         else
                         {
                             _logger.LogError(

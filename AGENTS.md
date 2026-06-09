@@ -56,17 +56,6 @@
 - Roundtrip tests for all data types
 - Test naming pattern: `MethodUnderTest_Condition_Expectation` (e.g., `WriteByte_Zero_CanBeReadByBufferReader`)
 
-### Concurrency & Task Management
-- **Shared CancellationTokenSource:** When cancelling a shared `_stop` CTS, do NOT replace it with a new one — bound tasks (fetch loops, heartbeat loop) hold references to the old token and won't see the new one
-- **Self-deadlock:** When calling an async method from within a task (e.g., heartbeat task → `JoinGroupAsync()` → `StartSendingHeartbeats()`), do NOT `await _heartbeatsBackgroundTask` — it IS the current task
-- **Heartbeat task cleanup:** Cancel `_stop` to signal the old heartbeat task to exit via `OperationCanceledException`; don't await when called from within the same task (it exits naturally after the calling method returns)
-- **Fetch task cancellation:** `StopFetchingAsync()` calls `_stop.CancelAsync()` then `Task.WhenAll(_fetchTasks)` — wrap `WhenAll` in try-catch for `OperationCanceledException` since cancelled tasks throw
-
-### Integration Tests for Rebalance
-- **Timing:** Don't use `Task.Delay` before starting second consumer — start immediately so rebalance happens while first consumer is actively fetching (consuming all 4MB is fast, <1s)
-- **Exception handling:** `ConsumeBatchAsync()` can throw `ChannelClosedException` (channel closed during rebalance) and `OperationCanceledException` (test cleanup) — catch both in consume loops
-- **Test pattern:** Start consumer A, start consumer B immediately, wait for both to finish, verify both received messages
-
 ### Exception Hierarchy
 - **KafkaException** (base)
   - **SerializationException** - BufferWriter errors, serialization failures

@@ -184,6 +184,7 @@ public class ConsumerTests
         var offsetStorage = new FixedOffsetStorage(0);
         var deserializer = new DummyDeserializer();
 
+        var consumerStarted = new SemaphoreSlim(0, 1);
         await using var consumerA = new Consumer<byte[]>(configWithHeartbeat, deserializer, offsetStorage, TestLoggerFactory.Instance);
         await consumerA.JoinGroupAsync(CancellationToken.None);
 
@@ -201,6 +202,9 @@ public class ConsumerTests
                     {
                         Interlocked.Increment(ref consumedByA);
                     }
+                    // Signal that consumer A has started consuming
+                    consumerStarted.Release();
+                    break;
                 }
                 catch (ObjectDisposedException)
                 {
@@ -217,9 +221,6 @@ public class ConsumerTests
             }
         });
 
-        // Start consumer B immediately — Kafka's JoinGroupAsync takes ~1-2s for group
-        // coordination, so consumer A will be actively fetching when rebalance triggers.
-        // This ensures consumer A doesn't finish before consumer B starts.
         await using var consumerB = new Consumer<byte[]>(
             TestHelpers.CreateConsumerConfig(
                 "rebalance-test-client-b",
@@ -232,6 +233,8 @@ public class ConsumerTests
             offsetStorage,
             TestLoggerFactory.Instance);
 
+        // Wait for consumer A to start consuming before joining group
+        await consumerStarted.WaitAsync(testCts.Token);
         await consumerB.JoinGroupAsync(CancellationToken.None);
 
         long consumedByB = 0;
