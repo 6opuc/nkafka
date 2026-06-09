@@ -480,13 +480,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     private void StartSendingHeartbeats()
     {
-        if (_heartbeatsBackgroundTask != null && !_heartbeatsBackgroundTask.IsCompleted)
-        {
-            // Cancel _stop so the old heartbeat task exits via OperationCanceledException.
-            // This guarantees only one heartbeat task runs at a time.
-            _stop!.Cancel();
-        }
-
         var cancellationToken = _stop.Token;
         _heartbeatsBackgroundTask = Task.Run(
             async () =>
@@ -505,7 +498,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             MemberId = _groupMembership.MemberId,
                             GroupInstanceId = null, // ???
                         };
-                        using var response = await connection.SendAsync(request, CancellationToken.None);
+                        using var response = await connection.SendAsync(request, cancellationToken);
                         var hbElapsed = _heartbeatStopwatch.Elapsed;
                         _heartbeatStopwatch.Stop();
                         Interlocked.Increment(ref _heartbeatCount);
