@@ -76,6 +76,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     public async ValueTask JoinGroupAsync(CancellationToken cancellationToken)
     {
         _stop = new CancellationTokenSource();
+        await RejoinGroupAsync(cancellationToken);
+    }
+
+    private async ValueTask RejoinGroupAsync(CancellationToken cancellationToken)
+    {
         _totalStopwatch.Start();
         using var _ = BeginDefaultLoggingScope();
 
@@ -480,6 +485,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     private void StartSendingHeartbeats()
     {
+        if (_heartbeatsBackgroundTask != null && !_heartbeatsBackgroundTask.IsCompleted)
+        {
+            return;
+        }
+
         var cancellationToken = _stop!.Token;
         _heartbeatsBackgroundTask = Task.Run(
             async () =>
@@ -518,9 +528,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             // re-join the group
                             // exit heartbeat loop
                             await StopFetchingAsync();
-                            await JoinGroupAsync(CancellationToken.None);
+                            await RejoinGroupAsync(CancellationToken.None);
                             break;
                         }
+#warning error 25(UnknownMemberId) in non-leader consumer after leader left the group.
                         else
                         {
                             _logger.LogError(
@@ -538,7 +549,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
 
                 _logger.LogDebug("Heartbeats sending was stopped.");
-            });
+            }, cancellationToken);
     }
 
     private async Task StartFetchingAsync(IDictionary<string, TopicPartition> assignedPartitions)
@@ -669,7 +680,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     }
                     else
                     {
-                        _logger.LogDebug("Fetch response was received.");
+
                         long responseBytes = 0;
                         long responseMessages = 0;
 
@@ -717,7 +728,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     }
 
                     consecutiveErrors = 0;
-                    await _consumeChannel.Writer.WriteAsync(new FetchResult(response), cancellationToken);
+                    await _consumeChannel.Writer.WriteAsync(new FetchResult(response, _groupMembership?.GenerationId ?? 0), cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -874,14 +885,27 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         if (_messageDeserializeEnumerator != null) return;
 
-        _fetchResult = await _consumeChannel.Reader.ReadAsync(cancellationToken);
-
-        if (!_fetchResult.IsSuccess)
+        while (true)
         {
-            var ex = _fetchResult.Exception;
+            _fetchResult = await _consumeChannel.Reader.ReadAsync(cancellationToken);
+
+            if (!_fetchResult.IsSuccess)
+            {
+                var ex = _fetchResult.Exception;
+                _fetchResult.Dispose();
+                _fetchResult = null;
+                throw new InvalidOperationException("Fetch loop failed.", ex);
+            }
+
+            if (_fetchResult.GenerationId == (_groupMembership?.GenerationId ?? 0))
+            {
+                break;
+            }
+
+            _logger.LogWarning("Discarding stale fetch result from old generation: {OldGen} vs {CurrentGen}",
+                _fetchResult.GenerationId, _groupMembership?.GenerationId);
             _fetchResult.Dispose();
             _fetchResult = null;
-            throw new InvalidOperationException("Fetch loop failed.", ex);
         }
 
         _messageDeserializeEnumerator = GetMessageEnumerator();
@@ -890,8 +914,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private IEnumerator<MessageDeserializationContext> GetMessageEnumerator()
     {
         if (_fetchResponse == null ||
-            _fetchResponse.Message.ErrorCode != 0 ||
-            (_stop?.IsCancellationRequested ?? true))
+            (_stop?.IsCancellationRequested ?? true) ||
+            _fetchResponse.Message.ErrorCode != 0)
         {
             yield break;
         }
@@ -906,6 +930,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     topic = topicMetadata.Name;
                 }
             }
+            if (topic == null)
+            {
+                continue;
+            }
+
             foreach (var partition in response.Partitions!)
             {
                 foreach (var recordBatch in partition.Records!.RecordBatches!)
@@ -915,7 +944,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     {
                         yield return new MessageDeserializationContext
                         {
-                            Topic = topic ?? "unknown_topic",
+                            Topic = topic,
                             Partition = partition.PartitionIndex!.Value,
                             Offset = recordBatch.BaseOffset + record.OffsetDelta,
                             Timestamp = firstTimestamp.AddMilliseconds(record.TimestampDelta),
@@ -974,6 +1003,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         await StopFetchingAsync();
 
+        _consumeChannel.Writer.TryComplete();
+
         if (_heartbeatsBackgroundTask != null)
         {
             await _heartbeatsBackgroundTask;
@@ -999,14 +1030,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         if (_fetchTasks != null)
         {
-            try
-            {
-                await Task.WhenAll(_fetchTasks);
-            }
-            catch (OperationCanceledException)
-            {
-                // Expected — fetch tasks were cancelled by _stop.CancelAsync().
-            }
+            await Task.WhenAll(_fetchTasks);
             _fetchTasks = null;
         }
 
@@ -1021,8 +1045,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _messageDeserializeEnumerator.Dispose();
             _messageDeserializeEnumerator = null;
         }
-
-        _consumeChannel.Writer.TryComplete();
     }
 
     private async ValueTask LeaveGroupAsync(CancellationToken cancellationToken)
