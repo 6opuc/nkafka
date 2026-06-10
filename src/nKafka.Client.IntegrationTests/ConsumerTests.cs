@@ -166,4 +166,97 @@ public class ConsumerTests
         await consumer.JoinGroupAsync(CancellationToken.None);
         return consumer;
     }
+
+    [Test]
+    [TestCaseSource(nameof(Protocols))]
+    public async Task ConsumeBatchAsync_WithRebalance_ShouldHandleGracefully(string protocol)
+    {
+        if (protocol == "SASL_SSL")
+            TestHelpers.ValidateSslInfrastructure();
+
+        string groupId = $"rebalance-group-{Guid.NewGuid()}";
+        var offsetStorage = new FixedOffsetStorage(0);
+        var deserializer = new DummyDeserializer();
+
+        var consumerAConfig = TestHelpers.CreateConsumerConfig(
+            "rebalance-test-client-a",
+            groupId,
+            "rebalance-test-instance-a",
+            protocol,
+            maxWaitTime: TimeSpan.FromSeconds(2));
+
+        var consumerBConfig = TestHelpers.CreateConsumerConfig(
+            "rebalance-test-client-b",
+            groupId,
+            "rebalance-test-instance-b",
+            protocol,
+            maxWaitTime: TimeSpan.FromSeconds(2));
+
+        await using var consumerA = new Consumer<byte[]>(consumerAConfig, deserializer, offsetStorage, TestLoggerFactory.Instance);
+        await consumerA.JoinGroupAsync(CancellationToken.None);
+
+        long consumedByA = 0;
+        long consumedByB = 0;
+        Exception? exceptionOnA = null;
+        Exception? exceptionOnB = null;
+
+        // Consumer A consumes some batches
+        var consumeTaskA = Task.Run(async () =>
+        {
+            for (int i = 0; i < 5 && exceptionOnA == null; i++)
+            {
+                try
+                {
+                    using var batch = await consumerA.ConsumeBatchAsync(CancellationToken.None).ConfigureAwait(false);
+                    foreach (var _ in batch)
+                    {
+                        Interlocked.Increment(ref consumedByA);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Interlocked.Exchange(ref exceptionOnA, ex);
+                    break;
+                }
+            }
+        });
+
+        // Wait for consumer A to consume at least 1 message, then trigger rebalance
+        while (Interlocked.Read(ref consumedByA) == 0 && exceptionOnA == null)
+        {
+            await Task.Delay(100);
+        }
+
+        // Consumer B joins, triggering rebalance
+        await using var consumerB = new Consumer<byte[]>(consumerBConfig, deserializer, offsetStorage, TestLoggerFactory.Instance);
+        await consumerB.JoinGroupAsync(CancellationToken.None);
+
+        // Both consumers continue consuming
+        var consumeTaskB = Task.Run(async () =>
+        {
+            for (int i = 0; i < 5 && exceptionOnB == null; i++)
+            {
+                try
+                {
+                    using var batch = await consumerB.ConsumeBatchAsync(CancellationToken.None).ConfigureAwait(false);
+                    foreach (var _ in batch)
+                    {
+                        Interlocked.Increment(ref consumedByB);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Interlocked.Exchange(ref exceptionOnB, ex);
+                    break;
+                }
+            }
+        });
+
+        await Task.WhenAll(consumeTaskA, consumeTaskB);
+
+        exceptionOnA.Should().BeNull("Consumer A should not throw exceptions during rebalance");
+        exceptionOnB.Should().BeNull("Consumer B should not throw exceptions during rebalance");
+        Interlocked.Read(ref consumedByA).Should().BeGreaterThan(0, "Consumer A should have consumed messages before rebalance");
+        Interlocked.Read(ref consumedByB).Should().BeGreaterThan(0, "Consumer B should have consumed messages after rebalance");
+    }
 }

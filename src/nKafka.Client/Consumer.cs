@@ -55,6 +55,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     public ConsumerStatistics Statistics { get; } = new();
 
+    public int GenerationId => _groupMembership?.GenerationId ?? 0;
+
     public Consumer(
         ConsumerConfig config,
         IMessageDeserializer<TMessage> deserializer,
@@ -126,6 +128,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         await SyncGroup(connection, assignments, cancellationToken);
         _syncGroupStopwatch.Stop();
         Statistics.SyncGroupTime = _syncGroupStopwatch.Elapsed;
+
+        await StopFetchingAsync();
+
+        _stop?.Dispose();
+        _stop = new CancellationTokenSource();
+
+        if (_rejoinAssignments != null)
+        {
+            await StartFetchingAsync(_rejoinAssignments.AssignedPartitions!);
+        }
 
         StartSendingHeartbeats();
     }
@@ -465,10 +477,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             throw new ProtocolException($"Failed to synchronize consumer group. Error code {response.Message.ErrorCode}");
         }
 
-        var actualAssignments = response.Message.Assignment!;
+        _rejoinAssignments = response.Message.Assignment!;
 
         var context = new StringBuilder();
-        foreach (var topic in actualAssignments.AssignedPartitions!)
+        foreach (var topic in _rejoinAssignments.AssignedPartitions!)
         {
             context.Append(topic.Value.Topic);
             context.Append("[");
@@ -480,8 +492,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             context.Append("] ");
         }
         _logger.LogInformation("Assigned partitions: {context}", context);
-        await StartFetchingAsync(actualAssignments.AssignedPartitions!);
     }
+
+    private ConsumerProtocolAssignment? _rejoinAssignments;
 
     private void StartSendingHeartbeats()
     {
@@ -524,10 +537,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                         else if (response.Message.ErrorCode == (short)ErrorCode.RebalanceInProgress)
                         {
                             _logger.LogInformation("The group is rebalancing, so a rejoin is needed.");
-                            // stop fetching
-                            // re-join the group
-                            // exit heartbeat loop
-                            await StopFetchingAsync();
                             await RejoinGroupAsync(CancellationToken.None);
                             break;
                         }
@@ -887,25 +896,39 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         while (true)
         {
-            _fetchResult = await _consumeChannel.Reader.ReadAsync(cancellationToken);
-
-            if (!_fetchResult.IsSuccess)
+            try
             {
-                var ex = _fetchResult.Exception;
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(30000);
+                _fetchResult = await _consumeChannel.Reader.ReadAsync(timeoutCts.Token);
+
+                if (_fetchResult == null)
+                {
+                    continue;
+                }
+
+                if (!_fetchResult.IsSuccess)
+                {
+                    var ex = _fetchResult.Exception;
+                    _fetchResult.Dispose();
+                    _fetchResult = null;
+                    throw new InvalidOperationException("Fetch loop failed.", ex);
+                }
+
+                if (_fetchResult.GenerationId == (_groupMembership?.GenerationId ?? 0))
+                {
+                    break;
+                }
+
+                _logger.LogWarning("Discarding stale fetch result from old generation: {OldGen} vs {CurrentGen}",
+                    _fetchResult.GenerationId, _groupMembership?.GenerationId);
                 _fetchResult.Dispose();
                 _fetchResult = null;
-                throw new InvalidOperationException("Fetch loop failed.", ex);
             }
-
-            if (_fetchResult.GenerationId == (_groupMembership?.GenerationId ?? 0))
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                break;
+                continue;
             }
-
-            _logger.LogWarning("Discarding stale fetch result from old generation: {OldGen} vs {CurrentGen}",
-                _fetchResult.GenerationId, _groupMembership?.GenerationId);
-            _fetchResult.Dispose();
-            _fetchResult = null;
         }
 
         _messageDeserializeEnumerator = GetMessageEnumerator();
@@ -1030,7 +1053,14 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         if (_fetchTasks != null)
         {
-            await Task.WhenAll(_fetchTasks);
+            await Task.WhenAll(_fetchTasks.Select(t => t.ContinueWith(task =>
+            {
+                if (task.IsFaulted && task.Exception!.InnerException is not OperationCanceledException and not TaskCanceledException)
+                {
+                    // Re-throw non-cancellation exceptions
+                    throw task.Exception!.InnerException;
+                }
+            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default)));
             _fetchTasks = null;
         }
 
