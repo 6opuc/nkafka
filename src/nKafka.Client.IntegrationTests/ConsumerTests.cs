@@ -199,19 +199,24 @@ public class ConsumerTests
         long consumedByB = 0;
         Exception? exceptionOnA = null;
         Exception? exceptionOnB = null;
+        var stopRebalance = new CancellationTokenSource();
 
-        // Consumer A consumes some batches
+        // Consumer A consumes continuously for test duration
         var consumeTaskA = Task.Run(async () =>
         {
-            for (int i = 0; i < 5 && exceptionOnA == null; i++)
+            while (!stopRebalance.Token.IsCancellationRequested && exceptionOnA == null)
             {
                 try
                 {
-                    using var batch = await consumerA.ConsumeBatchAsync(CancellationToken.None).ConfigureAwait(false);
+                    using var batch = await consumerA.ConsumeBatchAsync(stopRebalance.Token).ConfigureAwait(false);
                     foreach (var _ in batch)
                     {
                         Interlocked.Increment(ref consumedByA);
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
                 }
                 catch (Exception ex)
                 {
@@ -221,17 +226,19 @@ public class ConsumerTests
             }
         });
 
-        // Wait for consumer A to consume at least 1 message, then trigger rebalance
+        // Wait for consumer A to consume at least 1 batch, then trigger rebalance
         while (Interlocked.Read(ref consumedByA) == 0 && exceptionOnA == null)
         {
             await Task.Delay(100);
         }
 
+        Console.WriteLine($"Consumer A consumed {consumedByA} batches before rebalance");
+
         // Consumer B joins, triggering rebalance
         await using var consumerB = new Consumer<byte[]>(consumerBConfig, deserializer, offsetStorage, TestLoggerFactory.Instance);
         await consumerB.JoinGroupAsync(CancellationToken.None);
 
-        // Both consumers continue consuming
+        // Consumer B consumes 5 batches after rebalance
         var consumeTaskB = Task.Run(async () =>
         {
             for (int i = 0; i < 5 && exceptionOnB == null; i++)
@@ -252,11 +259,14 @@ public class ConsumerTests
             }
         });
 
+        // Wait for B to finish, then let A consume a few more batches and stop
+        await Task.WhenAny(consumeTaskB, Task.Delay(TimeSpan.FromSeconds(30)));
+        stopRebalance.Cancel();
         await Task.WhenAll(consumeTaskA, consumeTaskB);
 
         exceptionOnA.Should().BeNull("Consumer A should not throw exceptions during rebalance");
         exceptionOnB.Should().BeNull("Consumer B should not throw exceptions during rebalance");
-        Interlocked.Read(ref consumedByA).Should().BeGreaterThan(0, "Consumer A should have consumed messages before rebalance");
+        Interlocked.Read(ref consumedByA).Should().BeGreaterThan(0, "Consumer A should have consumed messages");
         Interlocked.Read(ref consumedByB).Should().BeGreaterThan(0, "Consumer B should have consumed messages after rebalance");
     }
 }
