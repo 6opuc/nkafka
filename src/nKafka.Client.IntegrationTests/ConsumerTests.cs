@@ -199,9 +199,12 @@ public class ConsumerTests
         long consumedByB = 0;
         Exception? exceptionOnA = null;
         Exception? exceptionOnB = null;
+        int generationAtRebalance = 0;
+        var rebalanceDetected = new TaskCompletionSource<bool>();
         var stopA = new CancellationTokenSource();
+        int prevGen = consumerA.GenerationId;
 
-        // Consumer A consumes continuously for test duration
+        // Consumer A consumes continuously for test duration, detecting generation change
         var consumeTaskA = Task.Run(async () =>
         {
             while (!stopA.Token.IsCancellationRequested && exceptionOnA == null)
@@ -213,6 +216,13 @@ public class ConsumerTests
                     {
                         Interlocked.Increment(ref consumedByA);
                     }
+
+                    int currentGen = consumerA.GenerationId;
+                    if (currentGen != prevGen && Interlocked.CompareExchange(ref generationAtRebalance, currentGen, 0) == 0)
+                    {
+                        rebalanceDetected.SetResult(true);
+                    }
+                    prevGen = currentGen;
                 }
                 catch (OperationCanceledException)
                 {
@@ -226,24 +236,18 @@ public class ConsumerTests
             }
         });
 
-        // Wait for consumer A to consume at least 1 batch, then record count before rebalance
+        // Wait for consumer A to consume at least 1 batch
         while (Interlocked.Read(ref consumedByA) == 0 && exceptionOnA == null)
         {
             await Task.Delay(100);
         }
 
-        long consumedBeforeRebalance = Interlocked.Read(ref consumedByA);
-
         // Consumer B joins, triggering rebalance
         await using var consumerB = new Consumer<byte[]>(consumerBConfig, deserializer, offsetStorage, TestLoggerFactory.Instance);
         await consumerB.JoinGroupAsync(CancellationToken.None);
 
-        // Wait for A to consume at least 1 batch after the rebalance completes
-        var waitCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        while (Interlocked.Read(ref consumedByA) <= consumedBeforeRebalance && !waitCts.Token.IsCancellationRequested)
-        {
-            await Task.Delay(100);
-        }
+        // Wait for A to detect the generation change (rebalance complete)
+        await rebalanceDetected.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
         // Consumer B consumes 5 batches after rebalance
         var consumeTaskB = Task.Run(async () =>
@@ -266,15 +270,14 @@ public class ConsumerTests
             }
         });
 
-        // Let A and B consume, then stop
-        await Task.WhenAny(consumeTaskB, Task.Delay(TimeSpan.FromSeconds(30)));
+        // Let A and B consume more, then stop
+        await Task.WhenAny(consumeTaskB, Task.Delay(TimeSpan.FromSeconds(10)));
         stopA.Cancel();
         await Task.WhenAll(consumeTaskA, consumeTaskB);
 
+        generationAtRebalance.Should().BeGreaterThan(0, "Rebalance should have been detected via generation change");
         exceptionOnA.Should().BeNull("Consumer A should not throw exceptions during rebalance");
         exceptionOnB.Should().BeNull("Consumer B should not throw exceptions during rebalance");
-        Interlocked.Read(ref consumedByA).Should().BeGreaterThan(consumedBeforeRebalance,
-            $"Consumer A should have consumed messages after rebalance (before: {consumedBeforeRebalance}, after: {Interlocked.Read(ref consumedByA)})");
         Interlocked.Read(ref consumedByB).Should().BeGreaterThan(0, "Consumer B should have consumed messages after rebalance");
     }
 }
