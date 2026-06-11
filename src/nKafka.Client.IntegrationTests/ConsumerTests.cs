@@ -238,6 +238,13 @@ public class ConsumerTests
         await using var consumerB = new Consumer<byte[]>(consumerBConfig, deserializer, offsetStorage, TestLoggerFactory.Instance);
         await consumerB.JoinGroupAsync(CancellationToken.None);
 
+        // Wait for A to consume at least 1 batch after the rebalance completes
+        var waitCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        while (Interlocked.Read(ref consumedByA) <= consumedBeforeRebalance && !waitCts.Token.IsCancellationRequested)
+        {
+            await Task.Delay(100);
+        }
+
         // Consumer B consumes 5 batches after rebalance
         var consumeTaskB = Task.Run(async () =>
         {
@@ -259,9 +266,8 @@ public class ConsumerTests
             }
         });
 
-        // Wait for B to finish, then let A consume more and stop
+        // Let A and B consume, then stop
         await Task.WhenAny(consumeTaskB, Task.Delay(TimeSpan.FromSeconds(30)));
-        await Task.Delay(TimeSpan.FromSeconds(3)); // Give A time to consume after rebalance
         stopA.Cancel();
         await Task.WhenAll(consumeTaskA, consumeTaskB);
 
