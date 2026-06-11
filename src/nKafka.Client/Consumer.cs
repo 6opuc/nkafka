@@ -139,6 +139,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             await StartFetchingAsync(_rejoinAssignments.AssignedPartitions!);
         }
 
+        _heartbeatsBackgroundTask = null;
         StartSendingHeartbeats();
     }
 
@@ -540,7 +541,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             await RejoinGroupAsync(CancellationToken.None);
                             break;
                         }
-#warning error 25(UnknownMemberId) in non-leader consumer after leader left the group.
                         else
                         {
                             _logger.LogError(
@@ -661,6 +661,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     firstRequest = false;
 
                     _fetchStopwatch.Start();
+                    int fetchGenerationId = _groupMembership?.GenerationId ?? 0;
                     var response = await connection.SendAsync(fetchRequest, cancellationToken);
                     var fetchElapsed = _fetchStopwatch.Elapsed;
                     _fetchStopwatch.Stop();
@@ -737,7 +738,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     }
 
                     consecutiveErrors = 0;
-                    await _consumeChannel.Writer.WriteAsync(new FetchResult(response, _groupMembership?.GenerationId ?? 0), cancellationToken);
+                    if (fetchGenerationId == (_groupMembership?.GenerationId ?? 0))
+                    {
+                        await _consumeChannel.Writer.WriteAsync(new FetchResult(response, fetchGenerationId), cancellationToken);
+                    }
                 }
                 catch (OperationCanceledException)
                 {
