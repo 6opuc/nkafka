@@ -1061,8 +1061,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             {
                 if (task.IsFaulted && task.Exception!.InnerException is not OperationCanceledException and not TaskCanceledException)
                 {
-                    // Re-throw non-cancellation exceptions
-                    throw task.Exception!.InnerException;
+                    throw task.Exception!.InnerException!;
                 }
             }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default)));
             _fetchTasks = null;
