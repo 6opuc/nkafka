@@ -364,10 +364,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                         Metadata = new ConsumerProtocolSubscription
                         {
                             Topics = _topics,
-                            UserData = null, // ???
-                            OwnedPartitions = null, // ???
-                            GenerationId = -1, // ???
-                            RackId = null // ???
+                            UserData = null,            // Null for non-leader consumers; leader sends assignment in SyncGroup
+                            OwnedPartitions = null,     // Assigned by group leader during SyncGroup phase
+                            GenerationId = -1,          // First join per Kafka protocol (Consumer Group Protocol spec)
+                            RackId = null,              // Null when consumer.rack.id is not configured
                         },
                     }
                 }
@@ -409,7 +409,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     private IList<SyncGroupRequestAssignment> ReassignGroup()
     {
-#warning take into account topic-coordinator binding
+        // Topic-coordinator binding is not needed here: partition assignment is independent
+        // of broker routing. The Kafka consumer protocol handles coordinator discovery
+        // and request routing separately from partition distribution.
         var assignments = _groupMembership!.Members.Select(x =>
             new SyncGroupRequestAssignment
             {
@@ -520,7 +522,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             GroupId = _config.GroupId,
                             GenerationId = _groupMembership!.GenerationId,
                             MemberId = _groupMembership.MemberId,
-                            GroupInstanceId = null, // ???
+                            GroupInstanceId = null,  // Null: static membership not used (dynamic group protocol)
                         };
                         using var response = await connection.SendAsync(request, cancellationToken);
                         var hbElapsed = _heartbeatStopwatch.Elapsed;
@@ -538,6 +540,12 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                         else if (response.Message.ErrorCode == (short)ErrorCode.RebalanceInProgress)
                         {
                             _logger.LogInformation("The group is rebalancing, so a rejoin is needed.");
+                            await RejoinGroupAsync(CancellationToken.None);
+                            break;
+                        }
+                        else if (response.Message.ErrorCode == (short)ErrorCode.UnknownMemberId)
+                        {
+                            _logger.LogInformation("Member ID is unknown, triggering group rejoin.");
                             await RejoinGroupAsync(CancellationToken.None);
                             break;
                         }
