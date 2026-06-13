@@ -27,8 +27,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private Task? _heartbeatsBackgroundTask;
     private readonly Dictionary<int, IConnection> _connections = new();
     private IConnection? _coordinatorConnection;
-    private string? _coordinatorHost;
-    private int _coordinatorPort;
+    private ConnectionConfig? _coordinatorConfig;
     private readonly string[] _topics;
     private GroupMembership? _groupMembership;
     private IDictionary<string, MetadataResponseTopic>? _topicsMetadata;
@@ -315,8 +314,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         var coordinatorConnection = new Connection(coordinatorConnectionConfig, _loggerFactory);
         await coordinatorConnection.OpenAsync(cancellationToken);
 
-        _coordinatorHost = coordinatorConnectionConfig.Host;
-        _coordinatorPort = coordinatorConnectionConfig.Port;
+        _coordinatorConfig = coordinatorConnectionConfig;
 
         return coordinatorConnection;
     }
@@ -364,12 +362,12 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             newPort = coordinator.Port!.Value;
         }
 
-        if (_coordinatorHost == newHost && _coordinatorPort == newPort)
+        if (_coordinatorConfig is { Host: var oldHost, Port: var oldPort } && oldHost == newHost && oldPort == newPort)
         {
             return _coordinatorConnection!;
         }
 
-        _logger.LogInformation("Coordinator changed from {oldHost}:{oldPort} to {newHost}:{newPort}. Reconnecting.", _coordinatorHost, _coordinatorPort, newHost, newPort);
+        _logger.LogInformation("Coordinator changed from {oldHost}:{oldPort} to {newHost}:{newPort}. Reconnecting.", _coordinatorConfig?.Host ?? "<unknown>", _coordinatorConfig?.Port ?? -1, newHost, newPort);
 
         if (_coordinatorConnection != null)
         {
@@ -391,8 +389,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         var newConnection = new Connection(newConfig, _loggerFactory);
         await newConnection.OpenAsync(cancellationToken);
 
-        _coordinatorHost = newHost;
-        _coordinatorPort = newPort;
+        _coordinatorConfig = newConfig;
         _coordinatorConnection = newConnection;
 
         return newConnection;
