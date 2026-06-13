@@ -144,10 +144,7 @@ public class ConsumerTests
                 break;
         }
 
-        var stats = consumer.Statistics;
-        stats.P50FetchRoundTripMs.Should().BeGreaterThan(0, "Should have fetch RTT stats");
-        stats.TotalBytesReceived.Should().BeGreaterThan(0, "Should have received bytes");
-        stats.TotalMessagesConsumed.Should().BeGreaterThan(0, "Should have consumed messages");
+        consumed.Should().BeGreaterThanOrEqualTo(500, "Should have consumed at least 500 messages");
     }
 
     private static async Task<Consumer<byte[]>> CreateConsumerAsync(string clientId, string consumerGroup,

@@ -42,18 +42,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private IDisposableMessage<FetchResponse>? _fetchResponse => _fetchResult?.Response;
     private IEnumerator<MessageDeserializationContext>? _messageDeserializeEnumerator = null;
 
-    private readonly Stopwatch _totalStopwatch = new();
-    private readonly Stopwatch _connectStopwatch = new();
-    private readonly Stopwatch _metadataStopwatch = new();
-    private readonly Stopwatch _joinGroupStopwatch = new();
-    private readonly Stopwatch _syncGroupStopwatch = new();
-    private readonly Stopwatch _fetchStopwatch = new();
-    private readonly Stopwatch _deserializeStopwatch = new();
-    private readonly Stopwatch _commitStopwatch = new();
-    private readonly Stopwatch _heartbeatStopwatch = new();
     private int _heartbeatCount;
-
-    public ConsumerStatistics Statistics { get; } = new();
+    private Activity? _totalActivity;
+    private Activity? _deserializeActivity;
 
     public int GenerationId => _groupMembership?.GenerationId ?? 0;
 
@@ -83,23 +74,20 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     private async ValueTask RejoinGroupAsync(CancellationToken cancellationToken)
     {
-        _totalStopwatch.Start();
+        _totalActivity = KafkaTracing.Source.StartActivity("Consumer.Lifetime", ActivityKind.Client);
         using var _ = BeginDefaultLoggingScope();
 
-        _connectStopwatch.Start();
+        using var _connectActivity = KafkaTracing.Source.StartActivity("Consumer.Connect", ActivityKind.Client);
         await OpenConnectionsAsync(cancellationToken);
-        _connectStopwatch.Stop();
-        Statistics.ConnectTime = _connectStopwatch.Elapsed;
+        _connectActivity?.AddTag("nKafka.phase", "connect");
 
-        _metadataStopwatch.Start();
+        using var _metadataActivity = KafkaTracing.Source.StartActivity("Consumer.Metadata", ActivityKind.Client);
         var connection = GetCoordinatorConnection();
-        _metadataStopwatch.Stop();
-        Statistics.MetadataTime = _metadataStopwatch.Elapsed;
+        _metadataActivity?.AddTag("nKafka.phase", "metadata");
 
-        _joinGroupStopwatch.Start();
+        using var _joingroupActivity = KafkaTracing.Source.StartActivity("Consumer.JoinGroup", ActivityKind.Client);
         using var joinGroupResponse = await JoinGroupRequestAsync(connection, cancellationToken);
-        _joinGroupStopwatch.Stop();
-        Statistics.JoinGroupTime = _joinGroupStopwatch.Elapsed;
+        _joingroupActivity?.AddTag("nKafka.phase", "joingroup");
         _groupMembership = new GroupMembership
         {
             MemberId = joinGroupResponse.Message.MemberId!,
@@ -124,10 +112,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             assignments = ReassignGroup();
         }
 
-        _syncGroupStopwatch.Start();
+        using var _syncgroupActivity = KafkaTracing.Source.StartActivity("Consumer.SyncGroup", ActivityKind.Client);
         await SyncGroup(connection, assignments, cancellationToken);
-        _syncGroupStopwatch.Stop();
-        Statistics.SyncGroupTime = _syncGroupStopwatch.Elapsed;
+        _syncgroupActivity?.AddTag("nKafka.phase", "syncgroup");
 
         await RefreshMetadataAsync(cancellationToken);
 
@@ -610,7 +597,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 {
                     try
                     {
-                        _heartbeatStopwatch.Start();
+                        using var _heartbeatActivity = KafkaTracing.Source.StartActivity("Consumer.Heartbeat", ActivityKind.Client);
                         var connection = GetCoordinatorConnection();
 
                         var request = new HeartbeatRequest
@@ -618,14 +605,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             GroupId = _config.GroupId,
                             GenerationId = _groupMembership!.GenerationId,
                             MemberId = _groupMembership.MemberId,
-                            GroupInstanceId = null,  // Null: static membership not used (dynamic group protocol)
+                            GroupInstanceId = null,
                         };
                         using var response = await connection.SendAsync(request, cancellationToken);
-                        var hbElapsed = _heartbeatStopwatch.Elapsed;
-                        _heartbeatStopwatch.Stop();
+                        _heartbeatActivity?.AddTag("nKafka.phase", "heartbeat");
                         Interlocked.Increment(ref _heartbeatCount);
-                        Statistics.IncrementHeartbeats(1);
-                        Statistics.AddHeartbeatTime(hbElapsed);
+                        KafkaMetrics.Heartbeats.Add(1);
+                        KafkaMetrics.HeartbeatTimeMs.Record(_heartbeatActivity!.Duration!.TotalMilliseconds);
 
                         if (response.Message.ErrorCode == 0)
                         {
@@ -767,18 +753,18 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
             while (!cancellationToken.IsCancellationRequested)
             {
+                using var _fetchActivity = KafkaTracing.Source.StartActivity("Consumer.Fetch", ActivityKind.Client);
                 try
                 {
                     var fetchRequest = CreateFetchRequest(sessionManager, topicMap, firstRequest);
                     firstRequest = false;
 
-                    _fetchStopwatch.Start();
                     int fetchGenerationId = _groupMembership?.GenerationId ?? 0;
                     var response = await connection.SendAsync(fetchRequest, cancellationToken);
-                    var fetchElapsed = _fetchStopwatch.Elapsed;
-                    _fetchStopwatch.Stop();
-                    Statistics.RecordFetchRoundTrip(fetchElapsed);
-                    Statistics.AddFetchTime(fetchElapsed);
+                    _fetchActivity!.AddTag("nKafka.phase", "fetch");
+                    double fetchElapsed = _fetchActivity.Duration!.TotalMilliseconds;
+                    KafkaMetrics.FetchRoundTripMs.Record(fetchElapsed);
+                    KafkaMetrics.Fetches.Add(1);
 
                     if (response.Message.SessionId != null)
                     {
@@ -848,8 +834,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             }
                         }
 
-                        Statistics.AddBytesReceived(responseBytes);
-                        Statistics.AddMessagesConsumed(responseMessages);
+                        KafkaMetrics.BytesReceived.Add(responseBytes);
+                        KafkaMetrics.MessagesConsumed.Add(responseMessages);
                     }
 
                     consecutiveErrors = 0;
@@ -864,10 +850,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
                 catch (Exception exception)
                 {
-                    if (_fetchStopwatch.IsRunning)
-                    {
-                        _fetchStopwatch.Stop();
-                    }
+                    _fetchActivity!.SetStatus(ActivityStatusCode.Error, exception.Message);
+                    _fetchActivity!.AddTag("exception.message", exception.Message);
                     sessionManager.OnError(0);
                     consecutiveErrors++;
 
@@ -961,7 +945,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
 
         await EnsureEnumeratorAsync(cancellationToken);
-        _deserializeStopwatch.Restart();
+        _deserializeActivity = KafkaTracing.Source.StartActivity("Consumer.Deserialize", ActivityKind.Client);
         _messageDeserializeEnumerator = GetMessageEnumerator();
 
         return ConsumeFromBuffer();
@@ -988,11 +972,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             };
         }
 
-        if (_deserializeStopwatch.IsRunning)
+        if (_deserializeActivity != null)
         {
-            _deserializeStopwatch.Stop();
-            Statistics.RecordDeserializeTime(_deserializeStopwatch.Elapsed);
-            Statistics.AddDeserializeTime(_deserializeStopwatch.Elapsed);
+            KafkaMetrics.DeserializeTimeMs.Record(_deserializeActivity.Duration.TotalMilliseconds);
+            _deserializeActivity.Dispose();
+            _deserializeActivity = null;
         }
 
         _messageDeserializeEnumerator.Dispose();
@@ -1135,7 +1119,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 consumeResult.Offset);
             return;
         }
-        _commitStopwatch.Start();
+        using var _commitActivity = KafkaTracing.Source.StartActivity("Consumer.Commit", ActivityKind.Client);
         await _offsetStorage.SetAsync(
             connection,
             _config.GroupId,
@@ -1143,15 +1127,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             consumeResult.Partition,
             consumeResult.Offset,
             cancellationToken);
-        _commitStopwatch.Stop();
-        Statistics.AddCommitTime(_commitStopwatch.Elapsed);
+        _commitActivity?.AddTag("nKafka.phase", "commit");
+        KafkaMetrics.Commits.Add(1);
+        KafkaMetrics.CommitTimeMs.Record(_commitActivity!.Duration!.TotalMilliseconds);
     }
 
     public async ValueTask DisposeAsync()
     {
         using var _ = BeginDefaultLoggingScope();
 
-        _totalStopwatch.Stop();
+        _totalActivity?.AddTag("nKafka.phase", "shutdown");
 
         await StopFetchingAsync();
 
@@ -1166,9 +1151,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         await LeaveGroupAsync(CancellationToken.None);
 
         await CloseConnectionsAsync();
-
-        Statistics.TotalElapsed = _totalStopwatch.Elapsed;
-        Statistics.SetHeartbeatCount(_heartbeatCount);
     }
 
     private async ValueTask StopFetchingAsync()

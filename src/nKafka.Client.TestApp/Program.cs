@@ -1,12 +1,27 @@
 using System.Diagnostics;
+using Microsoft.Extensions.Logging;
+using nKafka.Client;
 using nKafka.Client.Benchmarks;
 using nKafka.Client.TestApp;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
-/*
-var threadPoolThreads = 1;
-ThreadPool.SetMinThreads(threadPoolThreads, threadPoolThreads);
-ThreadPool.SetMaxThreads(threadPoolThreads, threadPoolThreads);
-*/
+using var meterProvider = Sdk.CreateMeterProviderBuilder()
+    .AddMeter(KafkaTracing.InstrumentName)
+    .AddConsoleExporter()
+    .Build();
+
+using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+    .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("testapp"))
+    .AddSource(KafkaTracing.Source.Name)
+    .AddOtlpExporter(o =>
+    {
+        o.Endpoint = new Uri("http://otel-collector:4318");
+    })
+    .AddConsoleExporter()
+    .Build();
 
 var benchmarks = new FetchBenchmarks();
 var scenario = benchmarks.Scenarios
