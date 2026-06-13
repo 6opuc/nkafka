@@ -9,25 +9,17 @@ public class FetchSessionManager
     private int _sessionId;
     private int _sessionIndex;
     private bool _useSessions;
-    private readonly List<FetchTopic> _currentTopics;
 
     public FetchSessionManager(int initialSessionId, int initialSessionIndex, bool useSessions)
     {
         _sessionId = initialSessionId;
         _sessionIndex = initialSessionIndex;
         _useSessions = useSessions;
-        _currentTopics = new List<FetchTopic>();
     }
 
     public int SessionId => _sessionId;
     public int SessionIndex => _useSessions ? _sessionIndex : 0;
     public bool IsActive => _sessionId != 0 && _useSessions;
-
-    public void InitializeTopics(IEnumerable<FetchTopic> topics)
-    {
-        _currentTopics.Clear();
-        _currentTopics.AddRange(topics);
-    }
 
     public FetchRequest CreateInitialRequest(int maxWaitMs, int minBytes, int maxBytes, IEnumerable<FetchTopic> topics)
     {
@@ -51,8 +43,6 @@ public class FetchSessionManager
         {
             _sessionId = 0;
             _sessionIndex = 0;
-            _currentTopics.Clear();
-            _currentTopics.AddRange(topics);
         }
 
         return request;
@@ -111,48 +101,10 @@ public class FetchSessionManager
         }
     }
 
-    public void AddTopicsToSession(IEnumerable<FetchTopic> topics)
-    {
-        if (!_useSessions) return;
-
-        foreach (var topic in topics)
-        {
-            var existingTopic = _currentTopics.FirstOrDefault(t => t.Topic == topic.Topic || t.TopicId == topic.TopicId);
-            if (existingTopic == null)
-            {
-                _currentTopics.Add(new FetchTopic
-                {
-                    Topic = topic.Topic,
-                    TopicId = topic.TopicId,
-                    Partitions = topic.Partitions?.ToList() ?? new List<FetchPartition>(),
-                });
-            }
-            else
-            {
-                foreach (var partition in topic.Partitions ?? Array.Empty<FetchPartition>())
-                {
-                    var existingPartition = existingTopic.Partitions?.FirstOrDefault(p => p.Partition == partition.Partition);
-                    if (existingPartition == null)
-                    {
-                        existingTopic.Partitions ??= new List<FetchPartition>();
-                        existingTopic.Partitions.Add(partition);
-                    }
-                }
-            }
-        }
-    }
-
-    public void RemoveTopicsFromSession(IEnumerable<FetchTopic> topics)
-    {
-        if (!_useSessions) return;
-
-        foreach (var topicToRemove in topics)
-        {
-            int topicIndex = _currentTopics.FindIndex(t => t.Topic == topicToRemove.Topic || t.TopicId == topicToRemove.TopicId);
-            if (topicIndex >= 0)
-            {
-                _currentTopics.RemoveAt(topicIndex);
-            }
-        }
-    }
+    // TODO: Implement incremental fetch session modification for partition reassignment.
+    // Currently, the consumer restarts fetch loops via StartFetchingAsync on rebalance,
+    // so there's no need to dynamically add/remove topics from the session.
+    // If incremental session updates are needed in the future, implement:
+    //   - AddTopicsToSession(IEnumerable<FetchTopic> topics)
+    //   - RemoveTopicsFromSession(IEnumerable<FetchTopic> topics)
 }
