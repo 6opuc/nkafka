@@ -129,6 +129,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         _syncGroupStopwatch.Stop();
         Statistics.SyncGroupTime = _syncGroupStopwatch.Elapsed;
 
+        await RefreshMetadataAsync(cancellationToken);
+
         await StopFetchingAsync();
 
         _stop?.Dispose();
@@ -166,6 +168,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _coordinatorConnection = await OpenCoordinatorConnectionAsync(bootstrapConnection, cancellationToken);
         }
 
+        await RefreshMetadataAsync(cancellationToken);
+    }
+
+    private async ValueTask RefreshMetadataAsync(CancellationToken cancellationToken)
+    {
         using var metadataResponse = await RequestMetadata(GetCoordinatorConnection(), cancellationToken);
         if (metadataResponse.Message.Topics == null)
         {
@@ -176,6 +183,17 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             .GroupBy(x => x.Value.TopicId)
             .Where(x => x.Key.HasValue)
             .ToDictionary(g => g.Key!.Value, g => g.First().Value);
+
+        var knownBrokerIds = new HashSet<int>(metadataResponse.Message.Brokers!.Keys);
+        var connectionsToClose = _connections
+            .Where(kvp => !knownBrokerIds.Contains(kvp.Key))
+            .ToList();
+        foreach (var (removedId, connection) in connectionsToClose)
+        {
+            await connection.DisposeAsync();
+            _connections.Remove(removedId);
+        }
+
         foreach (var broker in metadataResponse.Message.Brokers!.Values)
         {
             if (_connections.ContainsKey(broker.NodeId!.Value))
@@ -593,7 +611,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
 
                 int nodeId = partitionMetadata.LeaderId!.Value;
-                var connection = _connections[nodeId];
+                if (!_connections.TryGetValue(nodeId, out var connection))
+                {
+                    _logger.LogWarning("Broker node {nodeId} not found in connections, skipping partition {topic}/{partition}.", nodeId, topicAssignment.Key, partition);
+                    continue;
+                }
 
                 if (!sessionManagers.TryGetValue(nodeId, out var sessionManager))
                 {
@@ -659,7 +681,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _logger.LogInformation("Fetching started.");
             int consecutiveErrors = 0;
             bool firstRequest = true;
-            var connection = _connections[nodeId];
+            if (!_connections.TryGetValue(nodeId, out var connection))
+            {
+                _logger.LogError("Broker node {nodeId} not found in connections during fetch loop.", nodeId);
+                throw new ProtocolException($"Broker node {nodeId} not found in connections during fetch loop.");
+            }
 
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -689,6 +715,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             sessionManager.OnError(response.Message.ErrorCode.Value);
                             _logger.LogWarning("Fetch session error: {@errorCode}. Reinitializing session.", response.Message.ErrorCode);
                             firstRequest = true;
+                            continue;
+                        }
+
+                        if (response.Message.ErrorCode == (short)ErrorCode.NotLeaderForPartition)
+                        {
+                            _logger.LogWarning("Partition leader changed (errorCode: {@errorCode}). Refreshing metadata.", response.Message.ErrorCode);
+                            consecutiveErrors = 0;
+                            firstRequest = true;
+                            sessionManager.OnError(0);
+                            await RefreshMetadataAsync(cancellationToken);
                             continue;
                         }
 
@@ -1011,7 +1047,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             return;
         }
 
-        var connection = _connections[partitionMetadata.LeaderId!.Value];
+        if (!_connections.TryGetValue(partitionMetadata.LeaderId!.Value, out var connection))
+        {
+            _logger.LogError(
+                "Broker node {nodeId} not found in connections. Commit failed. {topic} {partition} {offset}",
+                partitionMetadata.LeaderId,
+                consumeResult.Topic,
+                consumeResult.Partition,
+                consumeResult.Offset);
+            return;
+        }
         _commitStopwatch.Start();
         await _offsetStorage.SetAsync(
             connection,
