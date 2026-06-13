@@ -129,6 +129,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         _syncGroupStopwatch.Stop();
         Statistics.SyncGroupTime = _syncGroupStopwatch.Elapsed;
 
+        await RefreshMetadataAsync(cancellationToken);
+
         await StopFetchingAsync();
 
         _stop?.Dispose();
@@ -166,7 +168,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _coordinatorConnection = await OpenCoordinatorConnectionAsync(bootstrapConnection, cancellationToken);
         }
 
-        using var metadataResponse = await RequestMetadata(GetCoordinatorConnection(), cancellationToken);
+        await RefreshMetadataAsync(cancellationToken);
+    }
+
+    private async ValueTask RefreshMetadataAsync(CancellationToken cancellationToken)
+    {
+        var coordinator = await RefreshCoordinatorAsync(cancellationToken);
+        using var metadataResponse = await RequestMetadata(coordinator, cancellationToken);
         if (metadataResponse.Message.Topics == null)
         {
             throw new ProtocolException("Metadata response did not contain topics.");
@@ -176,6 +184,17 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             .GroupBy(x => x.Value.TopicId)
             .Where(x => x.Key.HasValue)
             .ToDictionary(g => g.Key!.Value, g => g.First().Value);
+
+        var knownBrokerIds = new HashSet<int>(metadataResponse.Message.Brokers!.Keys);
+        var connectionsToClose = _connections
+            .Where(kvp => !knownBrokerIds.Contains(kvp.Key))
+            .ToList();
+        foreach (var (removedId, connection) in connectionsToClose)
+        {
+            await connection.DisposeAsync();
+            _connections.Remove(removedId);
+        }
+
         foreach (var broker in metadataResponse.Message.Brokers!.Values)
         {
             if (_connections.ContainsKey(broker.NodeId!.Value))
@@ -294,7 +313,84 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         var coordinatorConnection = new Connection(coordinatorConnectionConfig, _loggerFactory);
         await coordinatorConnection.OpenAsync(cancellationToken);
 
+        _coordinatorConnection = coordinatorConnection;
+
         return coordinatorConnection;
+    }
+
+    private async ValueTask<IConnection> RefreshCoordinatorAsync(CancellationToken cancellationToken)
+    {
+        await using var bootstrapConnection = await OpenBootstrapConnectionAsync(cancellationToken);
+        using var coordinatorResponse = await bootstrapConnection.SendAsync(
+            new FindCoordinatorRequest
+            {
+                Key = _config.GroupId,
+                KeyType = 0,
+                CoordinatorKeys = [_config.GroupId],
+            },
+            CancellationToken.None);
+
+        string newHost;
+        int newPort;
+
+        if (coordinatorResponse.Version < 4)
+        {
+            if (coordinatorResponse.Message.ErrorCode != 0)
+            {
+                throw new ProtocolException($"Failed to find group coordinator during refresh. Error code {coordinatorResponse.Message.ErrorCode}");
+            }
+
+            newHost = coordinatorResponse.Message.Host!;
+            newPort = coordinatorResponse.Message.Port!.Value;
+        }
+        else
+        {
+            var coordinator = coordinatorResponse.Message.Coordinators?.FirstOrDefault(x => x.Key == _config.GroupId);
+            if (coordinator == null)
+            {
+                throw new ProtocolException(
+                    $"Failed to find group coordinator during refresh. Response did not match coordinator key '{_config.GroupId}'.");
+            }
+
+            if (coordinator.ErrorCode != 0)
+            {
+                throw new ProtocolException($"Failed to find group coordinator during refresh. Error code {coordinator.ErrorCode}");
+            }
+
+            newHost = coordinator.Host!;
+            newPort = coordinator.Port!.Value;
+        }
+
+        if (_coordinatorConnection is Connection { Config: var oldConfig } && oldConfig.Host == newHost && oldConfig.Port == newPort)
+        {
+            return _coordinatorConnection!;
+        }
+
+        _logger.LogInformation("Coordinator changed from {oldHost}:{oldPort} to {newHost}:{newPort}. Reconnecting.", _coordinatorConnection is Connection c ? c.Config.Host : "<unknown>", _coordinatorConnection is Connection c2 ? c2.Config.Port : -1, newHost, newPort);
+
+        if (_coordinatorConnection != null)
+        {
+            await _coordinatorConnection.DisposeAsync();
+            _coordinatorConnection = null;
+        }
+
+        var newConfig = new ConnectionConfig(
+            _config.Protocol,
+            newHost,
+            newPort,
+            _config.ClientId,
+            _config.ResponseBufferSize,
+            _config.RequestBufferSize,
+            _config.Tls,
+            _config.Sasl,
+            _config.CheckCrcs);
+
+        var newConnection = new Connection(newConfig, _loggerFactory);
+        await newConnection.OpenAsync(cancellationToken);
+
+        _coordinatorConnection = newConnection;
+
+        return newConnection;
     }
 
     private async ValueTask<IDisposableMessage<MetadataResponse>> RequestMetadata(IConnection connection,
@@ -593,7 +689,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
 
                 int nodeId = partitionMetadata.LeaderId!.Value;
-                var connection = _connections[nodeId];
+                if (!_connections.TryGetValue(nodeId, out var connection))
+                {
+                    _logger.LogWarning("Broker node {nodeId} not found in connections, skipping partition {topic}/{partition}.", nodeId, topicAssignment.Key, partition);
+                    continue;
+                }
 
                 if (!sessionManagers.TryGetValue(nodeId, out var sessionManager))
                 {
@@ -659,7 +759,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _logger.LogInformation("Fetching started.");
             int consecutiveErrors = 0;
             bool firstRequest = true;
-            var connection = _connections[nodeId];
+            if (!_connections.TryGetValue(nodeId, out var connection))
+            {
+                _logger.LogError("Broker node {nodeId} not found in connections during fetch loop.", nodeId);
+                throw new ProtocolException($"Broker node {nodeId} not found in connections during fetch loop.");
+            }
 
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -689,6 +793,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             sessionManager.OnError(response.Message.ErrorCode.Value);
                             _logger.LogWarning("Fetch session error: {@errorCode}. Reinitializing session.", response.Message.ErrorCode);
                             firstRequest = true;
+                            continue;
+                        }
+
+                        if (response.Message.ErrorCode == (short)ErrorCode.NotLeaderForPartition)
+                        {
+                            _logger.LogWarning("Partition leader changed (errorCode: {@errorCode}). Refreshing metadata.", response.Message.ErrorCode);
+                            consecutiveErrors = 0;
+                            firstRequest = true;
+                            sessionManager.OnError(0);
+                            await RefreshMetadataAsync(cancellationToken);
                             continue;
                         }
 
@@ -1011,7 +1125,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             return;
         }
 
-        var connection = _connections[partitionMetadata.LeaderId!.Value];
+        if (!_connections.TryGetValue(partitionMetadata.LeaderId!.Value, out var connection))
+        {
+            _logger.LogError(
+                "Broker node {nodeId} not found in connections. Commit failed. {topic} {partition} {offset}",
+                partitionMetadata.LeaderId,
+                consumeResult.Topic,
+                consumeResult.Partition,
+                consumeResult.Offset);
+            return;
+        }
         _commitStopwatch.Start();
         await _offsetStorage.SetAsync(
             connection,

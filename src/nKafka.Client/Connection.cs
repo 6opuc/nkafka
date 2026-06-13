@@ -15,6 +15,8 @@ public class Connection : IConnection
     private readonly IAuthenticator? _authenticator;
     private readonly ConnectionConfig _config;
 
+    public ConnectionConfig Config => _config;
+
     private CancellationTokenSource? _stop;
 
     private Task _receiveBackgroundTask = default!;
