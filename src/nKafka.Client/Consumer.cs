@@ -27,7 +27,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private Task? _heartbeatsBackgroundTask;
     private readonly Dictionary<int, IConnection> _connections = new();
     private IConnection? _coordinatorConnection;
-    private ConnectionConfig? _coordinatorConfig;
     private readonly string[] _topics;
     private GroupMembership? _groupMembership;
     private IDictionary<string, MetadataResponseTopic>? _topicsMetadata;
@@ -314,7 +313,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         var coordinatorConnection = new Connection(coordinatorConnectionConfig, _loggerFactory);
         await coordinatorConnection.OpenAsync(cancellationToken);
 
-        _coordinatorConfig = coordinatorConnectionConfig;
+        _coordinatorConnection = coordinatorConnection;
 
         return coordinatorConnection;
     }
@@ -362,12 +361,12 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             newPort = coordinator.Port!.Value;
         }
 
-        if (_coordinatorConfig is { Host: var oldHost, Port: var oldPort } && oldHost == newHost && oldPort == newPort)
+        if (_coordinatorConnection is Connection { Config: var oldConfig } && oldConfig.Host == newHost && oldConfig.Port == newPort)
         {
             return _coordinatorConnection!;
         }
 
-        _logger.LogInformation("Coordinator changed from {oldHost}:{oldPort} to {newHost}:{newPort}. Reconnecting.", _coordinatorConfig?.Host ?? "<unknown>", _coordinatorConfig?.Port ?? -1, newHost, newPort);
+        _logger.LogInformation("Coordinator changed from {oldHost}:{oldPort} to {newHost}:{newPort}. Reconnecting.", _coordinatorConnection is Connection c ? c.Config.Host : "<unknown>", _coordinatorConnection is Connection c2 ? c2.Config.Port : -1, newHost, newPort);
 
         if (_coordinatorConnection != null)
         {
@@ -389,7 +388,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         var newConnection = new Connection(newConfig, _loggerFactory);
         await newConnection.OpenAsync(cancellationToken);
 
-        _coordinatorConfig = newConfig;
         _coordinatorConnection = newConnection;
 
         return newConnection;
