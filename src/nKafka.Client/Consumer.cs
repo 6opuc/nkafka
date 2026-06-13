@@ -704,14 +704,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
                         foreach (var topicResponse in response.Message.Responses!)
                         {
-                            string? topicName = topicResponse.Topic;
-                            if (string.IsNullOrEmpty(topicName) && topicResponse.TopicId != null)
-                            {
-                                if (_topicsMetadataById!.TryGetValue(topicResponse.TopicId.Value, out var topicMetadata))
-                                {
-                                    topicName = topicMetadata.Name;
-                                }
-                            }
+                            string? topicName = ResolveTopicName(topicResponse.Topic, topicResponse.TopicId);
 
                             if (string.IsNullOrEmpty(topicName) || !topicMap.TryGetValue(topicName, out var topicPartitions))
                             {
@@ -957,14 +950,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         foreach (var response in _fetchResponse.Message.Responses!)
         {
-            string? topic = response.Topic;
-            if (string.IsNullOrEmpty(topic) && response.TopicId != null)
-            {
-                if (_topicsMetadataById!.TryGetValue(response.TopicId.Value, out var topicMetadata))
-                {
-                    topic = topicMetadata.Name;
-                }
-            }
+            string? topic = ResolveTopicName(response.Topic, response.TopicId);
             if (topic == null)
             {
                 continue;
@@ -991,6 +977,14 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
             }
         }
+    }
+
+    private string? ResolveTopicName(string? name, Guid? topicId)
+    {
+        if (!string.IsNullOrEmpty(name)) return name;
+        if (topicId != null && _topicsMetadataById!.TryGetValue(topicId.Value, out var metadata))
+            return metadata.Name;
+        return null;
     }
 
     public async ValueTask CommitAsync(ConsumeResult<TMessage> consumeResult, CancellationToken cancellationToken)
