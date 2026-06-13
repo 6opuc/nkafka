@@ -22,11 +22,12 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private readonly IOffsetStorage _offsetStorage;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
+    private readonly KafkaTelemetryContext _context;
 
     private CancellationTokenSource? _stop;
     private Task? _heartbeatsBackgroundTask;
     private readonly Dictionary<int, IConnection> _connections = new();
-    private IConnection? _coordinatorConnection;
+    private Connection? _coordinatorConnection;
     private readonly string[] _topics;
     private GroupMembership? _groupMembership;
     private IDictionary<string, MetadataResponseTopic>? _topicsMetadata;
@@ -39,21 +40,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             SingleReader = true,
         });
     private FetchResult? _fetchResult;
-    private IDisposableMessage<FetchResponse>? _fetchResponse => _fetchResult?.Response;
+    private IDisposableMessage<FetchResponse>? FetchResponse => _fetchResult?.Response;
     private IEnumerator<MessageDeserializationContext>? _messageDeserializeEnumerator = null;
 
-    private readonly Stopwatch _totalStopwatch = new();
-    private readonly Stopwatch _connectStopwatch = new();
-    private readonly Stopwatch _metadataStopwatch = new();
-    private readonly Stopwatch _joinGroupStopwatch = new();
-    private readonly Stopwatch _syncGroupStopwatch = new();
-    private readonly Stopwatch _fetchStopwatch = new();
-    private readonly Stopwatch _deserializeStopwatch = new();
-    private readonly Stopwatch _commitStopwatch = new();
-    private readonly Stopwatch _heartbeatStopwatch = new();
     private int _heartbeatCount;
-
-    public ConsumerStatistics Statistics { get; } = new();
 
     public int GenerationId => _groupMembership?.GenerationId ?? 0;
 
@@ -72,34 +62,31 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         _offsetStorage = offsetStorage;
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<Consumer<TMessage>>();
+        _context = new KafkaTelemetryContext(
+            _config.GroupId,
+            _config.InstanceId ?? _config.ClientId,
+            _config.BootstrapServers.Split(",", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(),
+            null,
+            null,
+            null);
         _topics = _config.Topics.Split(",", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
     }
 
     public async ValueTask JoinGroupAsync(CancellationToken cancellationToken)
     {
         _stop = new CancellationTokenSource();
+        using var lifetime = BeginDefaultLoggingScope();
         await RejoinGroupAsync(cancellationToken);
     }
 
     private async ValueTask RejoinGroupAsync(CancellationToken cancellationToken)
     {
-        _totalStopwatch.Start();
-        using var _ = BeginDefaultLoggingScope();
+        using var joinGroupActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityJoinGroup);
+        joinGroupActivity?.AddMessagingAttributes(_context);
 
-        _connectStopwatch.Start();
-        await OpenConnectionsAsync(cancellationToken);
-        _connectStopwatch.Stop();
-        Statistics.ConnectTime = _connectStopwatch.Elapsed;
+        await RefreshMetadataAsync(cancellationToken);
 
-        _metadataStopwatch.Start();
-        var connection = GetCoordinatorConnection();
-        _metadataStopwatch.Stop();
-        Statistics.MetadataTime = _metadataStopwatch.Elapsed;
-
-        _joinGroupStopwatch.Start();
-        using var joinGroupResponse = await JoinGroupRequestAsync(connection, cancellationToken);
-        _joinGroupStopwatch.Stop();
-        Statistics.JoinGroupTime = _joinGroupStopwatch.Elapsed;
+        using var joinGroupResponse = await JoinGroupRequestAsync(_coordinatorConnection!, cancellationToken);
         _groupMembership = new GroupMembership
         {
             MemberId = joinGroupResponse.Message.MemberId!,
@@ -124,12 +111,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             assignments = ReassignGroup();
         }
 
-        _syncGroupStopwatch.Start();
-        await SyncGroup(connection, assignments, cancellationToken);
-        _syncGroupStopwatch.Stop();
-        Statistics.SyncGroupTime = _syncGroupStopwatch.Elapsed;
-
-        await RefreshMetadataAsync(cancellationToken);
+        await SyncGroup(_coordinatorConnection!, assignments, cancellationToken);
 
         await StopFetchingAsync();
 
@@ -145,41 +127,17 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         StartSendingHeartbeats();
     }
 
-    private IDisposable? BeginDefaultLoggingScope()
-    {
-        return _logger.BeginScope(_config.InstanceId);
-    }
-
-    private IConnection GetCoordinatorConnection()
-    {
-        return _coordinatorConnection!;
-    }
-
-    private async ValueTask OpenConnectionsAsync(
-        CancellationToken cancellationToken)
-    {
-        if (_coordinatorConnection != null)
-        {
-            return;
-        }
-
-        await using (var bootstrapConnection = await OpenBootstrapConnectionAsync(cancellationToken))
-        {
-            _coordinatorConnection = await OpenCoordinatorConnectionAsync(bootstrapConnection, cancellationToken);
-        }
-
-        await RefreshMetadataAsync(cancellationToken);
-    }
+    private IDisposable? BeginDefaultLoggingScope() => _logger.BeginScope(_config.InstanceId);
 
     private async ValueTask RefreshMetadataAsync(CancellationToken cancellationToken)
     {
-        var coordinator = await RefreshCoordinatorAsync(cancellationToken);
-        using var metadataResponse = await RequestMetadata(coordinator, cancellationToken);
-        if (metadataResponse.Message.Topics == null)
-        {
-            throw new ProtocolException("Metadata response did not contain topics.");
-        }
-        _topicsMetadata = metadataResponse.Message.Topics;
+        using var refreshMetadataActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityRefreshMetadata);
+        refreshMetadataActivity?.AddMessagingAttributes(_context);
+
+        await RefreshCoordinatorAsync(cancellationToken);
+
+        using var metadataResponse = await RequestMetadata(_coordinatorConnection!, cancellationToken);
+        _topicsMetadata = metadataResponse.Message.Topics ?? throw new ProtocolException("Metadata response did not contain topics.");
         _topicsMetadataById = metadataResponse.Message.Topics
             .GroupBy(x => x.Value.TopicId)
             .Where(x => x.Key.HasValue)
@@ -203,7 +161,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             }
 
             var connectionConfig = new ConnectionConfig(
-                _config.Protocol,
+                _coordinatorConnection!.Config.Protocol,
                 broker.Host!,
                 broker.Port!.Value,
                 _config.ClientId,
@@ -221,12 +179,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private async ValueTask<Connection> OpenBootstrapConnectionAsync(
         CancellationToken cancellationToken)
     {
+        using var bootstrapActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityBootstrapConnection);
+        bootstrapActivity?.AddMessagingAttributes(_context);
+
         _logger.LogInformation("Opening bootstrap connection.");
 
-        string[] connectionStrings = _config.BootstrapServers.Split(
+        var connectionStrings = _config.BootstrapServers.Split(
             ",",
             StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        foreach (string connectionString in connectionStrings)
+        foreach (var connectionString in connectionStrings)
         {
             var connectionConfig = ConnectionConfig.FromConnectionString(
                 connectionString,
@@ -250,22 +211,20 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         throw new ConnectionException("No connection could be established.");
     }
 
-    private async ValueTask<IConnection> OpenCoordinatorConnectionAsync(
-        IConnection connection,
+    private async ValueTask<(string HostName, int Port)> FindCoordinatorAsync(
+        Connection connection,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Opening coordinator connection.");
-
+        using var findCoordinatorActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityFindCoordinator);
+        findCoordinatorActivity?.AddMessagingAttributes(_context);
         var request = new FindCoordinatorRequest
         {
             Key = _config.GroupId,
             KeyType = 0,
             CoordinatorKeys = [_config.GroupId],
         };
+        using var response = await connection.SendAsync(request, cancellationToken);
 
-        using var response = await connection.SendAsync(request, CancellationToken.None);
-
-        ConnectionConfig coordinatorConnectionConfig;
         if (response.Version < 4)
         {
             if (response.Message.ErrorCode != 0)
@@ -273,109 +232,37 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 throw new ProtocolException($"Failed to find group coordinator. Error code {response.Message.ErrorCode}");
             }
 
-            coordinatorConnectionConfig = new ConnectionConfig(
-                            _config.Protocol,
-                            response.Message.Host!,
-                            response.Message.Port!.Value,
-                            _config.ClientId,
-                            _config.ResponseBufferSize,
-                            _config.RequestBufferSize,
-                            _config.Tls,
-                            _config.Sasl,
-                            _config.CheckCrcs);
+            return (response.Message.Host!, response.Message.Port!.Value);
         }
-        else
+
+        var coordinator = response.Message.Coordinators?.FirstOrDefault(x => x.Key == _config.GroupId);
+        if (coordinator == null)
         {
-            var coordinator = response.Message.Coordinators?.FirstOrDefault(x => x.Key == _config.GroupId);
-            if (coordinator == null)
-            {
-                throw new ProtocolException(
-                    $"Failed to find group coordinator. Response did not match coordinator key '{_config.GroupId}'.");
-            }
-
-            if (coordinator.ErrorCode != 0)
-            {
-                throw new ProtocolException($"Failed to find group coordinator. Error code {coordinator.ErrorCode}");
-            }
-
-            coordinatorConnectionConfig = new ConnectionConfig(
-                _config.Protocol,
-                coordinator.Host!,
-                coordinator.Port!.Value,
-                _config.ClientId,
-                _config.ResponseBufferSize,
-                _config.RequestBufferSize,
-                _config.Tls,
-                _config.Sasl,
-                _config.CheckCrcs);
+            throw new ProtocolException(
+                $"Failed to find group coordinator. Response did not match coordinator key '{_config.GroupId}'.");
+        }
+        if (coordinator.ErrorCode != 0)
+        {
+            throw new ProtocolException($"Failed to find group coordinator. Error code {coordinator.ErrorCode}");
         }
 
-        var coordinatorConnection = new Connection(coordinatorConnectionConfig, _loggerFactory);
-        await coordinatorConnection.OpenAsync(cancellationToken);
-
-        _coordinatorConnection = coordinatorConnection;
-
-        return coordinatorConnection;
+        return (coordinator.Host!, coordinator.Port!.Value);
     }
 
-    private async ValueTask<IConnection> RefreshCoordinatorAsync(CancellationToken cancellationToken)
+    private async ValueTask RefreshCoordinatorAsync(CancellationToken cancellationToken)
     {
+        using var refreshCoordinatorActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityRefreshCoordinator);
+        refreshCoordinatorActivity?.AddMessagingAttributes(_context);
+
         await using var bootstrapConnection = await OpenBootstrapConnectionAsync(cancellationToken);
-        using var coordinatorResponse = await bootstrapConnection.SendAsync(
-            new FindCoordinatorRequest
-            {
-                Key = _config.GroupId,
-                KeyType = 0,
-                CoordinatorKeys = [_config.GroupId],
-            },
-            CancellationToken.None);
-
-        string newHost;
-        int newPort;
-
-        if (coordinatorResponse.Version < 4)
+        var (newHost, newPort) = await FindCoordinatorAsync(bootstrapConnection, cancellationToken);
+        if (_coordinatorConnection != null && _coordinatorConnection.Config.Host == newHost && _coordinatorConnection.Config.Port == newPort)
         {
-            if (coordinatorResponse.Message.ErrorCode != 0)
-            {
-                throw new ProtocolException($"Failed to find group coordinator during refresh. Error code {coordinatorResponse.Message.ErrorCode}");
-            }
-
-            newHost = coordinatorResponse.Message.Host!;
-            newPort = coordinatorResponse.Message.Port!.Value;
-        }
-        else
-        {
-            var coordinator = coordinatorResponse.Message.Coordinators?.FirstOrDefault(x => x.Key == _config.GroupId);
-            if (coordinator == null)
-            {
-                throw new ProtocolException(
-                    $"Failed to find group coordinator during refresh. Response did not match coordinator key '{_config.GroupId}'.");
-            }
-
-            if (coordinator.ErrorCode != 0)
-            {
-                throw new ProtocolException($"Failed to find group coordinator during refresh. Error code {coordinator.ErrorCode}");
-            }
-
-            newHost = coordinator.Host!;
-            newPort = coordinator.Port!.Value;
-        }
-
-        if (_coordinatorConnection is Connection { Config: var oldConfig } && oldConfig.Host == newHost && oldConfig.Port == newPort)
-        {
-            return _coordinatorConnection!;
-        }
-
-        _logger.LogInformation("Coordinator changed from {oldHost}:{oldPort} to {newHost}:{newPort}. Reconnecting.", _coordinatorConnection is Connection c ? c.Config.Host : "<unknown>", _coordinatorConnection is Connection c2 ? c2.Config.Port : -1, newHost, newPort);
-
-        if (_coordinatorConnection != null)
-        {
-            await _coordinatorConnection.DisposeAsync();
-            _coordinatorConnection = null;
+            return;
         }
 
         var newConfig = new ConnectionConfig(
-            _config.Protocol,
+            bootstrapConnection.Config.Protocol,
             newHost,
             newPort,
             _config.ClientId,
@@ -385,17 +272,31 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _config.Sasl,
             _config.CheckCrcs);
 
+        if (_coordinatorConnection != null)
+        {
+            _logger.LogInformation("Coordinator changed from {oldHost}:{oldPort} to {newHost}:{newPort}. Reconnecting.", _coordinatorConnection.Config.Host, _coordinatorConnection.Config.Port, newHost, newPort);
+
+            await _coordinatorConnection.DisposeAsync();
+            _coordinatorConnection = null;
+        }
+        else
+        {
+            _logger.LogInformation("Connecting to coordinator {newHost}:{newPort}.", newHost, newPort);
+        }
+
         var newConnection = new Connection(newConfig, _loggerFactory);
         await newConnection.OpenAsync(cancellationToken);
 
         _coordinatorConnection = newConnection;
-
-        return newConnection;
     }
 
-    private async ValueTask<IDisposableMessage<MetadataResponse>> RequestMetadata(IConnection connection,
+    private async ValueTask<IDisposableMessage<MetadataResponse>> RequestMetadata(
+        IConnection connection,
         CancellationToken cancellationToken)
     {
+        using var requestMetadataActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityRequestMetadata);
+        requestMetadataActivity?.AddMessagingAttributes(_context);
+
         _logger.LogInformation("Requesting metadata.");
 
         var request = new MetadataRequest
@@ -412,7 +313,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         var response = await connection.SendAsync(request, cancellationToken);
 
-        foreach (string topicName in _topics)
+        foreach (var topicName in _topics)
         {
             if (!response.Message.Topics!.TryGetValue(topicName, out var topic))
             {
@@ -442,12 +343,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         IConnection connection,
         CancellationToken cancellationToken)
     {
+        using var joinGroupRequestActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityJoinGroupRequest);
+        joinGroupRequestActivity?.AddMessagingAttributes(_context);
+
         _logger.LogInformation("Joining consumer group.");
         var request = new JoinGroupRequest
         {
             GroupId = _config.GroupId,
-            SessionTimeoutMs = _config.SessionTimeoutMs,
-            RebalanceTimeoutMs = _config.MaxPollIntervalMs,
+            SessionTimeoutMs = (int)_config.SessionTimeout.TotalMilliseconds,
+            RebalanceTimeoutMs = (int)_config.MaxPollInterval.TotalMilliseconds,
             MemberId = string.Empty,
             GroupInstanceId = _config.InstanceId,
             ProtocolType = "consumer",
@@ -518,7 +422,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
             })
             .ToDictionary(x => x.MemberId!);
-        foreach (string topicName in _topics)
+        foreach (var topicName in _topics)
         {
             if (!_topicsMetadata!.TryGetValue(topicName, out var topic))
             {
@@ -533,7 +437,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
             foreach (var partition in topic.Partitions!)
             {
-                int memberIndex = partition.PartitionIndex!.Value % members.Count;
+                var memberIndex = partition.PartitionIndex!.Value % members.Count;
                 var member = members[memberIndex];
                 var assignment = assignments[member.MemberId];
                 if (!assignment.Assignment!.AssignedPartitions!.TryGetValue(topicName, out var topicPartition))
@@ -557,6 +461,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         IList<SyncGroupRequestAssignment> assignments,
         CancellationToken cancellationToken)
     {
+        using var syncGroupActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivitySyncGroup);
+        syncGroupActivity?.AddMessagingAttributes(_context);
+
         _logger.LogInformation("Synchronizing consumer group.");
 
         var request = new SyncGroupRequest
@@ -583,7 +490,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             context.Append(topic.Value.Topic);
             context.Append("[");
-            foreach (int partition in topic.Value.Partitions!)
+            foreach (var partition in topic.Value.Partitions!)
             {
                 context.Append(partition);
                 context.Append(",");
@@ -610,28 +517,25 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 {
                     try
                     {
-                        _heartbeatStopwatch.Start();
-                        var connection = GetCoordinatorConnection();
+                        using var heartbeatActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityHeartbeat);
+                        heartbeatActivity?.AddMessagingAttributes(_context);
+                        var heartbeatConnection = _coordinatorConnection!;
 
                         var request = new HeartbeatRequest
                         {
                             GroupId = _config.GroupId,
                             GenerationId = _groupMembership!.GenerationId,
                             MemberId = _groupMembership.MemberId,
-                            GroupInstanceId = null,  // Null: static membership not used (dynamic group protocol)
+                            GroupInstanceId = null,
                         };
-                        using var response = await connection.SendAsync(request, cancellationToken);
-                        var hbElapsed = _heartbeatStopwatch.Elapsed;
-                        _heartbeatStopwatch.Stop();
+                        using var response = await heartbeatConnection.SendAsync(request, cancellationToken);
                         Interlocked.Increment(ref _heartbeatCount);
-                        Statistics.IncrementHeartbeats(1);
-                        Statistics.AddHeartbeatTime(hbElapsed);
 
                         if (response.Message.ErrorCode == 0)
                         {
                             _logger.LogDebug(
                                 "Heartbeat was sent. Waiting for {@interval}ms.",
-                                _config.HeartbeatIntervalMs);
+                                (int)_config.HeartbeatInterval.TotalMilliseconds);
                         }
                         else if (response.Message.ErrorCode == (short)ErrorCode.RebalanceInProgress)
                         {
@@ -650,10 +554,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             _logger.LogError(
                                 "Error in heartbeat response: {@errorCode}. Waiting for {@interval}ms.",
                                 response.Message.ErrorCode,
-                                _config.HeartbeatIntervalMs);
+                                (int)_config.HeartbeatInterval.TotalMilliseconds);
                         }
 
-                        await Task.Delay(_config.HeartbeatIntervalMs, cancellationToken);
+                        await Task.Delay(_config.HeartbeatInterval, cancellationToken);
                     }
                     catch (OperationCanceledException)
                     {
@@ -680,7 +584,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 continue;
             }
 
-            foreach (int partition in topicAssignment.Value.Partitions!)
+            foreach (var partition in topicAssignment.Value.Partitions!)
             {
                 var partitionMetadata = topicMetadata!.Partitions?.FirstOrDefault(x => x.PartitionIndex == partition);
                 if (partitionMetadata == null)
@@ -688,7 +592,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     continue;
                 }
 
-                int nodeId = partitionMetadata.LeaderId!.Value;
+                var nodeId = partitionMetadata.LeaderId!.Value;
                 if (!_connections.TryGetValue(nodeId, out var connection))
                 {
                     _logger.LogWarning("Broker node {nodeId} not found in connections, skipping partition {topic}/{partition}.", nodeId, topicAssignment.Key, partition);
@@ -697,12 +601,12 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
                 if (!sessionManagers.TryGetValue(nodeId, out var sessionManager))
                 {
-                    bool useSessions = connection.SupportsApiKeyVersion(ApiKey.Fetch, 4);
+                    var useSessions = connection.SupportsApiKeyVersion(ApiKey.Fetch, 4);
                     sessionManager = new FetchSessionManager(0, 0, useSessions);
                     sessionManagers[nodeId] = sessionManager;
                 }
 
-                long offset = await _offsetStorage.GetAsync(
+                var offset = await _offsetStorage.GetAsync(
                     connection,
                     _config.GroupId,
                     topicAssignment.Key,
@@ -732,7 +636,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         _fetchTasks = new List<Task>(sessionManagers.Count);
         foreach (var pair in sessionManagers)
         {
-            int nodeId = pair.Key;
+            var nodeId = pair.Key;
             var sessionManager = pair.Value;
             var topicMap = nodeTopics.GetValueOrDefault(nodeId, new Dictionary<string, List<(int Partition, long Offset)>>());
             var fetchTask = Task.Run(() => FetchLoopAsync(nodeId, topicMap, sessionManager, cancellationToken), cancellationToken);
@@ -757,8 +661,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         using (_logger.BeginScope(context.ToString()))
         {
             _logger.LogInformation("Fetching started.");
-            int consecutiveErrors = 0;
-            bool firstRequest = true;
+            var consecutiveErrors = 0;
+            var firstRequest = true;
             if (!_connections.TryGetValue(nodeId, out var connection))
             {
                 _logger.LogError("Broker node {nodeId} not found in connections during fetch loop.", nodeId);
@@ -767,18 +671,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
             while (!cancellationToken.IsCancellationRequested)
             {
+                using var fetchActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityFetch);
+                fetchActivity?.AddMessagingAttributes(_context);
                 try
                 {
                     var fetchRequest = CreateFetchRequest(sessionManager, topicMap, firstRequest);
                     firstRequest = false;
 
-                    _fetchStopwatch.Start();
-                    int fetchGenerationId = _groupMembership?.GenerationId ?? 0;
+                    var fetchGenerationId = _groupMembership?.GenerationId ?? 0;
                     var response = await connection.SendAsync(fetchRequest, cancellationToken);
-                    var fetchElapsed = _fetchStopwatch.Elapsed;
-                    _fetchStopwatch.Stop();
-                    Statistics.RecordFetchRoundTrip(fetchElapsed);
-                    Statistics.AddFetchTime(fetchElapsed);
 
                     if (response.Message.SessionId != null)
                     {
@@ -812,20 +713,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     }
                     else
                     {
-
-                        long responseBytes = 0;
-                        long responseMessages = 0;
-
                         foreach (var topicResponse in response.Message.Responses!)
                         {
-                            string? topicName = ResolveTopicName(topicResponse.Topic, topicResponse.TopicId);
+                            var topicName = ResolveTopicName(topicResponse.Topic, topicResponse.TopicId);
 
                             if (string.IsNullOrEmpty(topicName) || !topicMap.TryGetValue(topicName, out var topicPartitions))
                             {
                                 continue;
                             }
 
-                            for (int pi = 0; pi < topicPartitions.Count; pi++)
+                            for (var pi = 0; pi < topicPartitions.Count; pi++)
                             {
                                 var partitionResponse = topicResponse.Partitions!.FirstOrDefault(
                                     x => x.PartitionIndex == topicPartitions[pi].Partition);
@@ -834,13 +731,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                                     continue;
                                 }
 
-                                if (partitionResponse.Records != null)
-                                {
-                                    responseBytes += partitionResponse.Records.SizeInBytes;
-                                    responseMessages += partitionResponse.Records.RecordCount;
-                                }
-
-                                long? lastOffset = partitionResponse.Records?.LastOffset;
+                                var lastOffset = partitionResponse.Records?.LastOffset;
                                 if (lastOffset.HasValue)
                                 {
                                     topicPartitions[pi] = (topicPartitions[pi].Partition, lastOffset.Value + 1);
@@ -848,8 +739,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             }
                         }
 
-                        Statistics.AddBytesReceived(responseBytes);
-                        Statistics.AddMessagesConsumed(responseMessages);
                     }
 
                     consecutiveErrors = 0;
@@ -864,10 +753,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
                 catch (Exception exception)
                 {
-                    if (_fetchStopwatch.IsRunning)
-                    {
-                        _fetchStopwatch.Stop();
-                    }
+                    fetchActivity?.SetStatus(ActivityStatusCode.Error, exception.Message);
+                    fetchActivity?.AddTag("exception.message", exception.Message);
                     sessionManager.OnError(0);
                     consecutiveErrors++;
 
@@ -913,7 +800,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             var fetchTopics = new List<FetchTopic>();
             foreach (var topicEntry in topicMap)
             {
-                string topicName = topicEntry.Key;
+                var topicName = topicEntry.Key;
                 if (!_topicsMetadata!.TryGetValue(topicName, out var topicMetadata))
                 {
                     continue;
@@ -954,17 +841,52 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     public async ValueTask<ConsumeResult<TMessage>?> ConsumeAsync(
         CancellationToken cancellationToken)
     {
+        using var consumeActivity = KafkaTracing.Source.StartActivity(KafkaTracing.BuildSpanName(KafkaMetrics.OperationNamePoll, _context), ActivityKind.Client);
+        consumeActivity?.AddMessagingAttributes(_context);
+
         var consumerResult = ConsumeFromBuffer();
         if (consumerResult != null)
         {
+            KafkaMetrics.AddMessagesConsumed(_context, 1, KafkaMetrics.OperationNamePoll);
+            consumeActivity?.AddTag("nKafka.result", "cached");
             return consumerResult;
         }
 
-        await EnsureEnumeratorAsync(cancellationToken);
-        _deserializeStopwatch.Restart();
-        _messageDeserializeEnumerator = GetMessageEnumerator();
+        using (var fetchWaitActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityFetchWait))
+        {
+            fetchWaitActivity?.AddMessagingAttributes(_context);
+            await EnsureEnumeratorAsync(cancellationToken);
+        }
 
-        return ConsumeFromBuffer();
+        ConsumeResult<TMessage>? result;
+        using (var deserializeActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityDeserialize))
+        {
+            deserializeActivity?.AddMessagingAttributes(_context);
+            var deserializeSw = Stopwatch.StartNew();
+            _messageDeserializeEnumerator = GetMessageEnumerator();
+
+            result = ConsumeFromBuffer();
+
+            if (result is { } r)
+            {
+                var contextWithMessage = _context with
+                {
+                    TopicName = r.Topic,
+                    PartitionId = r.Partition.ToString(),
+                };
+                KafkaMetrics.AddMessagesConsumed(contextWithMessage, 1, KafkaMetrics.OperationNamePoll);
+                consumeActivity?.AddTag("nKafka.result", "message");
+            }
+            else
+            {
+                consumeActivity?.AddTag("nKafka.result", "empty");
+            }
+
+            deserializeSw.Stop();
+            KafkaMetrics.RecordProcessDuration(_context, KafkaMetrics.OperationNameProcess, KafkaMetrics.OperationTypeProcess, deserializeSw.Elapsed.TotalMilliseconds);
+        }
+
+        return result;
     }
 
     private ConsumeResult<TMessage>? ConsumeFromBuffer()
@@ -988,13 +910,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             };
         }
 
-        if (_deserializeStopwatch.IsRunning)
-        {
-            _deserializeStopwatch.Stop();
-            Statistics.RecordDeserializeTime(_deserializeStopwatch.Elapsed);
-            Statistics.AddDeserializeTime(_deserializeStopwatch.Elapsed);
-        }
-
         _messageDeserializeEnumerator.Dispose();
         _messageDeserializeEnumerator = null;
         _fetchResult?.Dispose();
@@ -1005,49 +920,59 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     public async ValueTask<IConsumerBatch<TMessage>> ConsumeBatchAsync(CancellationToken cancellationToken)
     {
-        await EnsureEnumeratorAsync(cancellationToken);
+        using var consumeBatchActivity = KafkaTracing.Source.StartActivity(KafkaTracing.BuildSpanName(KafkaMetrics.OperationNamePoll, _context), ActivityKind.Client);
+        consumeBatchActivity?.AddMessagingAttributes(_context);
+        using (var fetchWaitActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityFetchWait))
+        {
+            fetchWaitActivity?.AddMessagingAttributes(_context);
+            await EnsureEnumeratorAsync(cancellationToken);
+        }
         return new ConsumerBatch(this);
     }
 
     private async ValueTask EnsureEnumeratorAsync(CancellationToken cancellationToken)
     {
-        if (_messageDeserializeEnumerator != null) return;
-
-        while (true)
+        if (_messageDeserializeEnumerator != null)
         {
+            return;
+        }
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter((int)_config.FetchTimeout.TotalMilliseconds);
+
             try
             {
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(30000);
                 _fetchResult = await _consumeChannel.Reader.ReadAsync(timeoutCts.Token);
-
-                if (_fetchResult == null)
-                {
-                    continue;
-                }
-
-                if (!_fetchResult.IsSuccess)
-                {
-                    var ex = _fetchResult.Exception;
-                    _fetchResult.Dispose();
-                    _fetchResult = null;
-                    throw new InvalidOperationException("Fetch loop failed.", ex);
-                }
-
-                if (_fetchResult.GenerationId == (_groupMembership?.GenerationId ?? 0))
-                {
-                    break;
-                }
-
-                _logger.LogWarning("Discarding stale fetch result from old generation: {OldGen} vs {CurrentGen}",
-                    _fetchResult.GenerationId, _groupMembership?.GenerationId);
-                _fetchResult.Dispose();
-                _fetchResult = null;
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
                 continue;
             }
+
+            if (_fetchResult == null)
+            {
+                continue;
+            }
+
+            if (!_fetchResult.IsSuccess)
+            {
+                var ex = _fetchResult.Exception;
+                _fetchResult.Dispose();
+                _fetchResult = null;
+                throw new InvalidOperationException("Fetch loop failed.", ex);
+            }
+
+            if (_fetchResult.GenerationId == (_groupMembership?.GenerationId ?? 0))
+            {
+                break;
+            }
+
+            _logger.LogWarning("Discarding stale fetch result from old generation: {OldGen} vs {CurrentGen}",
+                _fetchResult.GenerationId, _groupMembership?.GenerationId);
+            _fetchResult.Dispose();
+            _fetchResult = null;
         }
 
         _messageDeserializeEnumerator = GetMessageEnumerator();
@@ -1055,16 +980,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     private IEnumerator<MessageDeserializationContext> GetMessageEnumerator()
     {
-        if (_fetchResponse == null ||
+        if (FetchResponse == null ||
             (_stop?.IsCancellationRequested ?? true) ||
-            _fetchResponse.Message.ErrorCode != 0)
+            FetchResponse.Message.ErrorCode != 0)
         {
             yield break;
         }
 
-        foreach (var response in _fetchResponse.Message.Responses!)
+        foreach (var response in FetchResponse.Message.Responses!)
         {
-            string? topic = ResolveTopicName(response.Topic, response.TopicId);
+            var topic = ResolveTopicName(response.Topic, response.TopicId);
             if (topic == null)
             {
                 continue;
@@ -1095,9 +1020,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     private string? ResolveTopicName(string? name, Guid? topicId)
     {
-        if (!string.IsNullOrEmpty(name)) return name;
+        if (!string.IsNullOrEmpty(name))
+        {
+            return name;
+        }
+
         if (topicId != null && _topicsMetadataById!.TryGetValue(topicId.Value, out var metadata))
+        {
             return metadata.Name;
+        }
+
         return null;
     }
 
@@ -1135,7 +1067,14 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 consumeResult.Offset);
             return;
         }
-        _commitStopwatch.Start();
+        var sw = Stopwatch.StartNew();
+        var commitContext = _context with
+        {
+            TopicName = consumeResult.Topic,
+            PartitionId = consumeResult.Partition.ToString(),
+        };
+        using var commitActivity = KafkaTracing.Source.StartActivity(KafkaTracing.BuildSpanName(KafkaMetrics.OperationNameCommit, commitContext), ActivityKind.Client);
+        commitActivity?.AddMessagingAttributes(commitContext);
         await _offsetStorage.SetAsync(
             connection,
             _config.GroupId,
@@ -1143,15 +1082,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             consumeResult.Partition,
             consumeResult.Offset,
             cancellationToken);
-        _commitStopwatch.Stop();
-        Statistics.AddCommitTime(_commitStopwatch.Elapsed);
+        sw.Stop();
+        KafkaMetrics.RecordClientOperation(commitContext, KafkaMetrics.OperationNameCommit, KafkaMetrics.OperationTypeSettle, sw.Elapsed.TotalMilliseconds);
     }
 
     public async ValueTask DisposeAsync()
     {
         using var _ = BeginDefaultLoggingScope();
-
-        _totalStopwatch.Stop();
+        using var shutdownActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityShutdown);
+        shutdownActivity?.AddMessagingAttributes(_context);
 
         await StopFetchingAsync();
 
@@ -1166,13 +1105,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         await LeaveGroupAsync(CancellationToken.None);
 
         await CloseConnectionsAsync();
-
-        Statistics.TotalElapsed = _totalStopwatch.Elapsed;
-        Statistics.SetHeartbeatCount(_heartbeatCount);
     }
 
     private async ValueTask StopFetchingAsync()
     {
+        using var stopFetchingActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityStopFetching);
+        stopFetchingActivity?.AddMessagingAttributes(_context);
+
         if (_stop == null)
         {
             return;
@@ -1182,14 +1121,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         if (_fetchTasks != null)
         {
-            await Task.WhenAll(_fetchTasks.Select(t => t.ContinueWith(task =>
-            {
-                if (task.IsFaulted && task.Exception!.InnerException is not OperationCanceledException and not TaskCanceledException)
-                {
-                    throw task.Exception!.InnerException!;
-                }
-            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default)));
+            var tasks = _fetchTasks.ToList();
             _fetchTasks = null;
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
 
         if (_fetchResult != null)
@@ -1212,7 +1152,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             return;
         }
 
-        var connection = GetCoordinatorConnection();
+        using var leaveGroupActivity = KafkaTracing.StartAsCurrent(KafkaTracing.ActivityLeaveGroup);
+        leaveGroupActivity?.AddMessagingAttributes(_context);
 
         _logger.LogInformation("Leaving consumer group.");
 
@@ -1230,7 +1171,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
             ],
         };
-        using var response = await connection.SendAsync(request, cancellationToken);
+        using var response = await _coordinatorConnection!.SendAsync(request, cancellationToken);
 
         if (response.Message.ErrorCode != 0)
         {
@@ -1296,14 +1237,14 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         public void Dispose()
         {
-            if (_disposed) return;
+            if (_disposed)
+            {
+                return;
+            }
+
             _disposed = true;
             _enumerator?.Dispose();
             _enumerator = null;
-            _consumer._messageDeserializeEnumerator?.Dispose();
-            _consumer._messageDeserializeEnumerator = null;
-            _consumer._fetchResult?.Dispose();
-            _consumer._fetchResult = null;
         }
 
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();

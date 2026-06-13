@@ -19,7 +19,10 @@ public static class TestHelpers
     public static TlsConfig? CreateTlsConfig(string protocol)
     {
         if (protocol != "SASL_SSL")
+        {
             return null;
+        }
+
         return new TlsConfig(SslCaCertPath);
     }
 
@@ -67,20 +70,25 @@ public static class TestHelpers
         TimeSpan? maxWaitTime = null,
         bool checkCrcs = false)
     {
-        string servers = protocol == "SASL_SSL"
+        var servers = protocol == "SASL_SSL"
             ? $"SASL_SSL://{BootstrapHost}:{SaslBootstrapPort}"
             : $"PLAINTEXT://{BootstrapHost}:{PlainTextBootstrapPort}";
 
-        return new ConsumerConfig(
+        var config = new ConsumerConfig(
             servers,
             topics,
             clientId,
             groupId,
-            instanceId,
-            protocol,
-            CheckCrcs: checkCrcs || protocol == "SASL_SSL",
-            MaxWaitTime: maxWaitTime ?? TimeSpan.FromSeconds(1),
-            Tls: CreateTlsConfig(protocol),
-            Sasl: protocol == "SASL_SSL" ? CreateSaslConfig() : null);
+            instanceId);
+
+        config = config with
+        {
+            CheckCrcs = checkCrcs || protocol == "SASL_SSL",
+            MaxWaitTime = maxWaitTime ?? TimeSpan.FromSeconds(1),
+            Tls = CreateTlsConfig(protocol),
+            Sasl = protocol == "SASL_SSL" ? CreateSaslConfig() : null,
+        };
+
+        return config;
     }
 }

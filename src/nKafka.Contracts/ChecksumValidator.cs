@@ -29,7 +29,7 @@ public static class ChecksumValidator
         long start,
         long size)
     {
-        uint calculatedChecksum = calculateChecksumSpan(buffer, start, size);
+        var calculatedChecksum = calculateChecksumSpan(buffer, start, size);
         if (calculatedChecksum != expectedChecksum)
         {
             throw new ChecksumValidationException($"Corrupt message: checksum does not match. Calculated {calculatedChecksum} but got {expectedChecksum}.");

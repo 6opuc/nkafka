@@ -76,7 +76,10 @@ public class FetchSessionManager
 
     public void OnResponseReceived(FetchResponse response)
     {
-        if (response.SessionId == null) return;
+        if (response.SessionId == null)
+        {
+            return;
+        }
 
         if (response.SessionId == 0)
         {

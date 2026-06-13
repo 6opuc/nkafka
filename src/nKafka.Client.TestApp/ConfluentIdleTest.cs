@@ -20,7 +20,7 @@ public static class ConfluentIdleTest
                 using var consumer = new ConsumerBuilder<Null, string>(config).Build();
                 consumer.Subscribe(scenario.TopicName);
 
-                TimeSpan maxWaitTime = TimeSpan.FromSeconds(5);
+                var maxWaitTime = TimeSpan.FromSeconds(5);
                 while (true)
                 {
                     consumer.Consume(maxWaitTime);

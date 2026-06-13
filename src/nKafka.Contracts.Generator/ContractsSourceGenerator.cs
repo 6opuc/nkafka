@@ -208,7 +208,7 @@ public class ContractsSourceGenerator : IIncrementalGenerator
     {
         var tree = CSharpSyntaxTree.ParseText(source);
         var root = tree.GetRoot().NormalizeWhitespace();
-        string formatted = root.ToFullString();
+        var formatted = root.ToFullString();
         return formatted;
     }
 }

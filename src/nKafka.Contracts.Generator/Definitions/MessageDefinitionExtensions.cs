@@ -15,7 +15,7 @@ public static class MessageDefinitionExtensions
         source.AppendLine("      {");
         if (messageDefinition.ValidVersions.HasValue)
         {
-            foreach (short version in messageDefinition.ValidVersions.Value)
+            foreach (var version in messageDefinition.ValidVersions.Value)
             {
                 source.AppendLine($"          case {version}:");
                 source.AppendLine($"              {messageDefinition.Name}SerializerV{version}.Serialize(ref writer, message, context);");
@@ -33,7 +33,7 @@ public static class MessageDefinitionExtensions
         source.AppendLine("      {");
         if (messageDefinition.ValidVersions.HasValue)
         {
-            foreach (short version in messageDefinition.ValidVersions.Value)
+            foreach (var version in messageDefinition.ValidVersions.Value)
             {
                 source.AppendLine($"          case {version}:");
                 source.AppendLine($"              return {messageDefinition.Name}SerializerV{version}.Deserialize(ref reader, context);");
@@ -49,9 +49,9 @@ public static class MessageDefinitionExtensions
 
         if (messageDefinition.ValidVersions.HasValue)
         {
-            foreach (short version in messageDefinition.ValidVersions.Value)
+            foreach (var version in messageDefinition.ValidVersions.Value)
             {
-                bool flexible = messageDefinition.FlexibleVersions.Includes(version);
+                var flexible = messageDefinition.FlexibleVersions.Includes(version);
 
                 source.AppendLine($"public static class {messageDefinition.Name}SerializerV{version}");
                 source.AppendLine("{");
@@ -79,13 +79,13 @@ public static class MessageDefinitionExtensions
         var source = new StringBuilder();
         if (messageDefinition.ValidVersions.HasValue)
         {
-            foreach (short version in messageDefinition.ValidVersions.Value)
+            foreach (var version in messageDefinition.ValidVersions.Value)
             {
-                bool flexible = messageDefinition.FlexibleVersions.Includes(version);
+                var flexible = messageDefinition.FlexibleVersions.Includes(version);
 
                 foreach (var fieldDefinition in messageDefinition.Fields)
                 {
-                    string nestedSerializer = fieldDefinition.ToNestedSerializerDeclaration(messageDefinition.ApiKey, version, flexible);
+                    var nestedSerializer = fieldDefinition.ToNestedSerializerDeclaration(messageDefinition.ApiKey, version, flexible);
                     if (!string.IsNullOrEmpty(nestedSerializer))
                     {
                         source.AppendLine(nestedSerializer);
@@ -94,7 +94,7 @@ public static class MessageDefinitionExtensions
 
                 foreach (var commonStruct in messageDefinition.CommonStructs)
                 {
-                    string nestedSerializer = commonStruct.ToNestedSerializerDeclaration(messageDefinition.ApiKey, version, flexible);
+                    var nestedSerializer = commonStruct.ToNestedSerializerDeclaration(messageDefinition.ApiKey, version, flexible);
                     if (!string.IsNullOrEmpty(nestedSerializer))
                     {
                         source.AppendLine(nestedSerializer);

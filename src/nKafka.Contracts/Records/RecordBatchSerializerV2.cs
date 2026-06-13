@@ -17,7 +17,7 @@ public static class RecordBatchSerializerV2
             BatchLength = reader.ReadInt32BigEndian(),
         };
 
-        int recordBatchStart = reader.Position;
+        var recordBatchStart = reader.Position;
 
         if (recordBatchStart + recordBatch.BatchLength > eof)
         {
@@ -32,7 +32,7 @@ public static class RecordBatchSerializerV2
         }
         recordBatch.Crc = reader.ReadUInt32BigEndian();
 
-        int crcStart = reader.Position;
+        var crcStart = reader.Position;
         recordBatch.Attributes = reader.ReadInt16BigEndian();
         recordBatch.LastOffsetDelta = reader.ReadInt32BigEndian();
         recordBatch.FirstTimestamp = reader.ReadInt64BigEndian();
@@ -40,11 +40,11 @@ public static class RecordBatchSerializerV2
         recordBatch.ProducerId = reader.ReadInt64BigEndian();
         recordBatch.ProducerEpoch = reader.ReadInt16BigEndian();
         recordBatch.BaseSequence = reader.ReadInt32BigEndian();
-        int recordsCount = reader.ReadInt32BigEndian();
+        var recordsCount = reader.ReadInt32BigEndian();
         if (recordsCount >= 0)
         {
             recordBatch.Records = new List<Record>(recordsCount);
-            for (int i = 0; i < recordsCount; i++)
+            for (var i = 0; i < recordsCount; i++)
             {
                 var record = RecordSerializerV2.Deserialize(ref reader, recordBatchStart + recordBatch.BatchLength);
                 if (record == null)
@@ -61,7 +61,7 @@ public static class RecordBatchSerializerV2
             ChecksumValidator.ValidateCrc32c(recordBatch.Crc, reader.Buffer, (int)crcStart, (int)crcDataLength);
         }
 
-        int actualBatchLength = reader.Position - recordBatchStart;
+        var actualBatchLength = reader.Position - recordBatchStart;
         if (actualBatchLength != recordBatch.BatchLength)
         {
             throw new DeserializationException($"Expected batch length was {recordBatch.BatchLength}, but got {actualBatchLength}.");

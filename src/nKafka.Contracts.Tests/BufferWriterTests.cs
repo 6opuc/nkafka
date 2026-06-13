@@ -148,16 +148,20 @@ public class BufferWriterTests
     public void WriteLong_WritesNegativeValue()
     {
         _writer.WriteLong(-1);
-        for (int i = 0; i < 8; i++)
+        for (var i = 0; i < 8; i++)
+        {
             _writer.Buffer.Span[i].Should().Be(0xFF);
+        }
     }
 
     [Test]
     public void WriteLong_WritesZero()
     {
         _writer.WriteLong(0);
-        for (int i = 0; i < 8; i++)
+        for (var i = 0; i < 8; i++)
+        {
             _writer.Buffer.Span[i].Should().Be(0);
+        }
     }
 
     [Test]
@@ -165,8 +169,10 @@ public class BufferWriterTests
     {
         _writer.WriteLong(long.MaxValue);
         _writer.Buffer.Span[0].Should().Be(0x7F);
-        for (int i = 1; i < 8; i++)
+        for (var i = 1; i < 8; i++)
+        {
             _writer.Buffer.Span[i].Should().Be(0xFF);
+        }
     }
 
     #endregion
@@ -215,16 +221,20 @@ public class BufferWriterTests
     public void WriteUInt_WritesZero()
     {
         _writer.WriteUint(0);
-        for (int i = 0; i < 4; i++)
+        for (var i = 0; i < 4; i++)
+        {
             _writer.Buffer.Span[i].Should().Be(0);
+        }
     }
 
     [Test]
     public void WriteUInt_WritesMaxValue()
     {
         _writer.WriteUint(uint.MaxValue);
-        for (int i = 0; i < 4; i++)
+        for (var i = 0; i < 4; i++)
+        {
             _writer.Buffer.Span[i].Should().Be(0xFF);
+        }
     }
 
     #endregion
@@ -243,8 +253,10 @@ public class BufferWriterTests
     public void WriteULong_WritesZero()
     {
         _writer.WriteLong(0);
-        for (int i = 0; i < 8; i++)
+        for (var i = 0; i < 8; i++)
+        {
             _writer.Buffer.Span[i].Should().Be(0);
+        }
     }
 
     [Test]
@@ -252,8 +264,10 @@ public class BufferWriterTests
     {
         _writer.WriteLong(long.MaxValue);
         _writer.Buffer.Span[0].Should().Be(0x7F);
-        for (int i = 1; i < 8; i++)
+        for (var i = 1; i < 8; i++)
+        {
             _writer.Buffer.Span[i].Should().Be(0xFF);
+        }
     }
 
     #endregion
@@ -263,7 +277,7 @@ public class BufferWriterTests
     [Test]
     public void WriteFloat_WritesPositiveValue()
     {
-        byte[] floatBytes = BitConverter.GetBytes(3.14f);
+        var floatBytes = BitConverter.GetBytes(3.14f);
         _writer.WriteInt(BitConverter.SingleToInt32Bits(3.14f));
         _writer.Position.Should().Be(4);
     }
@@ -272,8 +286,10 @@ public class BufferWriterTests
     public void WriteFloat_WritesZero()
     {
         _writer.WriteInt(BitConverter.SingleToInt32Bits(0.0f));
-        for (int i = 0; i < 4; i++)
+        for (var i = 0; i < 4; i++)
+        {
             _writer.Buffer.Span[i].Should().Be(0);
+        }
     }
 
     [Test]
@@ -298,8 +314,10 @@ public class BufferWriterTests
     public void WriteDoubleBigEndian_WritesZero()
     {
         _writer.WriteDoubleBigEndian(0.0);
-        for (int i = 0; i < 8; i++)
+        for (var i = 0; i < 8; i++)
+        {
             _writer.Buffer.Span[i].Should().Be(0);
+        }
     }
 
     [Test]
@@ -574,8 +592,10 @@ public class BufferWriterTests
     {
         _writer.WriteGuid((Guid?)null);
         _writer.Position.Should().Be(16);
-        for (int i = 0; i < 16; i++)
+        for (var i = 0; i < 16; i++)
+        {
             _writer.Buffer.Span[i].Should().Be(0);
+        }
     }
 
     #endregion
@@ -621,7 +641,7 @@ public class BufferWriterTests
     [Test]
     public void Remaining_ReturnsCorrectValue()
     {
-        int initialRemaining = _writer.Remaining;
+        var initialRemaining = _writer.Remaining;
         _writer.WriteInt(42);
         _writer.Remaining.Should().Be(initialRemaining - 4);
     }

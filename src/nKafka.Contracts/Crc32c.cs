@@ -39,9 +39,9 @@ public static class Crc32c
                 throw new ArgumentOutOfRangeException(nameof(start), "Start position must be between 0 and int.MaxValue.");
             }
 
-            uint crc = _seed;
+            var crc = _seed;
             var span = buffer.Slice((int)start, (int)size);
-            int pos = 0;
+            var pos = 0;
 
             if (_sse42x64Available)
             {
@@ -76,15 +76,22 @@ public static class Crc32c
 
         private static uint[] InitializeTable()
         {
-            uint[] table = new uint[256];
-            for (int i = 0; i < 256; i++)
+            var table = new uint[256];
+            for (var i = 0; i < 256; i++)
             {
-                uint entry = (uint)i;
-                for (int j = 0; j < 8; j++)
+                var entry = (uint)i;
+                for (var j = 0; j < 8; j++)
+                {
                     if ((entry & 1) == 1)
+                    {
                         entry = (entry >> 1) ^ _polynomial;
+                    }
                     else
+                    {
                         entry = entry >> 1;
+                    }
+                }
+
                 table[i] = entry;
             }
 
@@ -98,11 +105,14 @@ public static class Crc32c
                 throw new ArgumentOutOfRangeException(nameof(start), "Start position must be between 0 and int.MaxValue.");
             }
 
-            uint crc = _seed;
+            var crc = _seed;
             var span = buffer.Slice((int)start, (int)size);
-            int end = (int)size;
-            for (int i = 0; i < end; i++)
+            var end = (int)size;
+            for (var i = 0; i < end; i++)
+            {
                 crc = (crc >> 8) ^ _table[span[i] ^ crc & 0xff];
+            }
+
             return ~crc;
         }
     }

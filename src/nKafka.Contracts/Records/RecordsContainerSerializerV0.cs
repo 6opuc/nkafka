@@ -11,14 +11,14 @@ public static class RecordsContainerSerializerV0
 
     public static RecordsContainer? Deserialize(ref BufferReader reader, ISerializationContext context)
     {
-        int size = reader.ReadInt32BigEndian();
+        var size = reader.ReadInt32BigEndian();
         if (size < 0)
         {
             throw new ProtocolException($"Negative record container size: {size}.");
         }
 
-        int start = reader.Position;
-        int remainingBefore = reader.Remaining;
+        var start = reader.Position;
+        var remainingBefore = reader.Remaining;
         if (size > remainingBefore)
         {
             throw new DeserializationException(
@@ -30,7 +30,7 @@ public static class RecordsContainerSerializerV0
             SizeInBytes = size,
             Messages = new List<Message>(),
         };
-        int endOfLastMessage = start;
+        var endOfLastMessage = start;
         while (true)
         {
             var message = MessageSerializerV0.Deserialize(ref reader, start + size, context);

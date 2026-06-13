@@ -17,10 +17,13 @@ public class FetchScenario
     {
         string[] suf = { "B", "KB", "MB", "GB" };
         if (byteCount == 0)
+        {
             return "0" + suf[0];
+        }
+
         long bytes = Math.Abs(byteCount);
-        int place = Convert.ToInt32(Math.Floor(Math.Log(bytes, 1024)));
-        double num = Math.Round(bytes / Math.Pow(1024, place), 1);
+        var place = Convert.ToInt32(Math.Floor(Math.Log(bytes, 1024)));
+        var num = Math.Round(bytes / Math.Pow(1024, place), 1);
         return (Math.Sign(byteCount) * num) + suf[place];
     }
 
@@ -33,8 +36,8 @@ public class FetchScenario
         }
 
         long bytes = Math.Abs(count);
-        int place = Convert.ToInt32(Math.Floor(Math.Log(bytes, 1000)));
-        double num = Math.Round(bytes / Math.Pow(1000, place), 1);
+        var place = Convert.ToInt32(Math.Floor(Math.Log(bytes, 1000)));
+        var num = Math.Round(bytes / Math.Pow(1000, place), 1);
         return (Math.Sign(count) * num) + suf[place - 1];
     }
 }

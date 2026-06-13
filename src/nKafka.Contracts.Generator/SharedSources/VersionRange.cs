@@ -28,7 +28,7 @@ public readonly struct VersionRange : IEnumerable<short>
 
         char[] delimiters = ['-', '+'];
 
-        string[] versions = s.Split(
+        var versions = s.Split(
             delimiters,
             StringSplitOptions.RemoveEmptyEntries);
 
@@ -37,7 +37,7 @@ public readonly struct VersionRange : IEnumerable<short>
             return false;
         }
 
-        if (!short.TryParse(versions.First(), out short from))
+        if (!short.TryParse(versions.First(), out var from))
         {
             return false;
         }
@@ -51,7 +51,7 @@ public readonly struct VersionRange : IEnumerable<short>
             return true;
         }
 
-        if (!short.TryParse(versions.Last(), out short to))
+        if (!short.TryParse(versions.Last(), out var to))
         {
             return false;
         }
@@ -87,8 +87,8 @@ public readonly struct VersionRange : IEnumerable<short>
             return None;
         }
 
-        short from = Math.Max(From ?? 0, other.From ?? 0);
-        short? to = (To ?? short.MaxValue) > (other.To ?? short.MaxValue)
+        var from = Math.Max(From ?? 0, other.From ?? 0);
+        var to = (To ?? short.MaxValue) > (other.To ?? short.MaxValue)
             ? other.To
             : To;
 
@@ -107,7 +107,7 @@ public readonly struct VersionRange : IEnumerable<short>
             yield break;
         }
 
-        for (short v = From.Value; v <= To.Value; v++)
+        for (var v = From.Value; v <= To.Value; v++)
         {
             yield return v;
         }
