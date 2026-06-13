@@ -27,6 +27,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private Task? _heartbeatsBackgroundTask;
     private readonly Dictionary<int, IConnection> _connections = new();
     private IConnection? _coordinatorConnection;
+    private string? _coordinatorHost;
+    private int _coordinatorPort;
     private readonly string[] _topics;
     private GroupMembership? _groupMembership;
     private IDictionary<string, MetadataResponseTopic>? _topicsMetadata;
@@ -173,7 +175,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     private async ValueTask RefreshMetadataAsync(CancellationToken cancellationToken)
     {
-        using var metadataResponse = await RequestMetadata(GetCoordinatorConnection(), cancellationToken);
+        var coordinator = await RefreshCoordinatorAsync(cancellationToken);
+        using var metadataResponse = await RequestMetadata(coordinator, cancellationToken);
         if (metadataResponse.Message.Topics == null)
         {
             throw new ProtocolException("Metadata response did not contain topics.");
@@ -312,7 +315,87 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         var coordinatorConnection = new Connection(coordinatorConnectionConfig, _loggerFactory);
         await coordinatorConnection.OpenAsync(cancellationToken);
 
+        _coordinatorHost = coordinatorConnectionConfig.Host;
+        _coordinatorPort = coordinatorConnectionConfig.Port;
+
         return coordinatorConnection;
+    }
+
+    private async ValueTask<IConnection> RefreshCoordinatorAsync(CancellationToken cancellationToken)
+    {
+        await using var bootstrapConnection = await OpenBootstrapConnectionAsync(cancellationToken);
+        using var coordinatorResponse = await bootstrapConnection.SendAsync(
+            new FindCoordinatorRequest
+            {
+                Key = _config.GroupId,
+                KeyType = 0,
+                CoordinatorKeys = [_config.GroupId],
+            },
+            CancellationToken.None);
+
+        string newHost;
+        int newPort;
+
+        if (coordinatorResponse.Version < 4)
+        {
+            if (coordinatorResponse.Message.ErrorCode != 0)
+            {
+                throw new ProtocolException($"Failed to find group coordinator during refresh. Error code {coordinatorResponse.Message.ErrorCode}");
+            }
+
+            newHost = coordinatorResponse.Message.Host!;
+            newPort = coordinatorResponse.Message.Port!.Value;
+        }
+        else
+        {
+            var coordinator = coordinatorResponse.Message.Coordinators?.FirstOrDefault(x => x.Key == _config.GroupId);
+            if (coordinator == null)
+            {
+                throw new ProtocolException(
+                    $"Failed to find group coordinator during refresh. Response did not match coordinator key '{_config.GroupId}'.");
+            }
+
+            if (coordinator.ErrorCode != 0)
+            {
+                throw new ProtocolException($"Failed to find group coordinator during refresh. Error code {coordinator.ErrorCode}");
+            }
+
+            newHost = coordinator.Host!;
+            newPort = coordinator.Port!.Value;
+        }
+
+        if (_coordinatorHost == newHost && _coordinatorPort == newPort)
+        {
+            return _coordinatorConnection!;
+        }
+
+        _logger.LogInformation("Coordinator changed from {oldHost}:{oldPort} to {newHost}:{newPort}. Reconnecting.", _coordinatorHost, _coordinatorPort, newHost, newPort);
+
+        if (_coordinatorConnection != null)
+        {
+            await _coordinatorConnection.DisposeAsync();
+            _coordinatorConnection = null;
+        }
+
+        var newConfig = new ConnectionConfig(
+            _config.Protocol,
+            newHost,
+            newPort,
+            _config.ClientId,
+            _config.ResponseBufferSize,
+            _config.RequestBufferSize,
+            _config.Tls,
+            _config.Sasl,
+            _config.CheckCrcs);
+
+        var newConnection = new Connection(newConfig, _loggerFactory);
+        await newConnection.OpenAsync(cancellationToken);
+
+        _coordinatorHost = newHost;
+        _coordinatorPort = newPort;
+        _coordinatorConnection = newConnection;
+
+        return newConnection;
     }
 
     private async ValueTask<IDisposableMessage<MetadataResponse>> RequestMetadata(IConnection connection,
