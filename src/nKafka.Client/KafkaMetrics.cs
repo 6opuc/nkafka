@@ -5,15 +5,71 @@ namespace nKafka.Client;
 
 public static class KafkaMetrics
 {
-    public static readonly Meter Meter = new("nKafka");
+    public const string MessagingSystem = "kafka";
+    public const string OperationReceive = "receive";
+    public const string OperationProcess = "process";
+    public const string OperationAck = "ack";
+    public const string OperationHeartbeat = "heartbeat";
 
-    public static readonly Histogram<double> FetchRoundTripMs = Meter.CreateHistogram<double>("nKafka.fetch.round_trip_ms");
-    public static readonly Histogram<double> DeserializeTimeMs = Meter.CreateHistogram<double>("nKafka.deserialize.time_ms");
-    public static readonly Histogram<double> CommitTimeMs = Meter.CreateHistogram<double>("nKafka.commit.time_ms");
-    public static readonly Histogram<double> HeartbeatTimeMs = Meter.CreateHistogram<double>("nKafka.heartbeat.time_ms");
-    public static readonly Counter<long> MessagesConsumed = Meter.CreateCounter<long>("nKafka.messages.consumed");
-    public static readonly Counter<long> BytesReceived = Meter.CreateCounter<long>("nKafka.bytes.received");
-    public static readonly Counter<long> Fetches = Meter.CreateCounter<long>("nKafka.fetches");
-    public static readonly Counter<long> Heartbeats = Meter.CreateCounter<long>("nKafka.heartbeats");
-    public static readonly Counter<long> Commits = Meter.CreateCounter<long>("nKafka.commits");
+    public static readonly Meter Meter = new("messaging");
+
+    public static readonly Histogram<double> ClientOperationDurationMs =
+        Meter.CreateHistogram<double>("messaging.client.operation.duration");
+
+    public static readonly Histogram<double> ProcessDurationMs =
+        Meter.CreateHistogram<double>("messaging.process.duration");
+
+    public static readonly Counter<long> MessagesConsumed =
+        Meter.CreateCounter<long>("messaging.client.consumed.messages");
+
+    public static void RecordClientOperation(string operationName, double durationMs, string? consumerGroup = null, string? serverAddress = null, int? serverPort = null, string? partitionId = null, string? errorType = null)
+    {
+        var tags = new TagList
+        {
+            { "messaging.operation.name", operationName },
+            { "messaging.system", MessagingSystem },
+        };
+
+        if (consumerGroup != null) tags.Add("messaging.consumer.group.name", consumerGroup);
+        if (serverAddress != null) tags.Add("server.address", serverAddress);
+        if (serverPort != null) tags.Add("server.port", serverPort.Value);
+        if (partitionId != null) tags.Add("messaging.destination.partition.id", partitionId);
+        if (errorType != null) tags.Add("error.type", errorType);
+
+        ClientOperationDurationMs.Record(durationMs, tags);
+    }
+
+    public static void RecordProcessDuration(string operationName, double durationMs, string? consumerGroup = null, string? serverAddress = null, int? serverPort = null, string? partitionId = null, string? errorType = null)
+    {
+        var tags = new TagList
+        {
+            { "messaging.operation.name", operationName },
+            { "messaging.system", MessagingSystem },
+        };
+
+        if (consumerGroup != null) tags.Add("messaging.consumer.group.name", consumerGroup);
+        if (serverAddress != null) tags.Add("server.address", serverAddress);
+        if (serverPort != null) tags.Add("server.port", serverPort.Value);
+        if (partitionId != null) tags.Add("messaging.destination.partition.id", partitionId);
+        if (errorType != null) tags.Add("error.type", errorType);
+
+        ProcessDurationMs.Record(durationMs, tags);
+    }
+
+    public static void AddMessagesConsumed(long count, string operationName = OperationReceive, string? consumerGroup = null, string? serverAddress = null, int? serverPort = null, string? partitionId = null, string? errorType = null)
+    {
+        var tags = new TagList
+        {
+            { "messaging.operation.name", operationName },
+            { "messaging.system", MessagingSystem },
+        };
+
+        if (consumerGroup != null) tags.Add("messaging.consumer.group.name", consumerGroup);
+        if (serverAddress != null) tags.Add("server.address", serverAddress);
+        if (serverPort != null) tags.Add("server.port", serverPort.Value);
+        if (partitionId != null) tags.Add("messaging.destination.partition.id", partitionId);
+        if (errorType != null) tags.Add("error.type", errorType);
+
+        MessagesConsumed.Add(count, tags);
+    }
 }

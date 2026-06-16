@@ -598,8 +598,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                         using var response = await connection.SendAsync(request, cancellationToken);
                         _heartbeatActivity?.AddTag("nKafka.phase", "heartbeat");
                         Interlocked.Increment(ref _heartbeatCount);
-                        KafkaMetrics.Heartbeats.Add(1);
-                        KafkaMetrics.HeartbeatTimeMs.Record(_heartbeatActivity!.Duration!.TotalMilliseconds);
+                        KafkaMetrics.RecordClientOperation(
+                            KafkaMetrics.OperationHeartbeat,
+                            _heartbeatActivity!.Duration!.TotalMilliseconds);
 
                         if (response.Message.ErrorCode == 0)
                         {
@@ -751,8 +752,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     var response = await connection.SendAsync(fetchRequest, cancellationToken);
                     _fetchActivity!.AddTag("nKafka.phase", "fetch");
                     double fetchElapsed = _fetchActivity.Duration!.TotalMilliseconds;
-                    KafkaMetrics.FetchRoundTripMs.Record(fetchElapsed);
-                    KafkaMetrics.Fetches.Add(1);
+                    KafkaMetrics.RecordClientOperation(
+                        KafkaMetrics.OperationReceive,
+                        fetchElapsed);
 
                     if (response.Message.SessionId != null)
                     {
@@ -822,8 +824,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             }
                         }
 
-                        KafkaMetrics.BytesReceived.Add(responseBytes);
-                        KafkaMetrics.MessagesConsumed.Add(responseMessages);
+                        KafkaMetrics.AddMessagesConsumed(responseMessages);
                     }
 
                     consecutiveErrors = 0;
@@ -943,7 +944,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         var result = ConsumeFromBuffer();
 
-        KafkaMetrics.DeserializeTimeMs.Record(_deserializeActivity!.Duration!.TotalMilliseconds);
+        KafkaMetrics.RecordProcessDuration(
+            KafkaMetrics.OperationProcess,
+            _deserializeActivity!.Duration!.TotalMilliseconds);
 
         return result;
     }
@@ -1123,8 +1126,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             cancellationToken);
         _offsetCommitActivity?.AddTag("nKafka.phase", "offset_commit");
         _commitActivity?.AddTag("nKafka.phase", "commit");
-        KafkaMetrics.Commits.Add(1);
-        KafkaMetrics.CommitTimeMs.Record(_commitActivity!.Duration!.TotalMilliseconds);
+        KafkaMetrics.RecordClientOperation(
+            KafkaMetrics.OperationAck,
+            _commitActivity!.Duration!.TotalMilliseconds);
     }
 
     public async ValueTask DisposeAsync()
