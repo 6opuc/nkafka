@@ -109,6 +109,49 @@ public class ConsumerTests
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10), "Should complete within reasonable time");
     }
 
+    [Test]
+    [TestCaseSource(nameof(Protocols))]
+    public async Task ConsumeBatchAsync_WithMessages_ShouldConsumeFromTopic(string protocol)
+    {
+        var config = TestHelpers.CreateConsumerConfig(
+            $"batch-test-{Guid.NewGuid()}",
+            $"batch-group-{Guid.NewGuid()}",
+            $"batch-instance-{Guid.NewGuid()}",
+            protocol,
+            maxWaitTime: TimeSpan.FromSeconds(2),
+            checkCrcs: true);
+
+        var offsetStorage = new FixedOffsetStorage(0);
+        var deserializer = new DummyDeserializer();
+
+        await using var consumer = new Consumer<byte[]>(
+            config, deserializer, offsetStorage, TestLoggerFactory.Instance);
+
+        await consumer.JoinGroupAsync(CancellationToken.None);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        int consumed = 0;
+
+        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
+        while (!cts.Token.IsCancellationRequested)
+        {
+            using var batch = await consumer.ConsumeBatchAsync(cts.Token).ConfigureAwait(false);
+            foreach (var record in batch)
+            {
+                consumed++;
+            }
+
+            if (consumed >= 1000)
+                break;
+        }
+
+        stopwatch.Stop();
+
+        consumed.Should().BeGreaterThan(0, $"Should consume messages from {protocol} topic");
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10), "Should complete within reasonable time");
+    }
+
     private static async Task<Consumer<byte[]>> CreateConsumerAsync(string clientId, string consumerGroup,
         string instanceId, string protocol)
     {
