@@ -22,6 +22,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private readonly IOffsetStorage _offsetStorage;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
+    private readonly KafkaTelemetryContext _context;
 
     private CancellationTokenSource? _stop;
     private Task? _heartbeatsBackgroundTask;
@@ -61,6 +62,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         _offsetStorage = offsetStorage;
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<Consumer<TMessage>>();
+        _context = new KafkaTelemetryContext(
+            _config.GroupId,
+            _config.InstanceId ?? _config.ClientId,
+            _config.BootstrapServers.Split(",", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(),
+            null,
+            null,
+            null);
         _topics = _config.Topics.Split(",", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
     }
 
@@ -586,7 +594,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     try
                     {
                         using var _heartbeatActivity = KafkaTracing.Source.StartActivity("Consumer.Heartbeat", ActivityKind.Client);
-                        var connection = _coordinatorConnection!;
+                        var heartbeatConnection = _coordinatorConnection!;
+                        _heartbeatActivity?.AddMessagingAttributes(_context, "heartbeat");
 
                         var request = new HeartbeatRequest
                         {
@@ -595,12 +604,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             MemberId = _groupMembership.MemberId,
                             GroupInstanceId = null,
                         };
-                        using var response = await connection.SendAsync(request, cancellationToken);
+                        using var response = await heartbeatConnection.SendAsync(request, cancellationToken);
                         _heartbeatActivity?.AddTag("nKafka.phase", "heartbeat");
                         Interlocked.Increment(ref _heartbeatCount);
-                        KafkaMetrics.RecordClientOperation(
-                            KafkaMetrics.OperationHeartbeat,
-                            _heartbeatActivity!.Duration!.TotalMilliseconds);
 
                         if (response.Message.ErrorCode == 0)
                         {
@@ -743,6 +749,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             while (!cancellationToken.IsCancellationRequested)
             {
                 using var _fetchActivity = KafkaTracing.Source.StartActivity("Consumer.Fetch", ActivityKind.Client);
+                _fetchActivity?.AddMessagingAttributes(_context, "receive");
                 try
                 {
                     var fetchRequest = CreateFetchRequest(sessionManager, topicMap, firstRequest);
@@ -751,10 +758,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     int fetchGenerationId = _groupMembership?.GenerationId ?? 0;
                     var response = await connection.SendAsync(fetchRequest, cancellationToken);
                     _fetchActivity!.AddTag("nKafka.phase", "fetch");
-                    double fetchElapsed = _fetchActivity.Duration!.TotalMilliseconds;
-                    KafkaMetrics.RecordClientOperation(
-                        KafkaMetrics.OperationReceive,
-                        fetchElapsed);
 
                     if (response.Message.SessionId != null)
                     {
@@ -824,7 +827,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             }
                         }
 
-                        KafkaMetrics.AddMessagesConsumed(responseMessages);
                     }
 
                     consecutiveErrors = 0;
@@ -928,10 +930,14 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         CancellationToken cancellationToken)
     {
         using var _consumeActivity = KafkaTracing.Source.StartActivity("Consumer.Consume", ActivityKind.Client);
+        _consumeActivity?.AddMessagingAttributes(_context, "receive");
+        _consumeActivity?.AddTag("nKafka.phase", "consume");
 
         var consumerResult = ConsumeFromBuffer();
         if (consumerResult != null)
         {
+            KafkaMetrics.AddMessagesConsumed(_context, 1);
+            _consumeActivity?.AddTag("nKafka.result", "cached");
             return consumerResult;
         }
 
@@ -940,13 +946,30 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         _fetchWaitActivity?.AddTag("nKafka.phase", "fetch_wait");
 
         using var _deserializeActivity = KafkaTracing.Source.StartActivity("Consumer.Deserialize", ActivityKind.Client);
+        var deserializeSw = System.Diagnostics.Stopwatch.StartNew();
         _messageDeserializeEnumerator = GetMessageEnumerator();
 
         var result = ConsumeFromBuffer();
 
-        KafkaMetrics.RecordProcessDuration(
-            KafkaMetrics.OperationProcess,
-            _deserializeActivity!.Duration!.TotalMilliseconds);
+        if (result != null)
+        {
+            var contextWithMessage = new KafkaTelemetryContext(
+                _context.ConsumerGroupId,
+                _context.ClientId,
+                _context.ServerAddress,
+                _context.ServerPort,
+                result?.Topic,
+                result?.Partition.ToString());
+            KafkaMetrics.AddMessagesConsumed(contextWithMessage, 1);
+            _consumeActivity?.AddTag("nKafka.result", "message");
+        }
+        else
+        {
+            _consumeActivity?.AddTag("nKafka.result", "empty");
+        }
+
+        deserializeSw.Stop();
+        KafkaMetrics.RecordProcessDuration(_context, KafkaMetrics.OperationProcess, deserializeSw.Elapsed.TotalMilliseconds);
 
         return result;
     }
@@ -986,6 +1009,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         using var _fetchWaitActivity = KafkaTracing.Source.StartActivity("Consumer.FetchWait", ActivityKind.Client);
         await EnsureEnumeratorAsync(cancellationToken);
         _fetchWaitActivity?.AddTag("nKafka.phase", "fetch_wait");
+        _consumeBatchActivity?.AddTag("nKafka.phase", "consume_batch");
         return new ConsumerBatch(this);
     }
 
@@ -1115,7 +1139,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 consumeResult.Offset);
             return;
         }
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         using var _commitActivity = KafkaTracing.Source.StartActivity("Consumer.Commit", ActivityKind.Client);
+        _commitActivity?.AddMessagingAttributes(_context, "settle", consumeResult.Topic, consumeResult.Partition.ToString());
         using var _offsetCommitActivity = KafkaTracing.Source.StartActivity("Consumer.OffsetCommit", ActivityKind.Client);
         await _offsetStorage.SetAsync(
             connection,
@@ -1126,9 +1152,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             cancellationToken);
         _offsetCommitActivity?.AddTag("nKafka.phase", "offset_commit");
         _commitActivity?.AddTag("nKafka.phase", "commit");
-        KafkaMetrics.RecordClientOperation(
-            KafkaMetrics.OperationAck,
-            _commitActivity!.Duration!.TotalMilliseconds);
+        sw.Stop();
+        KafkaMetrics.RecordClientOperation(_context, KafkaMetrics.OperationSettle, sw.Elapsed.TotalMilliseconds);
     }
 
     public async ValueTask DisposeAsync()
