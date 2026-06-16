@@ -9,13 +9,13 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
 using var meterProvider = Sdk.CreateMeterProviderBuilder()
-    .AddMeter(KafkaTracing.InstrumentName)
+    .AddNKafka()
     .AddConsoleExporter()
     .Build();
 
 using var tracerProvider = Sdk.CreateTracerProviderBuilder()
     .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("testapp"))
-    .AddSource(KafkaTracing.Source.Name)
+    .AddNKafka()
     .AddOtlpExporter(o =>
     {
         o.Endpoint = new Uri("http://otel-collector:4318");
