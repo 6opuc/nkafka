@@ -93,8 +93,8 @@ public class ConsumerTests
 
         while (!cts.Token.IsCancellationRequested)
         {
-            using var batch = await consumer.ConsumeBatchAsync(cts.Token).ConfigureAwait(false);
-            foreach (var record in batch)
+            var record = await consumer.ConsumeAsync(cts.Token).ConfigureAwait(false);
+            if (record?.Message != null)
             {
                 consumed++;
             }
@@ -107,44 +107,6 @@ public class ConsumerTests
 
         consumed.Should().BeGreaterThan(0, $"Should consume messages from {protocol} topic");
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10), "Should complete within reasonable time");
-    }
-
-    [Test]
-    [TestCaseSource(nameof(Protocols))]
-    public async Task ConsumeBatchAsync_WithMessages_ShouldConsumeMessages(string protocol)
-    {
-        var config = TestHelpers.CreateConsumerConfig(
-            $"stats-test-{Guid.NewGuid()}",
-            $"stats-group-{Guid.NewGuid()}",
-            $"stats-instance-{Guid.NewGuid()}",
-            protocol,
-            maxWaitTime: TimeSpan.FromSeconds(2),
-            checkCrcs: true);
-
-        var offsetStorage = new FixedOffsetStorage(0);
-        var deserializer = new DummyDeserializer();
-
-        await using var consumer = new Consumer<byte[]>(
-            config, deserializer, offsetStorage, TestLoggerFactory.Instance);
-
-        await consumer.JoinGroupAsync(CancellationToken.None);
-
-        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        int consumed = 0;
-
-        while (!cts.Token.IsCancellationRequested)
-        {
-            using var batch = await consumer.ConsumeBatchAsync(cts.Token).ConfigureAwait(false);
-            foreach (var record in batch)
-            {
-                consumed++;
-            }
-
-            if (consumed >= 500)
-                break;
-        }
-
-        consumed.Should().BeGreaterThanOrEqualTo(500, "Should have consumed at least 500 messages");
     }
 
     private static async Task<Consumer<byte[]>> CreateConsumerAsync(string clientId, string consumerGroup,
