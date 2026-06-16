@@ -14,12 +14,12 @@ public static class KafkaTracing
         activity?.AddTag("messaging.operation.type", operationName);
         activity?.AddTag("messaging.consumer.group.name", context.ConsumerGroupId);
         activity?.AddTag("messaging.client.id", context.ClientId);
-        
+
         if (topicName != null)
         {
             activity?.AddTag("messaging.destination.name", topicName);
         }
-        
+
         if (partitionId != null)
         {
             activity?.AddTag("messaging.destination.partition.id", partitionId);
