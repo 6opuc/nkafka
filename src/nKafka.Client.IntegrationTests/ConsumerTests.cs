@@ -111,7 +111,7 @@ public class ConsumerTests
 
     [Test]
     [TestCaseSource(nameof(Protocols))]
-    public async Task ConsumeBatchAsync_WithMessages_ShouldHaveFetchStats(string protocol)
+    public async Task ConsumeBatchAsync_WithMessages_ShouldConsumeMessages(string protocol)
     {
         var config = TestHelpers.CreateConsumerConfig(
             $"stats-test-{Guid.NewGuid()}",
