@@ -749,7 +749,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             while (!cancellationToken.IsCancellationRequested)
             {
                 using var _fetchActivity = KafkaTracing.Source.StartActivity("Consumer.Fetch", ActivityKind.Client);
-                _fetchActivity?.AddMessagingAttributes(_context, "receive");
+                _fetchActivity?.AddMessagingAttributes(_context, KafkaMetrics.OperationReceive);
                 try
                 {
                     var fetchRequest = CreateFetchRequest(sessionManager, topicMap, firstRequest);
@@ -930,7 +930,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         CancellationToken cancellationToken)
     {
         using var _consumeActivity = KafkaTracing.Source.StartActivity("Consumer.Consume", ActivityKind.Client);
-        _consumeActivity?.AddMessagingAttributes(_context, "receive");
+        _consumeActivity?.AddMessagingAttributes(_context, KafkaMetrics.OperationReceive);
         _consumeActivity?.AddTag("nKafka.phase", "consume");
 
         var consumerResult = ConsumeFromBuffer();
@@ -951,15 +951,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         var result = ConsumeFromBuffer();
 
-        if (result != null)
+        if (result is { } r)
         {
-            var contextWithMessage = new KafkaTelemetryContext(
-                _context.ConsumerGroupId,
-                _context.ClientId,
-                _context.ServerAddress,
-                _context.ServerPort,
-                result?.Topic,
-                result?.Partition.ToString());
+            var contextWithMessage = _context with
+            {
+                TopicName = r.Topic,
+                PartitionId = r.Partition.ToString(),
+            };
             KafkaMetrics.AddMessagesConsumed(contextWithMessage, 1);
             _consumeActivity?.AddTag("nKafka.result", "message");
         }
@@ -1141,7 +1139,12 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
         var sw = System.Diagnostics.Stopwatch.StartNew();
         using var _commitActivity = KafkaTracing.Source.StartActivity("Consumer.Commit", ActivityKind.Client);
-        _commitActivity?.AddMessagingAttributes(_context, "settle", consumeResult.Topic, consumeResult.Partition.ToString());
+        var commitContext = _context with
+        {
+            TopicName = consumeResult.Topic,
+            PartitionId = consumeResult.Partition.ToString(),
+        };
+        _commitActivity?.AddMessagingAttributes(commitContext, KafkaMetrics.OperationSettle);
         using var _offsetCommitActivity = KafkaTracing.Source.StartActivity("Consumer.OffsetCommit", ActivityKind.Client);
         await _offsetStorage.SetAsync(
             connection,

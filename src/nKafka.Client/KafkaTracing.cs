@@ -7,7 +7,7 @@ public static class KafkaTracing
     public const string InstrumentName = "nKafka";
     public static readonly ActivitySource Source = new(InstrumentName, "1.0.0");
 
-    public static void AddMessagingAttributes(this Activity activity, KafkaTelemetryContext context, string operationName, string? topicName = null, string? partitionId = null)
+    public static void AddMessagingAttributes(this Activity activity, KafkaTelemetryContext context, string operationName)
     {
         activity?.AddTag("messaging.system", "kafka");
         activity?.AddTag("messaging.operation.name", operationName);
@@ -15,14 +15,14 @@ public static class KafkaTracing
         activity?.AddTag("messaging.consumer.group.name", context.ConsumerGroupId);
         activity?.AddTag("messaging.client.id", context.ClientId);
 
-        if (topicName != null)
+        if (context.TopicName != null)
         {
-            activity?.AddTag("messaging.destination.name", topicName);
+            activity?.AddTag("messaging.destination.name", context.TopicName);
         }
 
-        if (partitionId != null)
+        if (context.PartitionId != null)
         {
-            activity?.AddTag("messaging.destination.partition.id", partitionId);
+            activity?.AddTag("messaging.destination.partition.id", context.PartitionId);
         }
     }
 }

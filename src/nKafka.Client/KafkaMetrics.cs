@@ -89,11 +89,3 @@ public static class KafkaMetrics
         MessagesConsumed.Add(count, tags);
     }
 }
-
-public readonly record struct KafkaTelemetryContext(
-    string ConsumerGroupId,
-    string ClientId,
-    string? ServerAddress,
-    int? ServerPort,
-    string? TopicName,
-    string? PartitionId);
