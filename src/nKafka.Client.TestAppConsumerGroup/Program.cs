@@ -3,6 +3,25 @@
 using Microsoft.Extensions.Logging;
 using nKafka.Client;
 using nKafka.Client.TestAppConsumerGroup;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+
+var meterProvider = Sdk.CreateMeterProviderBuilder()
+    .AddNKafka()
+    .AddConsoleExporter()
+    .Build();
+
+var tracerProvider = Sdk.CreateTracerProviderBuilder()
+    .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("testapp-consumer"))
+    .AddNKafka()
+    .AddOtlpExporter(o =>
+    {
+        o.Endpoint = new Uri("http://otel-collector:4318");
+    })
+    .AddConsoleExporter()
+    .Build();
 
 var loggerFactory = LoggerFactory.Create(builder => builder
     .SetMinimumLevel(LogLevel.Debug)
@@ -37,4 +56,3 @@ while (true)
 
     await Task.Delay(TimeSpan.FromMilliseconds(300));
 }
-

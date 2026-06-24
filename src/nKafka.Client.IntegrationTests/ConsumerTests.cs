@@ -93,8 +93,8 @@ public class ConsumerTests
 
         while (!cts.Token.IsCancellationRequested)
         {
-            using var batch = await consumer.ConsumeBatchAsync(cts.Token).ConfigureAwait(false);
-            foreach (var record in batch)
+            var record = await consumer.ConsumeAsync(cts.Token).ConfigureAwait(false);
+            if (record?.Message != null)
             {
                 consumed++;
             }
@@ -111,12 +111,12 @@ public class ConsumerTests
 
     [Test]
     [TestCaseSource(nameof(Protocols))]
-    public async Task ConsumeBatchAsync_WithMessages_ShouldHaveFetchStats(string protocol)
+    public async Task ConsumeBatchAsync_WithMessages_ShouldConsumeFromTopic(string protocol)
     {
         var config = TestHelpers.CreateConsumerConfig(
-            $"stats-test-{Guid.NewGuid()}",
-            $"stats-group-{Guid.NewGuid()}",
-            $"stats-instance-{Guid.NewGuid()}",
+            $"batch-test-{Guid.NewGuid()}",
+            $"batch-group-{Guid.NewGuid()}",
+            $"batch-instance-{Guid.NewGuid()}",
             protocol,
             maxWaitTime: TimeSpan.FromSeconds(2),
             checkCrcs: true);
@@ -129,8 +129,10 @@ public class ConsumerTests
 
         await consumer.JoinGroupAsync(CancellationToken.None);
 
-        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         int consumed = 0;
+
+        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
         while (!cts.Token.IsCancellationRequested)
         {
@@ -140,14 +142,14 @@ public class ConsumerTests
                 consumed++;
             }
 
-            if (consumed >= 500)
+            if (consumed >= 1000)
                 break;
         }
 
-        var stats = consumer.Statistics;
-        stats.P50FetchRoundTripMs.Should().BeGreaterThan(0, "Should have fetch RTT stats");
-        stats.TotalBytesReceived.Should().BeGreaterThan(0, "Should have received bytes");
-        stats.TotalMessagesConsumed.Should().BeGreaterThan(0, "Should have consumed messages");
+        stopwatch.Stop();
+
+        consumed.Should().BeGreaterThan(0, $"Should consume messages from {protocol} topic");
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10), "Should complete within reasonable time");
     }
 
     private static async Task<Consumer<byte[]>> CreateConsumerAsync(string clientId, string consumerGroup,

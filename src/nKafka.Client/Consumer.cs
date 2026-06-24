@@ -22,6 +22,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private readonly IOffsetStorage _offsetStorage;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
+    private readonly KafkaTelemetryContext _context;
 
     private CancellationTokenSource? _stop;
     private Task? _heartbeatsBackgroundTask;
@@ -42,18 +43,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private IDisposableMessage<FetchResponse>? _fetchResponse => _fetchResult?.Response;
     private IEnumerator<MessageDeserializationContext>? _messageDeserializeEnumerator = null;
 
-    private readonly Stopwatch _totalStopwatch = new();
-    private readonly Stopwatch _connectStopwatch = new();
-    private readonly Stopwatch _metadataStopwatch = new();
-    private readonly Stopwatch _joinGroupStopwatch = new();
-    private readonly Stopwatch _syncGroupStopwatch = new();
-    private readonly Stopwatch _fetchStopwatch = new();
-    private readonly Stopwatch _deserializeStopwatch = new();
-    private readonly Stopwatch _commitStopwatch = new();
-    private readonly Stopwatch _heartbeatStopwatch = new();
     private int _heartbeatCount;
-
-    public ConsumerStatistics Statistics { get; } = new();
 
     public int GenerationId => _groupMembership?.GenerationId ?? 0;
 
@@ -72,34 +62,42 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         _offsetStorage = offsetStorage;
         _loggerFactory = loggerFactory;
         _logger = loggerFactory.CreateLogger<Consumer<TMessage>>();
+        _context = new KafkaTelemetryContext(
+            _config.GroupId,
+            _config.InstanceId ?? _config.ClientId,
+            _config.BootstrapServers.Split(",", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(),
+            null,
+            null,
+            null);
         _topics = _config.Topics.Split(",", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
     }
 
     public async ValueTask JoinGroupAsync(CancellationToken cancellationToken)
     {
         _stop = new CancellationTokenSource();
+        using var _lifetime = BeginDefaultLoggingScope();
         await RejoinGroupAsync(cancellationToken);
     }
 
     private async ValueTask RejoinGroupAsync(CancellationToken cancellationToken)
     {
-        _totalStopwatch.Start();
-        using var _ = BeginDefaultLoggingScope();
+        using var _joinGroupActivity = KafkaTracing.Source.StartActivity("Consumer.JoinGroup", ActivityKind.Client);
 
-        _connectStopwatch.Start();
-        await OpenConnectionsAsync(cancellationToken);
-        _connectStopwatch.Stop();
-        Statistics.ConnectTime = _connectStopwatch.Elapsed;
+        using var _bootstrapActivity = KafkaTracing.Source.StartActivity("Consumer.BootstrapConnection", ActivityKind.Client);
+        await using var bootstrapConnection = await OpenBootstrapConnectionAsync(cancellationToken);
+        _bootstrapActivity?.AddTag("nKafka.phase", "bootstrap");
 
-        _metadataStopwatch.Start();
-        var connection = GetCoordinatorConnection();
-        _metadataStopwatch.Stop();
-        Statistics.MetadataTime = _metadataStopwatch.Elapsed;
+        using var _coordinatorConnActivity = KafkaTracing.Source.StartActivity("Consumer.OpenCoordinatorConnection", ActivityKind.Client);
+        _coordinatorConnection = await OpenCoordinatorConnectionAsync(bootstrapConnection, cancellationToken);
+        _coordinatorConnActivity?.AddTag("nKafka.phase", "coordinator_connection");
 
-        _joinGroupStopwatch.Start();
-        using var joinGroupResponse = await JoinGroupRequestAsync(connection, cancellationToken);
-        _joinGroupStopwatch.Stop();
-        Statistics.JoinGroupTime = _joinGroupStopwatch.Elapsed;
+        using var _refreshMetadataActivity = KafkaTracing.Source.StartActivity("Consumer.RefreshMetadata", ActivityKind.Client);
+        await RefreshMetadataAsync(cancellationToken);
+        _refreshMetadataActivity?.AddTag("nKafka.phase", "refresh_metadata");
+
+        using var _joinGroupReqActivity = KafkaTracing.Source.StartActivity("Consumer.JoinGroupRequest", ActivityKind.Client);
+        using var joinGroupResponse = await JoinGroupRequestAsync(_coordinatorConnection, cancellationToken);
+        _joinGroupReqActivity?.AddTag("nKafka.phase", "join_group_request");
         _groupMembership = new GroupMembership
         {
             MemberId = joinGroupResponse.Message.MemberId!,
@@ -124,12 +122,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             assignments = ReassignGroup();
         }
 
-        _syncGroupStopwatch.Start();
-        await SyncGroup(connection, assignments, cancellationToken);
-        _syncGroupStopwatch.Stop();
-        Statistics.SyncGroupTime = _syncGroupStopwatch.Elapsed;
-
-        await RefreshMetadataAsync(cancellationToken);
+        using var _syncGroupActivity = KafkaTracing.Source.StartActivity("Consumer.SyncGroup", ActivityKind.Client);
+        await SyncGroup(_coordinatorConnection, assignments, cancellationToken);
+        _syncGroupActivity?.AddTag("nKafka.phase", "sync_group");
 
         await StopFetchingAsync();
 
@@ -150,31 +145,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         return _logger.BeginScope(_config.InstanceId);
     }
 
-    private IConnection GetCoordinatorConnection()
-    {
-        return _coordinatorConnection!;
-    }
-
-    private async ValueTask OpenConnectionsAsync(
-        CancellationToken cancellationToken)
-    {
-        if (_coordinatorConnection != null)
-        {
-            return;
-        }
-
-        await using (var bootstrapConnection = await OpenBootstrapConnectionAsync(cancellationToken))
-        {
-            _coordinatorConnection = await OpenCoordinatorConnectionAsync(bootstrapConnection, cancellationToken);
-        }
-
-        await RefreshMetadataAsync(cancellationToken);
-    }
-
     private async ValueTask RefreshMetadataAsync(CancellationToken cancellationToken)
     {
+        using var _refreshCoordinatorActivity = KafkaTracing.Source.StartActivity("Consumer.RefreshCoordinator", ActivityKind.Client);
         var coordinator = await RefreshCoordinatorAsync(cancellationToken);
+        _refreshCoordinatorActivity?.AddTag("nKafka.phase", "refresh_coordinator");
+
+        using var _requestMetadataActivity = KafkaTracing.Source.StartActivity("Consumer.RequestMetadata", ActivityKind.Client);
         using var metadataResponse = await RequestMetadata(coordinator, cancellationToken);
+        _requestMetadataActivity?.AddTag("nKafka.phase", "request_metadata");
         if (metadataResponse.Message.Topics == null)
         {
             throw new ProtocolException("Metadata response did not contain topics.");
@@ -256,6 +235,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         _logger.LogInformation("Opening coordinator connection.");
 
+        using var _findCoordinatorActivity = KafkaTracing.Source.StartActivity("Consumer.FindCoordinator", ActivityKind.Client);
         var request = new FindCoordinatorRequest
         {
             Key = _config.GroupId,
@@ -264,6 +244,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         };
 
         using var response = await connection.SendAsync(request, CancellationToken.None);
+        _findCoordinatorActivity?.AddTag("nKafka.phase", "find_coordinator");
 
         ConnectionConfig coordinatorConnectionConfig;
         if (response.Version < 4)
@@ -321,6 +302,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private async ValueTask<IConnection> RefreshCoordinatorAsync(CancellationToken cancellationToken)
     {
         await using var bootstrapConnection = await OpenBootstrapConnectionAsync(cancellationToken);
+        using var _findCoordinatorActivity = KafkaTracing.Source.StartActivity("Consumer.FindCoordinator", ActivityKind.Client);
         using var coordinatorResponse = await bootstrapConnection.SendAsync(
             new FindCoordinatorRequest
             {
@@ -329,6 +311,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 CoordinatorKeys = [_config.GroupId],
             },
             CancellationToken.None);
+        _findCoordinatorActivity?.AddTag("nKafka.phase", "find_coordinator");
 
         string newHost;
         int newPort;
@@ -610,22 +593,20 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 {
                     try
                     {
-                        _heartbeatStopwatch.Start();
-                        var connection = GetCoordinatorConnection();
+                        using var _heartbeatActivity = KafkaTracing.Source.StartActivity("Consumer.Heartbeat", ActivityKind.Client);
+                        var heartbeatConnection = _coordinatorConnection!;
+                        _heartbeatActivity?.AddMessagingAttributes(_context, "heartbeat");
 
                         var request = new HeartbeatRequest
                         {
                             GroupId = _config.GroupId,
                             GenerationId = _groupMembership!.GenerationId,
                             MemberId = _groupMembership.MemberId,
-                            GroupInstanceId = null,  // Null: static membership not used (dynamic group protocol)
+                            GroupInstanceId = null,
                         };
-                        using var response = await connection.SendAsync(request, cancellationToken);
-                        var hbElapsed = _heartbeatStopwatch.Elapsed;
-                        _heartbeatStopwatch.Stop();
+                        using var response = await heartbeatConnection.SendAsync(request, cancellationToken);
+                        _heartbeatActivity?.AddTag("nKafka.phase", "heartbeat");
                         Interlocked.Increment(ref _heartbeatCount);
-                        Statistics.IncrementHeartbeats(1);
-                        Statistics.AddHeartbeatTime(hbElapsed);
 
                         if (response.Message.ErrorCode == 0)
                         {
@@ -767,18 +748,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
             while (!cancellationToken.IsCancellationRequested)
             {
+                using var _fetchActivity = KafkaTracing.Source.StartActivity("Consumer.Fetch", ActivityKind.Client);
+                _fetchActivity?.AddMessagingAttributes(_context, KafkaMetrics.OperationReceive);
                 try
                 {
                     var fetchRequest = CreateFetchRequest(sessionManager, topicMap, firstRequest);
                     firstRequest = false;
 
-                    _fetchStopwatch.Start();
                     int fetchGenerationId = _groupMembership?.GenerationId ?? 0;
                     var response = await connection.SendAsync(fetchRequest, cancellationToken);
-                    var fetchElapsed = _fetchStopwatch.Elapsed;
-                    _fetchStopwatch.Stop();
-                    Statistics.RecordFetchRoundTrip(fetchElapsed);
-                    Statistics.AddFetchTime(fetchElapsed);
+                    _fetchActivity!.AddTag("nKafka.phase", "fetch");
 
                     if (response.Message.SessionId != null)
                     {
@@ -848,8 +827,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             }
                         }
 
-                        Statistics.AddBytesReceived(responseBytes);
-                        Statistics.AddMessagesConsumed(responseMessages);
                     }
 
                     consecutiveErrors = 0;
@@ -864,10 +841,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
                 catch (Exception exception)
                 {
-                    if (_fetchStopwatch.IsRunning)
-                    {
-                        _fetchStopwatch.Stop();
-                    }
+                    _fetchActivity!.SetStatus(ActivityStatusCode.Error, exception.Message);
+                    _fetchActivity!.AddTag("exception.message", exception.Message);
                     sessionManager.OnError(0);
                     consecutiveErrors++;
 
@@ -954,17 +929,47 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     public async ValueTask<ConsumeResult<TMessage>?> ConsumeAsync(
         CancellationToken cancellationToken)
     {
+        using var _consumeActivity = KafkaTracing.Source.StartActivity("Consumer.Consume", ActivityKind.Client);
+        _consumeActivity?.AddMessagingAttributes(_context, KafkaMetrics.OperationReceive);
+        _consumeActivity?.AddTag("nKafka.phase", "consume");
+
         var consumerResult = ConsumeFromBuffer();
         if (consumerResult != null)
         {
+            KafkaMetrics.AddMessagesConsumed(_context, 1);
+            _consumeActivity?.AddTag("nKafka.result", "cached");
             return consumerResult;
         }
 
+        using var _fetchWaitActivity = KafkaTracing.Source.StartActivity("Consumer.FetchWait", ActivityKind.Client);
         await EnsureEnumeratorAsync(cancellationToken);
-        _deserializeStopwatch.Restart();
+        _fetchWaitActivity?.AddTag("nKafka.phase", "fetch_wait");
+
+        using var _deserializeActivity = KafkaTracing.Source.StartActivity("Consumer.Deserialize", ActivityKind.Client);
+        var deserializeSw = System.Diagnostics.Stopwatch.StartNew();
         _messageDeserializeEnumerator = GetMessageEnumerator();
 
-        return ConsumeFromBuffer();
+        var result = ConsumeFromBuffer();
+
+        if (result is { } r)
+        {
+            var contextWithMessage = _context with
+            {
+                TopicName = r.Topic,
+                PartitionId = r.Partition.ToString(),
+            };
+            KafkaMetrics.AddMessagesConsumed(contextWithMessage, 1);
+            _consumeActivity?.AddTag("nKafka.result", "message");
+        }
+        else
+        {
+            _consumeActivity?.AddTag("nKafka.result", "empty");
+        }
+
+        deserializeSw.Stop();
+        KafkaMetrics.RecordProcessDuration(_context, KafkaMetrics.OperationProcess, deserializeSw.Elapsed.TotalMilliseconds);
+
+        return result;
     }
 
     private ConsumeResult<TMessage>? ConsumeFromBuffer()
@@ -988,13 +993,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             };
         }
 
-        if (_deserializeStopwatch.IsRunning)
-        {
-            _deserializeStopwatch.Stop();
-            Statistics.RecordDeserializeTime(_deserializeStopwatch.Elapsed);
-            Statistics.AddDeserializeTime(_deserializeStopwatch.Elapsed);
-        }
-
         _messageDeserializeEnumerator.Dispose();
         _messageDeserializeEnumerator = null;
         _fetchResult?.Dispose();
@@ -1005,7 +1003,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     public async ValueTask<IConsumerBatch<TMessage>> ConsumeBatchAsync(CancellationToken cancellationToken)
     {
+        using var _consumeBatchActivity = KafkaTracing.Source.StartActivity("Consumer.ConsumeBatch", ActivityKind.Client);
+        using var _fetchWaitActivity = KafkaTracing.Source.StartActivity("Consumer.FetchWait", ActivityKind.Client);
         await EnsureEnumeratorAsync(cancellationToken);
+        _fetchWaitActivity?.AddTag("nKafka.phase", "fetch_wait");
+        _consumeBatchActivity?.AddTag("nKafka.phase", "consume_batch");
         return new ConsumerBatch(this);
     }
 
@@ -1135,7 +1137,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 consumeResult.Offset);
             return;
         }
-        _commitStopwatch.Start();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        using var _commitActivity = KafkaTracing.Source.StartActivity("Consumer.Commit", ActivityKind.Client);
+        var commitContext = _context with
+        {
+            TopicName = consumeResult.Topic,
+            PartitionId = consumeResult.Partition.ToString(),
+        };
+        _commitActivity?.AddMessagingAttributes(commitContext, KafkaMetrics.OperationSettle);
+        using var _offsetCommitActivity = KafkaTracing.Source.StartActivity("Consumer.OffsetCommit", ActivityKind.Client);
         await _offsetStorage.SetAsync(
             connection,
             _config.GroupId,
@@ -1143,17 +1153,20 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             consumeResult.Partition,
             consumeResult.Offset,
             cancellationToken);
-        _commitStopwatch.Stop();
-        Statistics.AddCommitTime(_commitStopwatch.Elapsed);
+        _offsetCommitActivity?.AddTag("nKafka.phase", "offset_commit");
+        _commitActivity?.AddTag("nKafka.phase", "commit");
+        sw.Stop();
+        KafkaMetrics.RecordClientOperation(_context, KafkaMetrics.OperationSettle, sw.Elapsed.TotalMilliseconds);
     }
 
     public async ValueTask DisposeAsync()
     {
         using var _ = BeginDefaultLoggingScope();
+        using var _shutdownActivity = KafkaTracing.Source.StartActivity("Consumer.Shutdown", ActivityKind.Client);
 
-        _totalStopwatch.Stop();
-
+        using var _stopFetchingActivity = KafkaTracing.Source.StartActivity("Consumer.StopFetching", ActivityKind.Client);
         await StopFetchingAsync();
+        _stopFetchingActivity?.AddTag("nKafka.phase", "stop_fetching");
 
         _consumeChannel.Writer.TryComplete();
 
@@ -1166,9 +1179,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         await LeaveGroupAsync(CancellationToken.None);
 
         await CloseConnectionsAsync();
-
-        Statistics.TotalElapsed = _totalStopwatch.Elapsed;
-        Statistics.SetHeartbeatCount(_heartbeatCount);
     }
 
     private async ValueTask StopFetchingAsync()
@@ -1212,7 +1222,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             return;
         }
 
-        var connection = GetCoordinatorConnection();
+        using var _leaveGroupActivity = KafkaTracing.Source.StartActivity("Consumer.LeaveGroup", ActivityKind.Client);
 
         _logger.LogInformation("Leaving consumer group.");
 
@@ -1230,7 +1240,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
             ],
         };
-        using var response = await connection.SendAsync(request, cancellationToken);
+        using var response = await _coordinatorConnection!.SendAsync(request, cancellationToken);
+        _leaveGroupActivity?.AddTag("nKafka.phase", "leave_group_request");
 
         if (response.Message.ErrorCode != 0)
         {
