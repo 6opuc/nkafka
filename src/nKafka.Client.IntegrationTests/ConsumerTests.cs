@@ -56,10 +56,11 @@ public class ConsumerTests
         var cts = new CancellationTokenSource(TestTimeout);
         var batchTask = consumer.ConsumeBatchAsync(cts.Token);
 
-        var completedTask = await Task.WhenAny(batchTask.AsTask(),
+        var batch = batchTask.AsTask();
+        var completedTask = await Task.WhenAny(batch,
             Task.Delay(TestTimeout + TimeSpan.FromSeconds(2), CancellationToken.None));
 
-        completedTask.Should().Be(batchTask.AsTask(),
+        completedTask.Should().Be(batch,
             "ConsumeBatchAsync should complete within 10s when no messages are available.");
 
         using var results = await batchTask;

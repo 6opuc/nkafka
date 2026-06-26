@@ -13,8 +13,10 @@ public sealed record ConnectionConfig(
     SaslConfig? Sasl = null,
     bool CheckCrcs = false,
     bool RequestApiVersionsOnOpen = true,
-    int RequestTimeoutMs = 60_000)
+    TimeSpan RequestTimeout = default)
 {
+    internal int RequestTimeoutMs => (int)(RequestTimeout > TimeSpan.Zero ? RequestTimeout : TimeSpan.FromSeconds(60)).TotalMilliseconds;
+
     private static readonly Regex _connectionStringRegex = new(
         @"^(?<proto>\S+)\:\/\/(?<host>\S+)\:(?<port>\S+)$", RegexOptions.Compiled);
 

@@ -830,7 +830,7 @@ public class ConnectionTests
             leader.Host!,
             leader.Port!.Value,
             "nKafka.Client.IntegrationTests") with
-        { RequestTimeoutMs = 2000 };
+        { RequestTimeout = TimeSpan.FromSeconds(2) };
 
         await using var connection = new Connection(config, TestLoggerFactory.Instance);
         await connection.OpenAsync(CancellationToken.None);
@@ -918,7 +918,7 @@ public class ConnectionTests
             leader.Host!,
             leader.Port!.Value,
             "nKafka.Client.IntegrationTests") with
-        { RequestTimeoutMs = 2000 };
+        { RequestTimeout = TimeSpan.FromSeconds(2) };
 
         await using var connection = new Connection(config, TestLoggerFactory.Instance);
         await connection.OpenAsync(CancellationToken.None);
@@ -994,7 +994,7 @@ public class ConnectionTests
             port: TestHelpers.PlainTextBootstrapPort,
             clientId: "nKafka.Client.IntegrationTests",
             requestApiVersionsOnOpen: false);
-        config = config with { RequestTimeoutMs = 60000 };
+        config = config with { RequestTimeout = TimeSpan.FromMilliseconds(60000) };
 
         var connection = new Connection(config, TestLoggerFactory.Instance);
         await connection.OpenAsync(CancellationToken.None);
@@ -1095,7 +1095,7 @@ public class ConnectionTests
             leader.Host!,
             leader.Port!.Value,
             "nKafka.Client.IntegrationTests") with
-        { RequestTimeoutMs = 30000 };
+        { RequestTimeout = TimeSpan.FromSeconds(30) };
 
         await using var connection = new Connection(config, TestLoggerFactory.Instance);
         await connection.OpenAsync(CancellationToken.None);
@@ -1192,7 +1192,7 @@ public class ConnectionTests
             leader.Host!,
             leader.Port!.Value,
             "nKafka.Client.IntegrationTests") with
-        { RequestTimeoutMs = 30000 };
+        { RequestTimeout = TimeSpan.FromSeconds(30) };
 
         await using var connection = new Connection(config, TestLoggerFactory.Instance);
         await connection.OpenAsync(CancellationToken.None);
@@ -1330,7 +1330,7 @@ public class ConnectionTests
             leader.Host!,
             leader.Port!.Value,
             "nKafka.Client.IntegrationTests") with
-        { RequestTimeoutMs = 30000 };
+        { RequestTimeout = TimeSpan.FromSeconds(30) };
 
         await using var connection = new Connection(config, TestLoggerFactory.Instance);
         await connection.OpenAsync(CancellationToken.None);

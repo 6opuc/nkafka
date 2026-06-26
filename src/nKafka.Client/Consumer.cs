@@ -634,7 +634,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                                 _config.HeartbeatIntervalMs);
                         }
 
-                        await Task.Delay(_config.HeartbeatIntervalMs, cancellationToken);
+                        await Task.Delay(_config.HeartbeatInterval, cancellationToken);
                     }
                     catch (OperationCanceledException)
                     {
@@ -757,7 +757,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
                     int fetchGenerationId = _groupMembership?.GenerationId ?? 0;
                     var response = await connection.SendAsync(fetchRequest, cancellationToken);
-                    _fetchActivity!.AddTag("nKafka.phase", "fetch");
+                    _fetchActivity?.AddTag("nKafka.phase", "fetch");
 
                     if (response.Message.SessionId != null)
                     {
@@ -841,8 +841,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
                 catch (Exception exception)
                 {
-                    _fetchActivity!.SetStatus(ActivityStatusCode.Error, exception.Message);
-                    _fetchActivity!.AddTag("exception.message", exception.Message);
+                    _fetchActivity?.SetStatus(ActivityStatusCode.Error, exception.Message);
+                    _fetchActivity?.AddTag("exception.message", exception.Message);
                     sessionManager.OnError(0);
                     consecutiveErrors++;
 
@@ -1015,41 +1015,42 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         if (_messageDeserializeEnumerator != null) return;
 
-        while (true)
+        while (!cancellationToken.IsCancellationRequested)
         {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(_config.FetchTimeoutMs > 0 ? _config.FetchTimeoutMs : (int)_config.MaxWaitTime.TotalMilliseconds);
+
             try
             {
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(30000);
                 _fetchResult = await _consumeChannel.Reader.ReadAsync(timeoutCts.Token);
-
-                if (_fetchResult == null)
-                {
-                    continue;
-                }
-
-                if (!_fetchResult.IsSuccess)
-                {
-                    var ex = _fetchResult.Exception;
-                    _fetchResult.Dispose();
-                    _fetchResult = null;
-                    throw new InvalidOperationException("Fetch loop failed.", ex);
-                }
-
-                if (_fetchResult.GenerationId == (_groupMembership?.GenerationId ?? 0))
-                {
-                    break;
-                }
-
-                _logger.LogWarning("Discarding stale fetch result from old generation: {OldGen} vs {CurrentGen}",
-                    _fetchResult.GenerationId, _groupMembership?.GenerationId);
-                _fetchResult.Dispose();
-                _fetchResult = null;
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
                 continue;
             }
+
+            if (_fetchResult == null)
+            {
+                continue;
+            }
+
+            if (!_fetchResult.IsSuccess)
+            {
+                var ex = _fetchResult.Exception;
+                _fetchResult.Dispose();
+                _fetchResult = null;
+                throw new InvalidOperationException("Fetch loop failed.", ex);
+            }
+
+            if (_fetchResult.GenerationId == (_groupMembership?.GenerationId ?? 0))
+            {
+                break;
+            }
+
+            _logger.LogWarning("Discarding stale fetch result from old generation: {OldGen} vs {CurrentGen}",
+                _fetchResult.GenerationId, _groupMembership?.GenerationId);
+            _fetchResult.Dispose();
+            _fetchResult = null;
         }
 
         _messageDeserializeEnumerator = GetMessageEnumerator();
@@ -1192,14 +1193,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         if (_fetchTasks != null)
         {
-            await Task.WhenAll(_fetchTasks.Select(t => t.ContinueWith(task =>
-            {
-                if (task.IsFaulted && task.Exception!.InnerException is not OperationCanceledException and not TaskCanceledException)
-                {
-                    throw task.Exception!.InnerException!;
-                }
-            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default)));
+            var tasks = _fetchTasks.ToList();
             _fetchTasks = null;
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
 
         if (_fetchResult != null)
@@ -1311,10 +1313,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _disposed = true;
             _enumerator?.Dispose();
             _enumerator = null;
-            _consumer._messageDeserializeEnumerator?.Dispose();
-            _consumer._messageDeserializeEnumerator = null;
-            _consumer._fetchResult?.Dispose();
-            _consumer._fetchResult = null;
         }
 
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();

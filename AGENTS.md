@@ -51,10 +51,12 @@
 - Explain why certain approaches are used (e.g., ref struct position handling)
 
 ### Testing
+- All tests must be green (`dotnet test src/nKafka.sln -c Release`) before committing or pushing
 - Comprehensive test coverage for buffer operations
 - Test bounds checking, error cases, and edge conditions
 - Roundtrip tests for all data types
 - Test naming pattern: `MethodUnderTest_Condition_Expectation` (e.g., `WriteByte_Zero_CanBeReadByBufferReader`)
+- `ValueTask.AsTask()` creates a new Task instance on every call when the ValueTask is already completed — cache the result to avoid identity comparison failures
 
 ### Exception Hierarchy
 - **KafkaException** (base)
