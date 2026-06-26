@@ -54,15 +54,15 @@ public class ConsumerTests
             protocol);
 
         var cts = new CancellationTokenSource(TestTimeout);
-        var batchTask = consumer.ConsumeBatchAsync(cts.Token);
+        var batch = consumer.ConsumeBatchAsync(cts.Token).AsTask();
 
-        var completedTask = await Task.WhenAny(batchTask.AsTask(),
+        var completedTask = await Task.WhenAny(batch,
             Task.Delay(TestTimeout + TimeSpan.FromSeconds(2), CancellationToken.None));
 
-        completedTask.Should().Be(batchTask.AsTask(),
+        completedTask.Should().Be(batch,
             "ConsumeBatchAsync should complete within 10s when no messages are available.");
 
-        using var results = await batchTask;
+        using var results = await batch;
         results.Should().BeEmpty("no messages exist at the high offset");
     }
 
