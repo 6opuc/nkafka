@@ -39,7 +39,7 @@ public static class ConsumerProtocolAssignmentSerializationHelper
 
     public static ConsumerProtocolAssignment? Deserialize(ref BufferReader reader, bool flexible, ISerializationContext context)
     {
-        int length = flexible
+        var length = flexible
             ? reader.ReadLength()
             : reader.ReadInt32BigEndian();
         if (length == -1)
@@ -50,7 +50,7 @@ public static class ConsumerProtocolAssignmentSerializationHelper
         {
             return new ConsumerProtocolAssignment();
         }
-        short version = reader.ReadInt16BigEndian();
+        var version = reader.ReadInt16BigEndian();
         return ConsumerProtocolAssignmentSerializer.Deserialize(ref reader, version, context);
     }
 }

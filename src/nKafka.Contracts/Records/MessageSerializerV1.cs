@@ -23,7 +23,7 @@ public static class MessageSerializerV1
             MessageSize = reader.ReadInt32BigEndian(),
         };
 
-        int messageStart = reader.Position;
+        var messageStart = reader.Position;
 
         if (reader.Position + message.MessageSize > eof)
         {
@@ -32,7 +32,7 @@ public static class MessageSerializerV1
 
         message.Crc = reader.ReadUInt32BigEndian();
 
-        int crcStart = reader.Position;
+        var crcStart = reader.Position;
         message.Magic = reader.ReadByte();
         if (message.Magic != 1)
         {
@@ -41,11 +41,11 @@ public static class MessageSerializerV1
         message.Attributes = reader.ReadByte();
         message.Timestamp = reader.ReadInt64BigEndian();
 
-        int keyLength = reader.ReadInt32BigEndian();
+        var keyLength = reader.ReadInt32BigEndian();
         message.Key = keyLength == -1
             ? null
             : reader.ReadMemory(keyLength);
-        int valueLength = reader.ReadInt32BigEndian();
+        var valueLength = reader.ReadInt32BigEndian();
         message.Value = valueLength == -1
             ? null
             : reader.ReadMemory(valueLength);
@@ -56,7 +56,7 @@ public static class MessageSerializerV1
             ChecksumValidator.ValidateCrc32(message.Crc, reader.Buffer, (int)crcStart, crcDataLength);
         }
 
-        int actualMessageSize = reader.Position - messageStart;
+        var actualMessageSize = reader.Position - messageStart;
         if (actualMessageSize != message.MessageSize)
         {
             throw new DeserializationException($"Expected message size was {message.MessageSize}, but got {actualMessageSize}.");

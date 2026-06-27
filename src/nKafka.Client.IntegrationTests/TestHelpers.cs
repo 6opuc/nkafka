@@ -19,7 +19,10 @@ public static class TestHelpers
     public static TlsConfig? CreateTlsConfig(string protocol)
     {
         if (protocol != "SASL_SSL")
+        {
             return null;
+        }
+
         return new TlsConfig(SslCaCertPath);
     }
 
@@ -67,7 +70,7 @@ public static class TestHelpers
         TimeSpan? maxWaitTime = null,
         bool checkCrcs = false)
     {
-        string servers = protocol == "SASL_SSL"
+        var servers = protocol == "SASL_SSL"
             ? $"SASL_SSL://{BootstrapHost}:{SaslBootstrapPort}"
             : $"PLAINTEXT://{BootstrapHost}:{PlainTextBootstrapPort}";
 

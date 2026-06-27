@@ -29,18 +29,18 @@ var scenario = benchmarks.Scenarios
 
 var stopwatch = Stopwatch.StartNew();
 
-int threads = 1;
-int iterationsPerThread = 3;
+var threads = 1;
+var iterationsPerThread = 3;
 var tasks = new List<Task>(threads);
-for (int t = 0; t < tasks.Capacity; t++)
+for (var t = 0; t < tasks.Capacity; t++)
 {
-    int t1 = t;
+    var t1 = t;
     tasks.Add(Task.Run(
         async () =>
         {
-            for (int i = 0; i < iterationsPerThread; i++)
+            for (var i = 0; i < iterationsPerThread; i++)
             {
-                string id = $"[{t1}:{i}]";
+                var id = $"[{t1}:{i}]";
                 var stopwatchInner = Stopwatch.StartNew();
                 //await ConfluentConsumeBytesTest.Test(scenario);
                 //await NKafkaFetchBytesSeqSinglePartTest.Test(scenario, "SASL_SSL");

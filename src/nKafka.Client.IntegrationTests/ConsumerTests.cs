@@ -88,7 +88,7 @@ public class ConsumerTests
         await consumer.JoinGroupAsync(CancellationToken.None);
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        int consumed = 0;
+        var consumed = 0;
 
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
@@ -101,7 +101,9 @@ public class ConsumerTests
             }
 
             if (consumed >= 1000)
+            {
                 break;
+            }
         }
 
         stopwatch.Stop();
@@ -131,7 +133,7 @@ public class ConsumerTests
         await consumer.JoinGroupAsync(CancellationToken.None);
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        int consumed = 0;
+        var consumed = 0;
 
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
@@ -144,7 +146,9 @@ public class ConsumerTests
             }
 
             if (consumed >= 1000)
+            {
                 break;
+            }
         }
 
         stopwatch.Stop();
@@ -175,9 +179,11 @@ public class ConsumerTests
     public async Task ConsumeBatchAsync_WithRebalance_ShouldHandleGracefully(string protocol)
     {
         if (protocol == "SASL_SSL")
+        {
             TestHelpers.ValidateSslInfrastructure();
+        }
 
-        string groupId = $"rebalance-group-{Guid.NewGuid()}";
+        var groupId = $"rebalance-group-{Guid.NewGuid()}";
         var offsetStorage = new FixedOffsetStorage(0);
         var deserializer = new DummyDeserializer();
 
@@ -202,10 +208,10 @@ public class ConsumerTests
         long consumedByB = 0;
         Exception? exceptionOnA = null;
         Exception? exceptionOnB = null;
-        int generationAtRebalance = 0;
+        var generationAtRebalance = 0;
         var rebalanceDetected = new TaskCompletionSource<bool>();
         var stopA = new CancellationTokenSource();
-        int prevGen = consumerA.GenerationId;
+        var prevGen = consumerA.GenerationId;
 
         // Consumer A consumes continuously for test duration, detecting generation change
         var consumeTaskA = Task.Run(async () =>
@@ -220,7 +226,7 @@ public class ConsumerTests
                         Interlocked.Increment(ref consumedByA);
                     }
 
-                    int currentGen = consumerA.GenerationId;
+                    var currentGen = consumerA.GenerationId;
                     if (currentGen != prevGen && Interlocked.CompareExchange(ref generationAtRebalance, currentGen, 0) == 0)
                     {
                         rebalanceDetected.SetResult(true);
@@ -255,7 +261,7 @@ public class ConsumerTests
         // Consumer B consumes 5 batches after rebalance
         var consumeTaskB = Task.Run(async () =>
         {
-            for (int i = 0; i < 5 && exceptionOnB == null; i++)
+            for (var i = 0; i < 5 && exceptionOnB == null; i++)
             {
                 try
                 {

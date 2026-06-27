@@ -13,9 +13,12 @@ var scenarios = new FetchBenchmarks().Scenarios
 var missing = new List<string>();
 foreach (var scenario in scenarios)
 {
-    bool existsSsl = await TopicExists(scenario, "SASL_SSL");
-    bool existsPlaintext = await TopicExists(scenario, "PLAINTEXT");
-    if (!existsSsl && !existsPlaintext) missing.Add(scenario.TopicName);
+    var existsSsl = await TopicExists(scenario, "SASL_SSL");
+    var existsPlaintext = await TopicExists(scenario, "PLAINTEXT");
+    if (!existsSsl && !existsPlaintext)
+    {
+        missing.Add(scenario.TopicName);
+    }
 }
 
 if (missing.Count > 0)

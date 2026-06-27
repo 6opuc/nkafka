@@ -113,8 +113,11 @@ public class BufferReaderTests
     [Test]
     public void ReadInt32BigEndian_ReadsNegativeValue()
     {
-        for (int i = 0; i < 4; i++)
+        for (var i = 0; i < 4; i++)
+        {
             _buffer[i] = 0xFF;
+        }
+
         _reader = new BufferReader(_buffer);
         _reader.ReadInt32BigEndian().Should().Be(-1);
     }
@@ -122,8 +125,11 @@ public class BufferReaderTests
     [Test]
     public void ReadInt32BigEndian_ReadsZero()
     {
-        for (int i = 0; i < 4; i++)
+        for (var i = 0; i < 4; i++)
+        {
             _buffer[i] = 0;
+        }
+
         _reader = new BufferReader(_buffer);
         _reader.ReadInt32BigEndian().Should().Be(0);
     }
@@ -161,8 +167,11 @@ public class BufferReaderTests
     [Test]
     public void ReadInt64BigEndian_ReadsNegativeValue()
     {
-        for (int i = 0; i < 8; i++)
+        for (var i = 0; i < 8; i++)
+        {
             _buffer[i] = 0xFF;
+        }
+
         _reader = new BufferReader(_buffer);
         _reader.ReadInt64BigEndian().Should().Be(-1);
     }
@@ -170,8 +179,11 @@ public class BufferReaderTests
     [Test]
     public void ReadUInt64_ReadsZero()
     {
-        for (int i = 0; i < 8; i++)
+        for (var i = 0; i < 8; i++)
+        {
             _buffer[i] = 0;
+        }
+
         _reader = new BufferReader(_buffer);
         _reader.ReadInt64BigEndian().Should().Be(0);
     }
@@ -180,8 +192,11 @@ public class BufferReaderTests
     public void ReadUInt64_ReadsMaxValue()
     {
         _buffer[0] = 0x7F;
-        for (int i = 1; i < 8; i++)
+        for (var i = 1; i < 8; i++)
+        {
             _buffer[i] = 0xFF;
+        }
+
         _reader = new BufferReader(_buffer);
         _reader.ReadInt64BigEndian().Should().Be(long.MaxValue);
     }
@@ -205,8 +220,11 @@ public class BufferReaderTests
     [Test]
     public void ReadUInt32BigEndian_ReadsZero()
     {
-        for (int i = 0; i < 4; i++)
+        for (var i = 0; i < 4; i++)
+        {
             _buffer[i] = 0;
+        }
+
         _reader = new BufferReader(_buffer);
         _reader.ReadUInt32BigEndian().Should().Be(0);
     }
@@ -214,8 +232,11 @@ public class BufferReaderTests
     [Test]
     public void ReadUInt32BigEndian_ReadsMaxValue()
     {
-        for (int i = 0; i < 4; i++)
+        for (var i = 0; i < 4; i++)
+        {
             _buffer[i] = 0xFF;
+        }
+
         _reader = new BufferReader(_buffer);
         _reader.ReadUInt32BigEndian().Should().Be(uint.MaxValue);
     }
@@ -228,36 +249,39 @@ public class BufferReaderTests
     [Test]
     public void ReadFloat_ReadsPositiveValue()
     {
-        int intBits = BitConverter.SingleToInt32Bits(3.14f);
+        var intBits = BitConverter.SingleToInt32Bits(3.14f);
         _buffer[0] = (byte)(intBits >> 24);
         _buffer[1] = (byte)(intBits >> 16);
         _buffer[2] = (byte)(intBits >> 8);
         _buffer[3] = (byte)intBits;
         _reader = new BufferReader(_buffer);
-        float result = BitConverter.Int32BitsToSingle(_reader.ReadInt32BigEndian());
+        var result = BitConverter.Int32BitsToSingle(_reader.ReadInt32BigEndian());
         result.Should().BeApproximately(3.14f, 0.0001f);
     }
 
     [Test]
     public void ReadFloat_ReadsZero()
     {
-        for (int i = 0; i < 4; i++)
+        for (var i = 0; i < 4; i++)
+        {
             _buffer[i] = 0;
+        }
+
         _reader = new BufferReader(_buffer);
-        float result = BitConverter.Int32BitsToSingle(_reader.ReadInt32BigEndian());
+        var result = BitConverter.Int32BitsToSingle(_reader.ReadInt32BigEndian());
         result.Should().Be(0.0f);
     }
 
     [Test]
     public void ReadFloat_ReadsNegativeValue()
     {
-        int intBits = BitConverter.SingleToInt32Bits(-1.5f);
+        var intBits = BitConverter.SingleToInt32Bits(-1.5f);
         _buffer[0] = (byte)(intBits >> 24);
         _buffer[1] = (byte)(intBits >> 16);
         _buffer[2] = (byte)(intBits >> 8);
         _buffer[3] = (byte)intBits;
         _reader = new BufferReader(_buffer);
-        float result = BitConverter.Int32BitsToSingle(_reader.ReadInt32BigEndian());
+        var result = BitConverter.Int32BitsToSingle(_reader.ReadInt32BigEndian());
         result.Should().BeApproximately(-1.5f, 0.0001f);
     }
 
@@ -276,8 +300,11 @@ public class BufferReaderTests
     [Test]
     public void ReadDoubleBigEndian_ReadsZero()
     {
-        for (int i = 0; i < 8; i++)
+        for (var i = 0; i < 8; i++)
+        {
             _buffer[i] = 0;
+        }
+
         _reader = new BufferReader(_buffer);
         _reader.ReadDoubleBigEndian().Should().Be(0.0);
     }
@@ -498,7 +525,7 @@ public class BufferReaderTests
     [Test]
     public void ReadString_ReadsSimpleString()
     {
-        byte[] bytes = Encoding.UTF8.GetBytes("Hello");
+        var bytes = Encoding.UTF8.GetBytes("Hello");
         _buffer[0] = 0;
         _buffer[1] = (byte)bytes.Length;
         bytes.CopyTo(_buffer, 2);
@@ -568,8 +595,11 @@ public class BufferReaderTests
     [Test]
     public void ReadGuid_ReadsEmptyGuid()
     {
-        for (int i = 0; i < 16; i++)
+        for (var i = 0; i < 16; i++)
+        {
             _buffer[i] = 0;
+        }
+
         _reader = new BufferReader(_buffer);
         _reader.ReadGuid().Should().Be(Guid.Empty);
     }
@@ -597,7 +627,7 @@ public class BufferReaderTests
     public void Remaining_ReturnsCorrectValue()
     {
         _reader = new BufferReader(_buffer);
-        int initialRemaining = _reader.Remaining;
+        var initialRemaining = _reader.Remaining;
         _reader.ReadByte();
         _reader.Remaining.Should().Be(initialRemaining - 1);
     }

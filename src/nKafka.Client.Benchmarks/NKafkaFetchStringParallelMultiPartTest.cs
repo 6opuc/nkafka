@@ -14,7 +14,7 @@ public static class NKafkaFetchStringParallelMultiPartTest
         var topicMetadata = metadata.Message.Topics![scenario.TopicName];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
-        int recordCount = 0;
+        var recordCount = 0;
         var tasks = new List<Task>();
         foreach (var group in partitions)
         {
@@ -68,7 +68,7 @@ public static class NKafkaFetchStringParallelMultiPartTest
                 while (true)
                 {
                     using var response = await connection.SendAsync(request, CancellationToken.None);
-                    int responseRecordCount = 0;
+                    var responseRecordCount = 0;
                     foreach (var topicResponse in response.Message.Responses!)
                     {
                         var topicRequest = request.Topics.FirstOrDefault(x =>
@@ -88,7 +88,7 @@ public static class NKafkaFetchStringParallelMultiPartTest
                                 continue;
                             }
 
-                            long? lastOffset = partitionResponse.Records?.LastOffset;
+                            var lastOffset = partitionResponse.Records?.LastOffset;
                             if (lastOffset != null)
                             {
                                 partitionRequest.FetchOffset = lastOffset + 1;
@@ -101,7 +101,7 @@ public static class NKafkaFetchStringParallelMultiPartTest
                                     if (record.Value != null &&
                                         record.Value.Value.Length > 0)
                                     {
-                                        string value = Encoding.UTF8.GetString(record.Value.Value.Span);
+                                        var value = Encoding.UTF8.GetString(record.Value.Value.Span);
                                         if (!string.IsNullOrEmpty(value))
                                         {
                                             responseRecordCount += 1;

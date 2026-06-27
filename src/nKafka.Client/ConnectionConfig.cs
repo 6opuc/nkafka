@@ -31,7 +31,7 @@ public sealed record ConnectionConfig(
         {
             throw new ArgumentException($"Invalid connection string '{connectionString}'");
         }
-        if (!int.TryParse(match.Groups["port"].Value, out int port))
+        if (!int.TryParse(match.Groups["port"].Value, out var port))
         {
             throw new ArgumentException($"Invalid port '{match.Groups["port"].Value}'");
         }

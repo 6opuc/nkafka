@@ -43,7 +43,7 @@ await using var consumer = new Consumer<Memory<byte>?>(
     loggerFactory);
 await consumer.JoinGroupAsync(CancellationToken.None);
 
-int counter = 0;
+var counter = 0;
 while (true)
 {
     var consumeResult = await consumer.ConsumeAsync(CancellationToken.None);

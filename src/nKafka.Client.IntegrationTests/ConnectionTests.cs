@@ -73,7 +73,7 @@ public class ConnectionTests
     public async Task SendAsync_FindCoordinatorRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         await using var connection = await OpenConnection(protocol);
-        string consumerGroupId = Guid.NewGuid().ToString();
+        var consumerGroupId = Guid.NewGuid().ToString();
         var request = new FindCoordinatorRequest
         {
             FixedVersion = apiVersion,
@@ -164,7 +164,7 @@ public class ConnectionTests
     [TestCaseSource(nameof(JoinGroupRequestTestCases))]
     public async Task SendAsync_JoinGroupRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
-        string consumerGroupId = Guid.NewGuid().ToString();
+        var consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId, protocol);
         using var response = await JoinGroupAsync(connection, apiVersion, consumerGroupId);
 
@@ -241,7 +241,7 @@ public class ConnectionTests
     [TestCaseSource(nameof(LeaveGroupRequestTestCases))]
     public async Task SendAsync_LeaveGroupRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
-        string consumerGroupId = Guid.NewGuid().ToString();
+        var consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId, protocol);
         using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var request = new LeaveGroupRequest
@@ -272,7 +272,7 @@ public class ConnectionTests
     [TestCaseSource(nameof(SyncGroupRequestTestCases))]
     public async Task SendAsync_SyncGroupRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
-        string consumerGroupId = Guid.NewGuid().ToString();
+        var consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId, protocol);
         using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var requestedAssignment = new ConsumerProtocolAssignment
@@ -321,7 +321,7 @@ public class ConnectionTests
     [TestCaseSource(nameof(HeartbeatRequestTestCases))]
     public async Task SendAsync_HeartbeatRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
-        string consumerGroupId = Guid.NewGuid().ToString();
+        var consumerGroupId = Guid.NewGuid().ToString();
         await using var connection = await OpenCoordinatorConnection(consumerGroupId, protocol);
         using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var requestClient = new HeartbeatRequest
@@ -426,7 +426,7 @@ public class ConnectionTests
         var topicMetadata = metadata.Message.Topics!["test_p12_m1M_s4B"];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
-        int recordCount = 0;
+        var recordCount = 0;
         foreach (var group in partitions)
         {
             var broker = metadata.Message.Brokers![group.Key];
@@ -485,13 +485,13 @@ public class ConnectionTests
                     };
                     using var response = await connection.SendAsync(request, CancellationToken.None);
 
-                    long lastOffset = response.Message
+                    var lastOffset = response.Message
                         .Responses?.LastOrDefault()?
                         .Partitions?.LastOrDefault()?
                         .Records?.LastOffset ?? -1;
                     offset = lastOffset + 1;
 
-                    int responseRecordCount = response.Message.Responses!
+                    var responseRecordCount = response.Message.Responses!
                         .SelectMany(x => x.Partitions!)
                         .Sum(x => x.Records!.RecordCount);
                     if (responseRecordCount == 0)
@@ -515,7 +515,7 @@ public class ConnectionTests
         var topicMetadata = metadata.Message.Topics!["test_p12_m1M_s4B"];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
-        int recordCount = 0;
+        var recordCount = 0;
         foreach (var group in partitions)
         {
             var broker = metadata.Message.Brokers![group.Key];
@@ -592,7 +592,7 @@ public class ConnectionTests
                             continue;
                         }
 
-                        long? lastOffset = partitionResponse.Records?.LastOffset;
+                        var lastOffset = partitionResponse.Records?.LastOffset;
                         if (lastOffset != null)
                         {
                             partitionRequest.FetchOffset = lastOffset + 1;
@@ -600,7 +600,7 @@ public class ConnectionTests
                     }
                 }
 
-                int responseRecordCount = response.Message.Responses!
+                var responseRecordCount = response.Message.Responses!
                     .SelectMany(x => x.Partitions!)
                     .Sum(x => x.Records!.RecordCount);
                 if (responseRecordCount == 0)
@@ -821,7 +821,7 @@ public class ConnectionTests
 
         using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
         var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        int leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
+        var leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
         var leader = metadataResponse.Message.Brokers![leaderId];
 
         // Connect directly to partition 0 leader
@@ -909,7 +909,7 @@ public class ConnectionTests
 
         using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
         var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        int leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
+        var leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
         var leader = metadataResponse.Message.Brokers![leaderId];
 
         // Connect directly to partition 0 leader with short timeout
@@ -1086,7 +1086,7 @@ public class ConnectionTests
 
         using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
         var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        int leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
+        var leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
         var leader = metadataResponse.Message.Brokers![leaderId];
 
         // Client timeout is 30s (default), broker MaxWaitMs is only 2s
@@ -1145,7 +1145,7 @@ public class ConnectionTests
         Console.WriteLine($"Fetch completed in {stopwatch.ElapsedMilliseconds}ms");
         Console.WriteLine($"Records: {response.Message.Responses?.FirstOrDefault()?.Partitions?.FirstOrDefault()?.Records?.RecordCount ?? 0}");
 
-        long elapsedMs = stopwatch.ElapsedMilliseconds;
+        var elapsedMs = stopwatch.ElapsedMilliseconds;
         elapsedMs.Should().BeGreaterThanOrEqualTo(1500); // Waited at least a bit for MaxWaitMs
         elapsedMs.Should().BeLessThan(10000); // But responded well before 30s timeout
 
@@ -1184,7 +1184,7 @@ public class ConnectionTests
 
         using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
         var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        int leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
+        var leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
         var leader = metadataResponse.Message.Brokers![leaderId];
 
         var config = new ConnectionConfig(
@@ -1236,9 +1236,9 @@ public class ConnectionTests
         };
 
         using var consumeAllResponse = await connection.SendAsync(consumeAll, CancellationToken.None);
-        long? highWatermark = consumeAllResponse.Message.Responses!.FirstOrDefault()?.Partitions?.FirstOrDefault()?.HighWatermark;
+        var highWatermark = consumeAllResponse.Message.Responses!.FirstOrDefault()?.Partitions?.FirstOrDefault()?.HighWatermark;
         highWatermark.Should().NotBeNull();
-        long watermark = highWatermark!.Value;
+        var watermark = highWatermark!.Value;
 
         // Now fetch from high watermark with MaxWaitMs=0, MinBytes=1MB (no data available)
         var fetchRequest = new FetchRequest
@@ -1283,7 +1283,7 @@ public class ConnectionTests
         stopwatch.Stop();
 
         // With MaxWaitMs=0 and no data, broker should respond immediately with 0 records
-        long elapsedMs = stopwatch.ElapsedMilliseconds;
+        var elapsedMs = stopwatch.ElapsedMilliseconds;
         elapsedMs.Should().BeLessThan(500, "Broker should respond immediately with MaxWaitMs=0");
 
         // Should have empty response
@@ -1322,7 +1322,7 @@ public class ConnectionTests
 
         using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
         var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        int leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
+        var leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
         var leader = metadataResponse.Message.Brokers![leaderId];
 
         var config = new ConnectionConfig(
@@ -1379,11 +1379,11 @@ public class ConnectionTests
         stopwatch.Stop();
 
         // Broker should respond immediately since partition has > 100KB
-        long elapsedMs = stopwatch.ElapsedMilliseconds;
+        var elapsedMs = stopwatch.ElapsedMilliseconds;
         elapsedMs.Should().BeLessThan(500, "Broker should respond immediately when MinBytes is met");
 
         // Should have received data
-        int records = response.Message.Responses?.FirstOrDefault()?.Partitions?.FirstOrDefault()?.Records?.RecordCount ?? 0;
+        var records = response.Message.Responses?.FirstOrDefault()?.Partitions?.FirstOrDefault()?.Records?.RecordCount ?? 0;
         records.Should().BeGreaterThan(0);
         response.Message.Responses!.FirstOrDefault()?.Partitions!.FirstOrDefault()?.HighWatermark.Should().BeGreaterThan(0);
     }

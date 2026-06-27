@@ -7,14 +7,14 @@ public static class FieldDefinitionExtensions
 {
     public static string ToPropertyDeclarations(this IList<FieldDefinition> fields)
     {
-        string propertyDeclarations = string.Join("\n", fields.Select(x => x.ToPropertyDeclaration()));
+        var propertyDeclarations = string.Join("\n", fields.Select(x => x.ToPropertyDeclaration()));
         return propertyDeclarations;
     }
 
     public static string ToPropertyDeclaration(this FieldDefinition field)
     {
-        string comment = GetPropertyComment(field);
-        string type = GetFieldPropertyType(field);
+        var comment = GetPropertyComment(field);
+        var type = GetFieldPropertyType(field);
         return $"{comment}\npublic {type} {field.Name} {{ get; set; }}";
     }
 
@@ -70,7 +70,7 @@ public static class FieldDefinitionExtensions
 
     public static string GetFieldPropertyType(this FieldDefinition field)
     {
-        string? type = GetFieldItemPropertyType(field);
+        var type = GetFieldItemPropertyType(field);
 
         if (field.IsCollection())
         {
@@ -78,7 +78,7 @@ public static class FieldDefinitionExtensions
             {
                 type = "string?";
             }
-            string? mapKeyPropertyType = field.GetMapKeyPropertyType();
+            var mapKeyPropertyType = field.GetMapKeyPropertyType();
             type = mapKeyPropertyType == null
                 ? $"IList<{type}>"
                 : $"IDictionary<{mapKeyPropertyType}, {type}>";
@@ -135,7 +135,7 @@ public static class FieldDefinitionExtensions
 
     private static string GetPropertyType(FieldDefinition field)
     {
-        string? type = field.GetFieldItemType();
+        var type = field.GetFieldItemType();
         if (type == "bytes")
         {
             if (field.Name == "Assignment")
@@ -166,13 +166,13 @@ public static class FieldDefinitionExtensions
     public static string ToNestedTypeDeclarations(this IList<FieldDefinition> fields)
     {
         var nestedTypes = fields.Where(x => x.Fields.Any());
-        string nestedTypeDeclarations = string.Join("\n", nestedTypes.Select(x => x.ToNestedTypeDeclaration()));
+        var nestedTypeDeclarations = string.Join("\n", nestedTypes.Select(x => x.ToNestedTypeDeclaration()));
         return nestedTypeDeclarations;
     }
 
     public static string ToNestedTypeDeclaration(this FieldDefinition field)
     {
-        string? nestedTypeName = field.GetFieldItemType();
+        var nestedTypeName = field.GetFieldItemType();
 
         return $$"""
                  public class {{nestedTypeName}}
@@ -198,7 +198,7 @@ public static class FieldDefinitionExtensions
                 continue;
             }
 
-            string fieldStatements = field.ToSerializationStatements(apiKey, version, flexible);
+            var fieldStatements = field.ToSerializationStatements(apiKey, version, flexible);
             if (!string.IsNullOrEmpty(fieldStatements))
             {
                 source.AppendLine(fieldStatements);
@@ -278,7 +278,7 @@ public static class FieldDefinitionExtensions
             flexible = field.FlexibleVersions.Includes(version);
         }
 
-        string? propertyType = field.GetFieldItemPropertyType();
+        var propertyType = field.GetFieldItemPropertyType();
         if (!field.IsCollection())
         {
             return GetSerializationStatements(
@@ -290,7 +290,7 @@ public static class FieldDefinitionExtensions
                 writer);
         }
 
-        string lengthSerialization = flexible
+        var lengthSerialization = flexible
             ? $"writer.WriteLength(message.{field.Name}?.Count ?? 0);"
             : $"writer.WriteInt(message.{field.Name}?.Count ?? -1);";
         if (!field.IsMap())
@@ -365,7 +365,7 @@ public static class FieldDefinitionExtensions
 
         if (propertyType == "Memory<byte>")
         {
-            string lengthSerialization = flexible
+            var lengthSerialization = flexible
                 ? $"{writer}.WriteLength({propertyPath}?.Length ?? 0);"
                 : $"{writer}.WriteInt({propertyPath}?.Length ?? -1);";
             return $$"""
@@ -385,7 +385,7 @@ public static class FieldDefinitionExtensions
 
         if (propertyType == "RecordsContainer")
         {
-            string recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
+            var recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
             return $"RecordsContainerSerializer{recordsVersion}.Serialize(ref {writer}, {propertyPath}, context);";
         }
 
@@ -432,7 +432,7 @@ public static class FieldDefinitionExtensions
 
         foreach (var child in fields)
         {
-            string childSerializer = child.ToNestedSerializerDeclaration(apiKey, version, flexible);
+            var childSerializer = child.ToNestedSerializerDeclaration(apiKey, version, flexible);
             if (!string.IsNullOrWhiteSpace(childSerializer))
             {
                 source.AppendLine(childSerializer);
@@ -453,7 +453,7 @@ public static class FieldDefinitionExtensions
             return String.Empty;
         }
 
-        string? nestedTypeName = field.GetFieldItemType();
+        var nestedTypeName = field.GetFieldItemType();
         return field.Fields.ToNestedSerializerDeclarations(apiKey, version, flexible, nestedTypeName!);
     }
 
@@ -482,7 +482,7 @@ public static class FieldDefinitionExtensions
                 continue;
             }
 
-            string fieldStatements = field.ToDeserializationStatements(apiKey, version, flexible, reader);
+            var fieldStatements = field.ToDeserializationStatements(apiKey, version, flexible, reader);
             if (!string.IsNullOrEmpty(fieldStatements))
             {
                 source.AppendLine(fieldStatements);
@@ -562,7 +562,7 @@ public static class FieldDefinitionExtensions
             flexible = field.FlexibleVersions.Includes(version);
         }
 
-        string? propertyType = field.GetFieldItemPropertyType();
+        var propertyType = field.GetFieldItemPropertyType();
         if (!field.IsCollection())
         {
             return GetDeserializationStatements(
@@ -575,8 +575,8 @@ public static class FieldDefinitionExtensions
         }
 
 
-        string itemsCount = $"{field.Name.FirstCharToLowerCase()}Count";
-        string lengthDeserialization = flexible
+        var itemsCount = $"{field.Name.FirstCharToLowerCase()}Count";
+        var lengthDeserialization = flexible
             ? $"var {itemsCount} = reader.ReadLength();"
             : $"var {itemsCount} = reader.ReadInt32BigEndian();";
         if (!field.IsMap())
@@ -594,9 +594,9 @@ public static class FieldDefinitionExtensions
                       """;
         }
 
-        string? keyType = field.GetMapKeyPropertyType();
-        string? keyName = field.GetMapKeyPropertyName();
-        string mapIndex = keyType == "string"
+        var keyType = field.GetMapKeyPropertyType();
+        var keyName = field.GetMapKeyPropertyName();
+        var mapIndex = keyType == "string"
             ? "key"
             : "key.Value";
         return $$"""
@@ -671,8 +671,8 @@ public static class FieldDefinitionExtensions
 
         if (propertyType == "Memory<byte>")
         {
-            string lengthVariableName = $"{propertyPath.Replace(".", "")}Length";
-            string lengthDeserialization = flexible
+            var lengthVariableName = $"{propertyPath.Replace(".", "")}Length";
+            var lengthDeserialization = flexible
                 ? $"var {lengthVariableName} = reader.ReadLength();"
                 : $"var {lengthVariableName} = reader.ReadInt32BigEndian();";
             return $$"""
@@ -695,7 +695,7 @@ public static class FieldDefinitionExtensions
 
         if (propertyType == "RecordsContainer")
         {
-            string recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
+            var recordsVersion = RecordsVersionHelper.GetRecordsVersion(apiKey, version);
             return $"{propertyPath} = RecordsContainerSerializer{recordsVersion}.Deserialize(ref reader, context);";
         }
 

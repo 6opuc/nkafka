@@ -13,7 +13,7 @@ public static class NKafkaFetchBytesSeqSinglePartTest
         var topicMetadata = metadata.Message.Topics![scenario.TopicName];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
-        int recordCount = 0;
+        var recordCount = 0;
         foreach (var group in partitions)
         {
             var broker = metadata.Message.Brokers![group.Key];
@@ -67,13 +67,13 @@ public static class NKafkaFetchBytesSeqSinglePartTest
                     };
                     using var response = await connection.SendAsync(request, CancellationToken.None);
 
-                    long lastOffset = response.Message
+                    var lastOffset = response.Message
                         .Responses?.LastOrDefault()?
                         .Partitions?.LastOrDefault()?
                         .Records?.LastOffset ?? -1;
                     offset = lastOffset + 1;
 
-                    int responseRecordCount = response.Message.Responses!
+                    var responseRecordCount = response.Message.Responses!
                         .SelectMany(x => x.Partitions!)
                         .Sum(x => x.Records!.RecordCount);
                     if (responseRecordCount == 0)

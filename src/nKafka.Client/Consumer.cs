@@ -202,10 +202,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     {
         _logger.LogInformation("Opening bootstrap connection.");
 
-        string[] connectionStrings = _config.BootstrapServers.Split(
+        var connectionStrings = _config.BootstrapServers.Split(
             ",",
             StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        foreach (string connectionString in connectionStrings)
+        foreach (var connectionString in connectionStrings)
         {
             var connectionConfig = ConnectionConfig.FromConnectionString(
                 connectionString,
@@ -395,7 +395,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         var response = await connection.SendAsync(request, cancellationToken);
 
-        foreach (string topicName in _topics)
+        foreach (var topicName in _topics)
         {
             if (!response.Message.Topics!.TryGetValue(topicName, out var topic))
             {
@@ -501,7 +501,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 }
             })
             .ToDictionary(x => x.MemberId!);
-        foreach (string topicName in _topics)
+        foreach (var topicName in _topics)
         {
             if (!_topicsMetadata!.TryGetValue(topicName, out var topic))
             {
@@ -516,7 +516,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
             foreach (var partition in topic.Partitions!)
             {
-                int memberIndex = partition.PartitionIndex!.Value % members.Count;
+                var memberIndex = partition.PartitionIndex!.Value % members.Count;
                 var member = members[memberIndex];
                 var assignment = assignments[member.MemberId];
                 if (!assignment.Assignment!.AssignedPartitions!.TryGetValue(topicName, out var topicPartition))
@@ -566,7 +566,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         {
             context.Append(topic.Value.Topic);
             context.Append("[");
-            foreach (int partition in topic.Value.Partitions!)
+            foreach (var partition in topic.Value.Partitions!)
             {
                 context.Append(partition);
                 context.Append(",");
@@ -661,7 +661,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 continue;
             }
 
-            foreach (int partition in topicAssignment.Value.Partitions!)
+            foreach (var partition in topicAssignment.Value.Partitions!)
             {
                 var partitionMetadata = topicMetadata!.Partitions?.FirstOrDefault(x => x.PartitionIndex == partition);
                 if (partitionMetadata == null)
@@ -669,7 +669,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     continue;
                 }
 
-                int nodeId = partitionMetadata.LeaderId!.Value;
+                var nodeId = partitionMetadata.LeaderId!.Value;
                 if (!_connections.TryGetValue(nodeId, out var connection))
                 {
                     _logger.LogWarning("Broker node {nodeId} not found in connections, skipping partition {topic}/{partition}.", nodeId, topicAssignment.Key, partition);
@@ -678,12 +678,12 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
                 if (!sessionManagers.TryGetValue(nodeId, out var sessionManager))
                 {
-                    bool useSessions = connection.SupportsApiKeyVersion(ApiKey.Fetch, 4);
+                    var useSessions = connection.SupportsApiKeyVersion(ApiKey.Fetch, 4);
                     sessionManager = new FetchSessionManager(0, 0, useSessions);
                     sessionManagers[nodeId] = sessionManager;
                 }
 
-                long offset = await _offsetStorage.GetAsync(
+                var offset = await _offsetStorage.GetAsync(
                     connection,
                     _config.GroupId,
                     topicAssignment.Key,
@@ -713,7 +713,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         _fetchTasks = new List<Task>(sessionManagers.Count);
         foreach (var pair in sessionManagers)
         {
-            int nodeId = pair.Key;
+            var nodeId = pair.Key;
             var sessionManager = pair.Value;
             var topicMap = nodeTopics.GetValueOrDefault(nodeId, new Dictionary<string, List<(int Partition, long Offset)>>());
             var fetchTask = Task.Run(() => FetchLoopAsync(nodeId, topicMap, sessionManager, cancellationToken), cancellationToken);
@@ -738,8 +738,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         using (_logger.BeginScope(context.ToString()))
         {
             _logger.LogInformation("Fetching started.");
-            int consecutiveErrors = 0;
-            bool firstRequest = true;
+            var consecutiveErrors = 0;
+            var firstRequest = true;
             if (!_connections.TryGetValue(nodeId, out var connection))
             {
                 _logger.LogError("Broker node {nodeId} not found in connections during fetch loop.", nodeId);
@@ -755,7 +755,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     var fetchRequest = CreateFetchRequest(sessionManager, topicMap, firstRequest);
                     firstRequest = false;
 
-                    int fetchGenerationId = _groupMembership?.GenerationId ?? 0;
+                    var fetchGenerationId = _groupMembership?.GenerationId ?? 0;
                     var response = await connection.SendAsync(fetchRequest, cancellationToken);
                     _fetchActivity?.AddTag("nKafka.phase", "fetch");
 
@@ -797,14 +797,14 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
                         foreach (var topicResponse in response.Message.Responses!)
                         {
-                            string? topicName = ResolveTopicName(topicResponse.Topic, topicResponse.TopicId);
+                            var topicName = ResolveTopicName(topicResponse.Topic, topicResponse.TopicId);
 
                             if (string.IsNullOrEmpty(topicName) || !topicMap.TryGetValue(topicName, out var topicPartitions))
                             {
                                 continue;
                             }
 
-                            for (int pi = 0; pi < topicPartitions.Count; pi++)
+                            for (var pi = 0; pi < topicPartitions.Count; pi++)
                             {
                                 var partitionResponse = topicResponse.Partitions!.FirstOrDefault(
                                     x => x.PartitionIndex == topicPartitions[pi].Partition);
@@ -819,7 +819,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                                     responseMessages += partitionResponse.Records.RecordCount;
                                 }
 
-                                long? lastOffset = partitionResponse.Records?.LastOffset;
+                                var lastOffset = partitionResponse.Records?.LastOffset;
                                 if (lastOffset.HasValue)
                                 {
                                     topicPartitions[pi] = (topicPartitions[pi].Partition, lastOffset.Value + 1);
@@ -888,7 +888,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             var fetchTopics = new List<FetchTopic>();
             foreach (var topicEntry in topicMap)
             {
-                string topicName = topicEntry.Key;
+                var topicName = topicEntry.Key;
                 if (!_topicsMetadata!.TryGetValue(topicName, out var topicMetadata))
                 {
                     continue;
@@ -1013,7 +1013,10 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     private async ValueTask EnsureEnumeratorAsync(CancellationToken cancellationToken)
     {
-        if (_messageDeserializeEnumerator != null) return;
+        if (_messageDeserializeEnumerator != null)
+        {
+            return;
+        }
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -1067,7 +1070,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         foreach (var response in _fetchResponse.Message.Responses!)
         {
-            string? topic = ResolveTopicName(response.Topic, response.TopicId);
+            var topic = ResolveTopicName(response.Topic, response.TopicId);
             if (topic == null)
             {
                 continue;
@@ -1098,9 +1101,16 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     private string? ResolveTopicName(string? name, Guid? topicId)
     {
-        if (!string.IsNullOrEmpty(name)) return name;
+        if (!string.IsNullOrEmpty(name))
+        {
+            return name;
+        }
+
         if (topicId != null && _topicsMetadataById!.TryGetValue(topicId.Value, out var metadata))
+        {
             return metadata.Name;
+        }
+
         return null;
     }
 
@@ -1309,7 +1319,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
         public void Dispose()
         {
-            if (_disposed) return;
+            if (_disposed)
+            {
+                return;
+            }
+
             _disposed = true;
             _enumerator?.Dispose();
             _enumerator = null;

@@ -26,7 +26,7 @@ public static class NKafkaConsumeBytesTest
                 NullLoggerFactory.Instance);
             await consumer.JoinGroupAsync(CancellationToken.None);
 
-            int counter = 0;
+            var counter = 0;
             while (counter < scenario.MessageCount)
             {
                 var consumeResult = await consumer.ConsumeAsync(CancellationToken.None);

@@ -10,9 +10,9 @@ public static class KafkaTestCases
     public static IEnumerable GetTestCases<TRequest>() where TRequest : IRequest, new()
     {
         var request = new TRequest();
-        foreach (string protocol in Protocols)
+        foreach (var protocol in Protocols)
         {
-            foreach (short version in request.ValidVersions)
+            foreach (var version in request.ValidVersions)
             {
                 yield return new object[] { protocol, version };
             }

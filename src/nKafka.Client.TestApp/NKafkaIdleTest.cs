@@ -69,7 +69,7 @@ public static class NKafkaIdleTest
             int partition,
             CancellationToken cancellationToken)
         {
-            if (!_offsets.TryGetValue((topic, partition), out long offset))
+            if (!_offsets.TryGetValue((topic, partition), out var offset))
             {
                 var fetchResponse = await connection.SendAsync(
                     new ListOffsetsRequest

@@ -25,7 +25,10 @@ public static class KafkaMetrics
 
     public static void RecordClientOperation(KafkaTelemetryContext context, string operationName, double durationMs, string? errorType = null)
     {
-        if (!Enabled) return;
+        if (!Enabled)
+        {
+            return;
+        }
 
         var tags = new TagList
         {
@@ -36,18 +39,40 @@ public static class KafkaMetrics
             { "messaging.client.id", context.ClientId },
         };
 
-        if (context.ServerAddress != null) tags.Add("server.address", context.ServerAddress);
-        if (context.ServerPort != null) tags.Add("server.port", context.ServerPort.Value);
-        if (context.TopicName != null) tags.Add("messaging.destination.name", context.TopicName);
-        if (context.PartitionId != null) tags.Add("messaging.destination.partition.id", context.PartitionId);
-        if (errorType != null) tags.Add("error.type", errorType);
+        if (context.ServerAddress != null)
+        {
+            tags.Add("server.address", context.ServerAddress);
+        }
+
+        if (context.ServerPort != null)
+        {
+            tags.Add("server.port", context.ServerPort.Value);
+        }
+
+        if (context.TopicName != null)
+        {
+            tags.Add("messaging.destination.name", context.TopicName);
+        }
+
+        if (context.PartitionId != null)
+        {
+            tags.Add("messaging.destination.partition.id", context.PartitionId);
+        }
+
+        if (errorType != null)
+        {
+            tags.Add("error.type", errorType);
+        }
 
         ClientOperationDurationMs.Record(durationMs, tags);
     }
 
     public static void RecordProcessDuration(KafkaTelemetryContext context, string operationName, double durationMs, string? errorType = null)
     {
-        if (!Enabled) return;
+        if (!Enabled)
+        {
+            return;
+        }
 
         var tags = new TagList
         {
@@ -58,18 +83,40 @@ public static class KafkaMetrics
             { "messaging.client.id", context.ClientId },
         };
 
-        if (context.ServerAddress != null) tags.Add("server.address", context.ServerAddress);
-        if (context.ServerPort != null) tags.Add("server.port", context.ServerPort.Value);
-        if (context.TopicName != null) tags.Add("messaging.destination.name", context.TopicName);
-        if (context.PartitionId != null) tags.Add("messaging.destination.partition.id", context.PartitionId);
-        if (errorType != null) tags.Add("error.type", errorType);
+        if (context.ServerAddress != null)
+        {
+            tags.Add("server.address", context.ServerAddress);
+        }
+
+        if (context.ServerPort != null)
+        {
+            tags.Add("server.port", context.ServerPort.Value);
+        }
+
+        if (context.TopicName != null)
+        {
+            tags.Add("messaging.destination.name", context.TopicName);
+        }
+
+        if (context.PartitionId != null)
+        {
+            tags.Add("messaging.destination.partition.id", context.PartitionId);
+        }
+
+        if (errorType != null)
+        {
+            tags.Add("error.type", errorType);
+        }
 
         ProcessDurationMs.Record(durationMs, tags);
     }
 
     public static void AddMessagesConsumed(KafkaTelemetryContext context, long count, string operationName = OperationReceive, string? errorType = null)
     {
-        if (!Enabled) return;
+        if (!Enabled)
+        {
+            return;
+        }
 
         var tags = new TagList
         {
@@ -80,11 +127,30 @@ public static class KafkaMetrics
             { "messaging.client.id", context.ClientId },
         };
 
-        if (context.ServerAddress != null) tags.Add("server.address", context.ServerAddress);
-        if (context.ServerPort != null) tags.Add("server.port", context.ServerPort.Value);
-        if (context.TopicName != null) tags.Add("messaging.destination.name", context.TopicName);
-        if (context.PartitionId != null) tags.Add("messaging.destination.partition.id", context.PartitionId);
-        if (errorType != null) tags.Add("error.type", errorType);
+        if (context.ServerAddress != null)
+        {
+            tags.Add("server.address", context.ServerAddress);
+        }
+
+        if (context.ServerPort != null)
+        {
+            tags.Add("server.port", context.ServerPort.Value);
+        }
+
+        if (context.TopicName != null)
+        {
+            tags.Add("messaging.destination.name", context.TopicName);
+        }
+
+        if (context.PartitionId != null)
+        {
+            tags.Add("messaging.destination.partition.id", context.PartitionId);
+        }
+
+        if (errorType != null)
+        {
+            tags.Add("error.type", errorType);
+        }
 
         MessagesConsumed.Add(count, tags);
     }
