@@ -22,7 +22,6 @@ public static class NKafkaIdleTest
             scenario.TopicName,
             "test-consumer-group",
             $"testapp-{DateTime.UtcNow.Ticks}",
-            "PLAINTEXT",
             "nKafka.Client.Benchmarks");
 
         await using var consumer = new Consumer<DummyStringMessage>(

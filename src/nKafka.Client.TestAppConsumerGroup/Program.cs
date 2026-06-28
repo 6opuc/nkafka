@@ -33,8 +33,7 @@ var consumerConfig = new ConsumerConfig(
     "test_p12_m40K_s10KB",
     $"testapp-{DateTime.UtcNow.Ticks}",
     "test-consumer-group",
-    Guid.NewGuid().ToString("N"),
-    "PLAINTEXT");
+    Guid.NewGuid().ToString("N"));
 
 await using var consumer = new Consumer<Memory<byte>?>(
     consumerConfig,

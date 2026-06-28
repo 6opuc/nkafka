@@ -11,8 +11,7 @@ public static class NKafkaBatchConsumeBytesTest
             scenario.TopicName,
             $"testapp-{DateTime.UtcNow.Date:yyyyMMdd}-{Guid.NewGuid():N}",
             $"test-consumer-group-{Guid.NewGuid():N}",
-            $"test-instance-{Guid.NewGuid():N}",
-            protocol)
+            $"test-instance-{Guid.NewGuid():N}")
             .ConfigureProtocol(protocol);
 
         await using var consumer = new Consumer<Memory<byte>?>(

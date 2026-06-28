@@ -11,8 +11,7 @@ public static class NKafkaConsumeBytesTest
             scenario.TopicName,
             $"testapp-{DateTime.UtcNow.Date:yyyyMMdd}-{Guid.NewGuid():N}",
             $"test-consumer-group-{Guid.NewGuid():N}",
-            $"test-instance-{Guid.NewGuid():N}",
-            protocol) with
+            $"test-instance-{Guid.NewGuid():N}") with
         { MaxWaitTime = TimeSpan.FromMilliseconds(100) })
             .ConfigureProtocol(protocol);
 

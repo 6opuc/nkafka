@@ -79,8 +79,7 @@ public static class TestHelpers
             topics,
             clientId,
             groupId,
-            instanceId,
-            protocol);
+            instanceId);
 
         config = config with
         {

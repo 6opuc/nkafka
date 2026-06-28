@@ -6,7 +6,6 @@ public sealed record ConsumerConfig(
     string ClientId,
     string GroupId,
     string InstanceId,
-    string Protocol,
     int ResponseBufferSize,
     int RequestBufferSize,
     TimeSpan SessionTimeout,
@@ -26,15 +25,13 @@ public sealed record ConsumerConfig(
         string topics,
         string clientId,
         string groupId,
-        string instanceId,
-        string protocol)
+        string instanceId)
         : this(
               BootstrapServers: bootstrapServers,
               Topics: topics,
               ClientId: clientId,
               GroupId: groupId,
               InstanceId: instanceId,
-              Protocol: protocol,
               ResponseBufferSize: 512 * 1024,
               RequestBufferSize: 512 * 1024,
               SessionTimeout: TimeSpan.FromSeconds(45),

@@ -17,8 +17,7 @@ public static class NKafkaConsumeStringTest
             scenario.TopicName,
             $"testapp-{DateTime.UtcNow.Date:yyyyMMdd}-{Guid.NewGuid():N}",
             $"test-consumer-group-{Guid.NewGuid():N}",
-            $"test-instance-{Guid.NewGuid():N}",
-            protocol)
+            $"test-instance-{Guid.NewGuid():N}")
             .ConfigureProtocol(protocol);
 
         await using var consumer = new Consumer<string>(

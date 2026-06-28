@@ -27,7 +27,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     private CancellationTokenSource? _stop;
     private Task? _heartbeatsBackgroundTask;
     private readonly Dictionary<int, IConnection> _connections = new();
-    private IConnection? _coordinatorConnection;
+    private Connection? _coordinatorConnection;
     private readonly string[] _topics;
     private GroupMembership? _groupMembership;
     private IDictionary<string, MetadataResponseTopic>? _topicsMetadata;
@@ -182,7 +182,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             }
 
             var connectionConfig = new ConnectionConfig(
-                _config.Protocol,
+                _coordinatorConnection!.Config.Protocol,
                 broker.Host!,
                 broker.Port!.Value,
                 _config.ClientId,
@@ -229,8 +229,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         throw new ConnectionException("No connection could be established.");
     }
 
-    private async ValueTask<IConnection> OpenCoordinatorConnectionAsync(
-        IConnection connection,
+    private async ValueTask<Connection> OpenCoordinatorConnectionAsync(
+        Connection connection,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("Opening coordinator connection.");
@@ -255,7 +255,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             }
 
             coordinatorConnectionConfig = new ConnectionConfig(
-                            _config.Protocol,
+                            connection.Config.Protocol,
                             response.Message.Host!,
                             response.Message.Port!.Value,
                             _config.ClientId,
@@ -280,7 +280,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             }
 
             coordinatorConnectionConfig = new ConnectionConfig(
-                _config.Protocol,
+                connection.Config.Protocol,
                 coordinator.Host!,
                 coordinator.Port!.Value,
                 _config.ClientId,
@@ -344,21 +344,13 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             newPort = coordinator.Port!.Value;
         }
 
-        if (_coordinatorConnection is Connection { Config: var oldConfig } && oldConfig.Host == newHost && oldConfig.Port == newPort)
+        if (_coordinatorConnection != null && _coordinatorConnection.Config.Host == newHost && _coordinatorConnection.Config.Port == newPort)
         {
-            return _coordinatorConnection!;
-        }
-
-        _logger.LogInformation("Coordinator changed from {oldHost}:{oldPort} to {newHost}:{newPort}. Reconnecting.", _coordinatorConnection is Connection c ? c.Config.Host : "<unknown>", _coordinatorConnection is Connection c2 ? c2.Config.Port : -1, newHost, newPort);
-
-        if (_coordinatorConnection != null)
-        {
-            await _coordinatorConnection.DisposeAsync();
-            _coordinatorConnection = null;
+            return _coordinatorConnection;
         }
 
         var newConfig = new ConnectionConfig(
-            _config.Protocol,
+            _coordinatorConnection!.Config.Protocol,
             newHost,
             newPort,
             _config.ClientId,
@@ -367,6 +359,14 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _config.Tls,
             _config.Sasl,
             _config.CheckCrcs);
+
+        _logger.LogInformation("Coordinator changed from {oldHost}:{oldPort} to {newHost}:{newPort}. Reconnecting.", _coordinatorConnection?.Config.Host ?? "<unknown>", _coordinatorConnection?.Config.Port ?? -1, newHost, newPort);
+
+        if (_coordinatorConnection != null)
+        {
+            await _coordinatorConnection.DisposeAsync();
+            _coordinatorConnection = null;
+        }
 
         var newConnection = new Connection(newConfig, _loggerFactory);
         await newConnection.OpenAsync(cancellationToken);
