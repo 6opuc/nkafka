@@ -21,11 +21,33 @@ public sealed record ConsumerConfig(
     TlsConfig? Tls,
     SaslConfig? Sasl)
 {
-    public ConsumerConfig(string bootstrapServers, string topics, string clientId, string groupId, string instanceId, string protocol)
-        : this(bootstrapServers, topics, clientId, groupId, instanceId, protocol,
-              512 * 1024, 512 * 1024,
-              TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30),
-              false, default, default, 3, default, 1024 * 1024, null, null)
+    public ConsumerConfig(
+        string bootstrapServers,
+        string topics,
+        string clientId,
+        string groupId,
+        string instanceId,
+        string protocol)
+        : this(
+              BootstrapServers: bootstrapServers,
+              Topics: topics,
+              ClientId: clientId,
+              GroupId: groupId,
+              InstanceId: instanceId,
+              Protocol: protocol,
+              ResponseBufferSize: 512 * 1024,
+              RequestBufferSize: 512 * 1024,
+              SessionTimeout: TimeSpan.FromSeconds(45),
+              HeartbeatInterval: TimeSpan.FromSeconds(15),
+              MaxPollInterval: TimeSpan.FromSeconds(30),
+              CheckCrcs: false,
+              MaxWaitTime: TimeSpan.FromMilliseconds(500),
+              FetchTimeout: default,
+              MaxFetchRetries: 3,
+              FetchRetryBaseDelay: TimeSpan.FromMilliseconds(100),
+              FetchPartitionMaxBytes: 1024 * 1024,
+              Tls: null,
+              Sasl: null)
     {
     }
 }
