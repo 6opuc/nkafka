@@ -1021,7 +1021,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         while (!cancellationToken.IsCancellationRequested)
         {
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(_config.FetchTimeout > TimeSpan.Zero ? (int)_config.FetchTimeout.TotalMilliseconds : (int)_config.MaxWaitTime.TotalMilliseconds);
+            timeoutCts.CancelAfter((int)_config.FetchTimeout.TotalMilliseconds);
 
             try
             {
