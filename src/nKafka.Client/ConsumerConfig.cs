@@ -42,7 +42,7 @@ public sealed record ConsumerConfig(
               MaxPollInterval: TimeSpan.FromSeconds(30),
               CheckCrcs: false,
               MaxWaitTime: TimeSpan.FromMilliseconds(500),
-              FetchTimeout: default,
+              FetchTimeout: TimeSpan.FromSeconds(1),
               MaxFetchRetries: 3,
               FetchRetryBaseDelay: TimeSpan.FromMilliseconds(100),
               FetchPartitionMaxBytes: 1024 * 1024,
