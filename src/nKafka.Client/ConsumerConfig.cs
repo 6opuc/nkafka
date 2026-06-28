@@ -21,8 +21,4 @@ public sealed record ConsumerConfig(
     TlsConfig? Tls = null,
     SaslConfig? Sasl = null)
 {
-    internal int SessionTimeoutMs => (int)(SessionTimeout > TimeSpan.Zero ? SessionTimeout : TimeSpan.FromSeconds(45)).TotalMilliseconds;
-    internal int HeartbeatIntervalMs => (int)(HeartbeatInterval > TimeSpan.Zero ? HeartbeatInterval : TimeSpan.FromSeconds(15)).TotalMilliseconds;
-    internal int MaxPollIntervalMs => (int)(MaxPollInterval > TimeSpan.Zero ? MaxPollInterval : TimeSpan.FromSeconds(30)).TotalMilliseconds;
-    internal int FetchTimeoutMs => FetchTimeout > TimeSpan.Zero ? (int)FetchTimeout.TotalMilliseconds : 0;
 }

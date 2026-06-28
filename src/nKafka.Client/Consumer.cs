@@ -429,8 +429,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         var request = new JoinGroupRequest
         {
             GroupId = _config.GroupId,
-            SessionTimeoutMs = _config.SessionTimeoutMs,
-            RebalanceTimeoutMs = _config.MaxPollIntervalMs,
+            SessionTimeoutMs = (int)(_config.SessionTimeout > TimeSpan.Zero ? _config.SessionTimeout : TimeSpan.FromSeconds(45)).TotalMilliseconds,
+            RebalanceTimeoutMs = (int)(_config.MaxPollInterval > TimeSpan.Zero ? _config.MaxPollInterval : TimeSpan.FromSeconds(30)).TotalMilliseconds,
             MemberId = string.Empty,
             GroupInstanceId = _config.InstanceId,
             ProtocolType = "consumer",
@@ -612,7 +612,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                         {
                             _logger.LogDebug(
                                 "Heartbeat was sent. Waiting for {@interval}ms.",
-                                _config.HeartbeatIntervalMs);
+                                (int)(_config.HeartbeatInterval > TimeSpan.Zero ? _config.HeartbeatInterval : TimeSpan.FromSeconds(15)).TotalMilliseconds);
                         }
                         else if (response.Message.ErrorCode == (short)ErrorCode.RebalanceInProgress)
                         {
@@ -631,7 +631,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                             _logger.LogError(
                                 "Error in heartbeat response: {@errorCode}. Waiting for {@interval}ms.",
                                 response.Message.ErrorCode,
-                                _config.HeartbeatIntervalMs);
+                                (int)(_config.HeartbeatInterval > TimeSpan.Zero ? _config.HeartbeatInterval : TimeSpan.FromSeconds(15)).TotalMilliseconds);
                         }
 
                         await Task.Delay(_config.HeartbeatInterval, cancellationToken);
@@ -1021,7 +1021,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         while (!cancellationToken.IsCancellationRequested)
         {
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(_config.FetchTimeoutMs > 0 ? _config.FetchTimeoutMs : (int)_config.MaxWaitTime.TotalMilliseconds);
+            timeoutCts.CancelAfter(_config.FetchTimeout > TimeSpan.Zero ? (int)_config.FetchTimeout.TotalMilliseconds : (int)_config.MaxWaitTime.TotalMilliseconds);
 
             try
             {
