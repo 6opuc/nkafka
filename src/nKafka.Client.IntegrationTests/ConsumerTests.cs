@@ -94,8 +94,8 @@ public class ConsumerTests
 
         while (!cts.Token.IsCancellationRequested)
         {
-            var record = await consumer.ConsumeAsync(cts.Token).ConfigureAwait(false);
-            if (record?.Message != null)
+            var result = await consumer.ConsumeAsync(cts.Token).ConfigureAwait(false);
+            if (result?.Message != null)
             {
                 consumed++;
             }
