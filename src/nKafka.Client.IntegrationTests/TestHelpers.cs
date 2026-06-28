@@ -74,16 +74,22 @@ public static class TestHelpers
             ? $"SASL_SSL://{BootstrapHost}:{SaslBootstrapPort}"
             : $"PLAINTEXT://{BootstrapHost}:{PlainTextBootstrapPort}";
 
-        return new ConsumerConfig(
+        var config = new ConsumerConfig(
             servers,
             topics,
             clientId,
             groupId,
             instanceId,
-            protocol,
-            CheckCrcs: checkCrcs || protocol == "SASL_SSL",
-            MaxWaitTime: maxWaitTime ?? TimeSpan.FromSeconds(1),
-            Tls: CreateTlsConfig(protocol),
-            Sasl: protocol == "SASL_SSL" ? CreateSaslConfig() : null);
+            protocol);
+
+        config = config with
+        {
+            CheckCrcs = checkCrcs || protocol == "SASL_SSL",
+            MaxWaitTime = maxWaitTime ?? TimeSpan.FromSeconds(1),
+            Tls = CreateTlsConfig(protocol),
+            Sasl = protocol == "SASL_SSL" ? CreateSaslConfig() : null,
+        };
+
+        return config;
     }
 }

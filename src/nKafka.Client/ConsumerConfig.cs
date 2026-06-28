@@ -7,18 +7,25 @@ public sealed record ConsumerConfig(
     string GroupId,
     string InstanceId,
     string Protocol,
-    int ResponseBufferSize = 512 * 1024,
-    int RequestBufferSize = 512 * 1024,
-    TimeSpan SessionTimeout = default,
-    TimeSpan HeartbeatInterval = default,
-    TimeSpan MaxPollInterval = default,
-    bool CheckCrcs = false,
-    TimeSpan MaxWaitTime = default,
-    TimeSpan FetchTimeout = default,
-    int MaxFetchRetries = 3,
-    TimeSpan FetchRetryBaseDelay = default,
-    int FetchPartitionMaxBytes = 1 * 1024 * 1024,
-    TlsConfig? Tls = null,
-    SaslConfig? Sasl = null)
+    int ResponseBufferSize,
+    int RequestBufferSize,
+    TimeSpan SessionTimeout,
+    TimeSpan HeartbeatInterval,
+    TimeSpan MaxPollInterval,
+    bool CheckCrcs,
+    TimeSpan MaxWaitTime,
+    TimeSpan FetchTimeout,
+    int MaxFetchRetries,
+    TimeSpan FetchRetryBaseDelay,
+    int FetchPartitionMaxBytes,
+    TlsConfig? Tls,
+    SaslConfig? Sasl)
 {
+    public ConsumerConfig(string bootstrapServers, string topics, string clientId, string groupId, string instanceId, string protocol)
+        : this(bootstrapServers, topics, clientId, groupId, instanceId, protocol,
+              512 * 1024, 512 * 1024,
+              TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30),
+              false, default, default, 3, default, 1024 * 1024, null, null)
+    {
+    }
 }
