@@ -6,13 +6,7 @@ public static class NKafkaBatchConsumeBytesTest
 {
     public static async Task Test(FetchScenario scenario, string protocol)
     {
-        var consumerConfig = new ConsumerConfig(
-            BenchmarkHelper.BootstrapServers(protocol),
-            scenario.TopicName,
-            $"testapp-{DateTime.UtcNow.Date:yyyyMMdd}-{Guid.NewGuid():N}",
-            $"test-consumer-group-{Guid.NewGuid():N}",
-            $"test-instance-{Guid.NewGuid():N}")
-            .ConfigureProtocol(protocol);
+        var consumerConfig = BenchmarkHelper.CreateConsumerConfig(scenario, protocol);
 
         await using var consumer = new Consumer<Memory<byte>?>(
             consumerConfig,
