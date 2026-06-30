@@ -594,8 +594,11 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                     try
                     {
                         using var heartbeatActivity = KafkaTracing.Source.StartActivity("Consumer.Heartbeat", ActivityKind.Client);
+                        heartbeatActivity?.AddTag("messaging.system", "kafka");
+                        heartbeatActivity?.AddTag("messaging.operation.name", "heartbeat");
+                        heartbeatActivity?.AddTag("messaging.operation.type", "heartbeat");
+                        heartbeatActivity?.AddTag("messaging.consumer.group.name", _config.GroupId);
                         var heartbeatConnection = _coordinatorConnection!;
-                        heartbeatActivity?.AddMessagingAttributes(_context, "heartbeat");
 
                         var request = new HeartbeatRequest
                         {
@@ -749,7 +752,6 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             while (!cancellationToken.IsCancellationRequested)
             {
                 using var fetchActivity = KafkaTracing.Source.StartActivity("Consumer.Fetch", ActivityKind.Client);
-                fetchActivity?.AddMessagingAttributes(_context, KafkaMetrics.OperationReceive);
                 try
                 {
                     var fetchRequest = CreateFetchRequest(sessionManager, topicMap, firstRequest);
@@ -929,14 +931,14 @@ public class Consumer<TMessage> : IConsumer<TMessage>
     public async ValueTask<ConsumeResult<TMessage>?> ConsumeAsync(
         CancellationToken cancellationToken)
     {
-        using var consumeActivity = KafkaTracing.Source.StartActivity("Consumer.Consume", ActivityKind.Client);
-        consumeActivity?.AddMessagingAttributes(_context, KafkaMetrics.OperationReceive);
+        using var consumeActivity = KafkaTracing.Source.StartActivity(KafkaTracing.BuildSpanName(KafkaMetrics.OperationNamePoll, _context), ActivityKind.Client);
+        consumeActivity?.AddMessagingAttributes(_context, KafkaMetrics.OperationNamePoll, KafkaMetrics.OperationTypeReceive);
         consumeActivity?.AddTag("nKafka.phase", "consume");
 
         var consumerResult = ConsumeFromBuffer();
         if (consumerResult != null)
         {
-            KafkaMetrics.AddMessagesConsumed(_context, 1);
+            KafkaMetrics.AddMessagesConsumed(_context, 1, KafkaMetrics.OperationNamePoll);
             consumeActivity?.AddTag("nKafka.result", "cached");
             return consumerResult;
         }
@@ -958,7 +960,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
                 TopicName = r.Topic,
                 PartitionId = r.Partition.ToString(),
             };
-            KafkaMetrics.AddMessagesConsumed(contextWithMessage, 1);
+            KafkaMetrics.AddMessagesConsumed(contextWithMessage, 1, KafkaMetrics.OperationNamePoll);
             consumeActivity?.AddTag("nKafka.result", "message");
         }
         else
@@ -967,7 +969,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         }
 
         deserializeSw.Stop();
-        KafkaMetrics.RecordProcessDuration(_context, KafkaMetrics.OperationProcess, deserializeSw.Elapsed.TotalMilliseconds);
+        KafkaMetrics.RecordProcessDuration(_context, KafkaMetrics.OperationNameProcess, KafkaMetrics.OperationTypeProcess, deserializeSw.Elapsed.TotalMilliseconds);
 
         return result;
     }
@@ -1003,7 +1005,8 @@ public class Consumer<TMessage> : IConsumer<TMessage>
 
     public async ValueTask<IConsumerBatch<TMessage>> ConsumeBatchAsync(CancellationToken cancellationToken)
     {
-        using var consumeBatchActivity = KafkaTracing.Source.StartActivity("Consumer.ConsumeBatch", ActivityKind.Client);
+        using var consumeBatchActivity = KafkaTracing.Source.StartActivity(KafkaTracing.BuildSpanName(KafkaMetrics.OperationNamePoll, _context), ActivityKind.Client);
+        consumeBatchActivity?.AddMessagingAttributes(_context, KafkaMetrics.OperationNamePoll, KafkaMetrics.OperationTypeReceive);
         using var fetchWaitActivity = KafkaTracing.Source.StartActivity("Consumer.FetchWait", ActivityKind.Client);
         await EnsureEnumeratorAsync(cancellationToken);
         fetchWaitActivity?.AddTag("nKafka.phase", "fetch_wait");
@@ -1149,14 +1152,15 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             return;
         }
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        using var commitActivity = KafkaTracing.Source.StartActivity("Consumer.Commit", ActivityKind.Client);
         var commitContext = _context with
         {
             TopicName = consumeResult.Topic,
             PartitionId = consumeResult.Partition.ToString(),
         };
-        commitActivity?.AddMessagingAttributes(commitContext, KafkaMetrics.OperationSettle);
-        using var offsetCommitActivity = KafkaTracing.Source.StartActivity("Consumer.OffsetCommit", ActivityKind.Client);
+        using var commitActivity = KafkaTracing.Source.StartActivity(KafkaTracing.BuildSpanName(KafkaMetrics.OperationNameCommit, commitContext), ActivityKind.Client);
+        commitActivity?.AddMessagingAttributes(commitContext, KafkaMetrics.OperationNameCommit, KafkaMetrics.OperationTypeSettle);
+        using var offsetCommitActivity = KafkaTracing.Source.StartActivity(KafkaTracing.BuildSpanName("offset_commit", commitContext), ActivityKind.Client);
+        offsetCommitActivity?.AddMessagingAttributes(commitContext, KafkaMetrics.OperationNameCommit, KafkaMetrics.OperationTypeSettle);
         await _offsetStorage.SetAsync(
             connection,
             _config.GroupId,
@@ -1167,7 +1171,7 @@ public class Consumer<TMessage> : IConsumer<TMessage>
         offsetCommitActivity?.AddTag("nKafka.phase", "offset_commit");
         commitActivity?.AddTag("nKafka.phase", "commit");
         sw.Stop();
-        KafkaMetrics.RecordClientOperation(_context, KafkaMetrics.OperationSettle, sw.Elapsed.TotalMilliseconds);
+        KafkaMetrics.RecordClientOperation(commitContext, KafkaMetrics.OperationNameCommit, KafkaMetrics.OperationTypeSettle, sw.Elapsed.TotalMilliseconds);
     }
 
     public async ValueTask DisposeAsync()

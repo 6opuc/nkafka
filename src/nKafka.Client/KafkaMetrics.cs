@@ -8,9 +8,12 @@ public static class KafkaMetrics
     public static bool Enabled { get; set; }
 
     public const string MessagingSystem = "kafka";
-    public const string OperationReceive = "receive";
-    public const string OperationProcess = "process";
-    public const string OperationSettle = "settle";
+    public const string OperationNamePoll = "poll";
+    public const string OperationNameProcess = "process";
+    public const string OperationNameCommit = "commit";
+    public const string OperationTypeReceive = "receive";
+    public const string OperationTypeProcess = "process";
+    public const string OperationTypeSettle = "settle";
 
     public static readonly Meter Meter = new("messaging");
 
@@ -23,7 +26,7 @@ public static class KafkaMetrics
     public static readonly Counter<long> MessagesConsumed =
         Meter.CreateCounter<long>("messaging.client.consumed.messages");
 
-    public static void RecordClientOperation(KafkaTelemetryContext context, string operationName, double durationMs, string? errorType = null)
+    public static void RecordClientOperation(KafkaTelemetryContext context, string operationName, string operationType, double durationMs, string? errorType = null)
     {
         if (!Enabled)
         {
@@ -33,7 +36,7 @@ public static class KafkaMetrics
         var tags = new TagList
         {
             { "messaging.operation.name", operationName },
-            { "messaging.operation.type", operationName },
+            { "messaging.operation.type", operationType },
             { "messaging.system", MessagingSystem },
             { "messaging.consumer.group.name", context.ConsumerGroupId },
             { "messaging.client.id", context.ClientId },
@@ -67,7 +70,7 @@ public static class KafkaMetrics
         ClientOperationDurationMs.Record(durationMs, tags);
     }
 
-    public static void RecordProcessDuration(KafkaTelemetryContext context, string operationName, double durationMs, string? errorType = null)
+    public static void RecordProcessDuration(KafkaTelemetryContext context, string operationName, string operationType, double durationMs, string? errorType = null)
     {
         if (!Enabled)
         {
@@ -77,7 +80,7 @@ public static class KafkaMetrics
         var tags = new TagList
         {
             { "messaging.operation.name", operationName },
-            { "messaging.operation.type", operationName },
+            { "messaging.operation.type", operationType },
             { "messaging.system", MessagingSystem },
             { "messaging.consumer.group.name", context.ConsumerGroupId },
             { "messaging.client.id", context.ClientId },
@@ -111,7 +114,7 @@ public static class KafkaMetrics
         ProcessDurationMs.Record(durationMs, tags);
     }
 
-    public static void AddMessagesConsumed(KafkaTelemetryContext context, long count, string operationName = OperationReceive, string? errorType = null)
+    public static void AddMessagesConsumed(KafkaTelemetryContext context, long count, string operationName = OperationNamePoll, string? errorType = null)
     {
         if (!Enabled)
         {
@@ -121,7 +124,7 @@ public static class KafkaMetrics
         var tags = new TagList
         {
             { "messaging.operation.name", operationName },
-            { "messaging.operation.type", operationName },
+            { "messaging.operation.type", OperationTypeReceive },
             { "messaging.system", MessagingSystem },
             { "messaging.consumer.group.name", context.ConsumerGroupId },
             { "messaging.client.id", context.ClientId },
