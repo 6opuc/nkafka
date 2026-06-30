@@ -56,7 +56,6 @@
 - Test bounds checking, error cases, and edge conditions
 - Roundtrip tests for all data types
 - Test naming pattern: `MethodUnderTest_Condition_Expectation` (e.g., `WriteByte_Zero_CanBeReadByBufferReader`)
-- `ValueTask.AsTask()` creates a new Task instance on every call when the ValueTask is already completed — cache the result to avoid identity comparison failures
 
 ### Exception Hierarchy
 - **KafkaException** (base)
@@ -66,19 +65,13 @@
   - **ChecksumValidationException** - CRC/checksum validation failures
   - **ConnectionException** - Network/connection failures
   - **IncompleteMessageException** - Partial/incomplete messages
-- **Remove:** `InvalidMessageException` (unused), `CorruptRecordException` (rename to ChecksumValidationException)
 - **Keep as `InvalidOperationException`:** Programming errors (uninitialized properties, null key values)
 
 ### Buffer Management
 - **BufferWriter:** Use pool-based constructor only: `new BufferWriter(arrayPool, size)`
-- **Buffer size:** Use `Math.Max(RequestBufferSize, ResponseBufferSize)` for consistency
-- **Temporary writers:** Use `writerTemp` naming convention for temporary serializers
-- **CreateWriter():** No parameters, uses configured buffer size
 
 ### Dead Code Removal
-- **Crc32c.cs:** Remove all MemoryStream-based methods (`CalculateStream`, `_calculateStream` field)
-- Keep only `ReadOnlySpan<byte>` overloads
-- **Remove unused methods** before refactoring
+- **Remove unused methods** before and after refactoring
 
 ### Benchmarks
 - Project: `src/nKafka.Client.Benchmarks` (BenchmarkDotNet 0.15.8, compares nKafka vs Confluent.Kafka)
