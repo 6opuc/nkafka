@@ -11,7 +11,7 @@ public class DummyOffsetStorage : IOffsetStorage
         int partition,
         CancellationToken cancellationToken)
     {
-        return !_offsets.TryGetValue((consumerGroup, topic, partition), out long offset)
+        return !_offsets.TryGetValue((consumerGroup, topic, partition), out var offset)
             ? ValueTask.FromResult<long>(0)
             : ValueTask.FromResult(offset);
     }

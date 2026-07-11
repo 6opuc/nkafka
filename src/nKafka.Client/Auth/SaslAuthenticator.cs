@@ -33,7 +33,7 @@ public sealed class SaslAuthenticator : IAuthenticator
 
     public async ValueTask AuthenticateAsync(IConnection connection, CancellationToken ct)
     {
-        string? mechanism = _config.Sasl?.Mechanism;
+        var mechanism = _config.Sasl?.Mechanism;
         if (string.IsNullOrEmpty(mechanism))
         {
             return;
@@ -56,7 +56,7 @@ public sealed class SaslAuthenticator : IAuthenticator
         if (supportedMechanisms == null ||
             !supportedMechanisms.Any(m => m == mechanism))
         {
-            string supported = supportedMechanisms != null
+            var supported = supportedMechanisms != null
                 ? string.Join(", ", supportedMechanisms)
                 : "none";
             throw new InvalidOperationException(
@@ -71,15 +71,15 @@ public sealed class SaslAuthenticator : IAuthenticator
             _ => throw new NotSupportedException($"SASL mechanism {mechanism} is not supported")
         };
 
-        string? username = _config.Sasl!.Username;
-        string? password = _config.Sasl!.Password;
+        var username = _config.Sasl!.Username;
+        var password = _config.Sasl!.Password;
         if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
         {
             throw new InvalidOperationException("SASL credentials (username, password) are required when SaslMechanism is configured.");
         }
 
-        byte[] passwordBytes = Encoding.UTF8.GetBytes(password);
-        int hashSize = _hashAlgorithmName switch
+        var passwordBytes = Encoding.UTF8.GetBytes(password);
+        var hashSize = _hashAlgorithmName switch
         {
             { Name: "SHA512" } => 64,
             { Name: "SHA256" } => 32,
@@ -88,7 +88,7 @@ public sealed class SaslAuthenticator : IAuthenticator
 
         // Round 1: Client-First -> Server-First
         _clientNonce = GenerateNonce();
-        int bareLength = 5 + username.Length + _clientNonce!.Length;
+        var bareLength = 5 + username.Length + _clientNonce!.Length;
         Span<char> bareChars = stackalloc char[bareLength];
         bareChars[0] = 'n';
         bareChars[1] = '=';
@@ -98,28 +98,28 @@ public sealed class SaslAuthenticator : IAuthenticator
         bareChars[4 + username.Length] = '=';
         _clientNonce.AsSpan().CopyTo(bareChars.Slice(5 + username.Length));
         _clientFirstMessageBare = Encoding.ASCII.GetBytes(new string(bareChars));
-        byte[] clientFirstBytes = BuildClientFirstMessage();
+        var clientFirstBytes = BuildClientFirstMessage();
         _logger.LogDebug("Sending SASL authenticate (client-first).");
         using var serverFirstResponse = await connection.SendAsync<SaslAuthenticateResponse>(
             new SaslAuthenticateRequest { AuthBytes = clientFirstBytes }, ct);
 
         if (serverFirstResponse.Message.ErrorCode != 0)
         {
-            string errorMsg = serverFirstResponse.Message.ErrorMessage ?? $"Error code {serverFirstResponse.Message.ErrorCode}";
+            var errorMsg = serverFirstResponse.Message.ErrorMessage ?? $"Error code {serverFirstResponse.Message.ErrorCode}";
             throw new InvalidOperationException($"SASL authentication failed at server-first: {errorMsg}");
         }
 
         ReadOnlySpan<byte> serverFirstSpan = serverFirstResponse.Message.AuthBytes is { } first ? first.Span : ReadOnlySpan<byte>.Empty;
 
         // Round 2: Client-Final -> Server-Final
-        byte[] clientFinalBytes = BuildClientFinalMessage(serverFirstSpan, passwordBytes, hashSize);
+        var clientFinalBytes = BuildClientFinalMessage(serverFirstSpan, passwordBytes, hashSize);
         _logger.LogDebug("Sending SASL authenticate (client-final).");
         using var serverFinalResponse = await connection.SendAsync<SaslAuthenticateResponse>(
             new SaslAuthenticateRequest { AuthBytes = clientFinalBytes }, ct);
 
         if (serverFinalResponse.Message.ErrorCode != 0)
         {
-            string errorMsg = serverFinalResponse.Message.ErrorMessage ?? $"Error code {serverFinalResponse.Message.ErrorCode}";
+            var errorMsg = serverFinalResponse.Message.ErrorMessage ?? $"Error code {serverFinalResponse.Message.ErrorCode}";
             throw new InvalidOperationException($"SASL authentication failed: {errorMsg}");
         }
 
@@ -130,7 +130,7 @@ public sealed class SaslAuthenticator : IAuthenticator
 
     private byte[] BuildClientFirstMessage()
     {
-        byte[] result = new byte[3 + _clientFirstMessageBare!.Length];
+        var result = new byte[3 + _clientFirstMessageBare!.Length];
         result[0] = (byte)'n';
         result[1] = (byte)',';
         result[2] = (byte)',';
@@ -141,25 +141,25 @@ public sealed class SaslAuthenticator : IAuthenticator
     private byte[] BuildClientFinalMessage(ReadOnlySpan<byte> serverFirstMessageSpan, byte[] passwordBytes, int hashSize)
     {
         _serverFirstMessage = serverFirstMessageSpan.ToArray();
-        ParseServerFirstMessage(_serverFirstMessage, out byte[] salt, out int iterations, out string serverNonce);
+        ParseServerFirstMessage(_serverFirstMessage, out var salt, out var iterations, out var serverNonce);
 
         _saltedPassword = PBKDF2(passwordBytes, salt, iterations, hashSize);
 
-        byte[] clientKey = HMAC(_saltedPassword, ClientKeyBytes);
-        byte[] storedKey = _hashAlgorithmName.Name switch
+        var clientKey = HMAC(_saltedPassword, ClientKeyBytes);
+        var storedKey = _hashAlgorithmName.Name switch
         {
             "SHA256" => SHA256.HashData(clientKey),
             "SHA512" => SHA512.HashData(clientKey),
             _ => throw new NotSupportedException($"Unsupported hash algorithm: {_hashAlgorithmName}")
         };
-        byte[] serverKey = HMAC(_saltedPassword, ServerKeyBytes);
+        var serverKey = HMAC(_saltedPassword, ServerKeyBytes);
 
         _clientFinalMessageWithoutProof = $"c=biws,r={serverNonce}";
 
-        byte[] authMessageBytes = BuildAuthMessageBytes(_clientFirstMessageBare!, _serverFirstMessage!, _clientFinalMessageWithoutProof);
-        string base64Proof = Convert.ToBase64String(XOR(clientKey, HMAC(storedKey, authMessageBytes)));
-        int finalByteCount = _clientFinalMessageWithoutProof!.Length + 3 + base64Proof.Length;
-        byte[] result = new byte[finalByteCount];
+        var authMessageBytes = BuildAuthMessageBytes(_clientFirstMessageBare!, _serverFirstMessage!, _clientFinalMessageWithoutProof);
+        var base64Proof = Convert.ToBase64String(XOR(clientKey, HMAC(storedKey, authMessageBytes)));
+        var finalByteCount = _clientFinalMessageWithoutProof!.Length + 3 + base64Proof.Length;
+        var result = new byte[finalByteCount];
         Encoding.ASCII.GetBytes(_clientFinalMessageWithoutProof, 0, _clientFinalMessageWithoutProof.Length, result, 0);
         result[_clientFinalMessageWithoutProof.Length] = (byte)',';
         result[_clientFinalMessageWithoutProof.Length + 1] = (byte)'p';
@@ -183,11 +183,11 @@ public sealed class SaslAuthenticator : IAuthenticator
                 $"Invalid SCRAM server-final message: {serverFinal}");
         }
 
-        byte[] expectedSignature = Convert.FromBase64String(signatureSpan.ToString());
+        var expectedSignature = Convert.FromBase64String(signatureSpan.ToString());
 
-        byte[] serverKey = HMAC(_saltedPassword!, ServerKeyBytes);
-        byte[] authMessageBytes = BuildAuthMessageBytes(_clientFirstMessageBare!, _serverFirstMessage!, _clientFinalMessageWithoutProof!);
-        byte[] serverSignature = HMAC(serverKey, authMessageBytes);
+        var serverKey = HMAC(_saltedPassword!, ServerKeyBytes);
+        var authMessageBytes = BuildAuthMessageBytes(_clientFirstMessageBare!, _serverFirstMessage!, _clientFinalMessageWithoutProof!);
+        var serverSignature = HMAC(serverKey, authMessageBytes);
 
         if (!CryptographicOperations.FixedTimeEquals(expectedSignature, serverSignature))
         {
@@ -205,27 +205,38 @@ public sealed class SaslAuthenticator : IAuthenticator
         iterations = 4096;
         nonce = "";
 
-        int start = 0;
-        for (int i = 0; i <= message.Length; i++)
+        var start = 0;
+        for (var i = 0; i <= message.Length; i++)
         {
             if (i == message.Length || message[i] == (byte)',')
             {
                 ReadOnlySpan<byte> part = message.Slice(start, i - start);
                 if (part.Length > 2 && part[0] == (byte)'r' && part[1] == (byte)'=')
+                {
                     nonce = Encoding.ASCII.GetString(part.Slice(2));
+                }
                 else if (part.Length > 2 && part[0] == (byte)'s' && part[1] == (byte)'=')
+                {
                     salt = Convert.FromBase64String(Encoding.ASCII.GetString(part.Slice(2)));
+                }
                 else if (part.Length > 2 && part[0] == (byte)'i' && part[1] == (byte)'=')
+                {
                     iterations = int.Parse(Encoding.ASCII.GetString(part.Slice(2)));
+                }
 
                 start = i + 1;
             }
         }
 
         if (salt.Length == 0)
+        {
             throw new InvalidOperationException("SCRAM server-first message missing salt");
+        }
+
         if (string.IsNullOrEmpty(nonce))
+        {
             throw new InvalidOperationException("SCRAM server-first message missing nonce");
+        }
     }
 
     private static string GenerateNonce()
@@ -234,7 +245,7 @@ public sealed class SaslAuthenticator : IAuthenticator
         Span<byte> bytes = stackalloc byte[30];
         RandomNumberGenerator.Fill(bytes);
         Span<char> nonce = stackalloc char[30];
-        for (int i = 0; i < bytes.Length; i++)
+        for (var i = 0; i < bytes.Length; i++)
         {
             nonce[i] = chars[bytes[i] % chars.Length];
         }
@@ -253,7 +264,7 @@ public sealed class SaslAuthenticator : IAuthenticator
 
     private byte[] HMAC(byte[] key, ReadOnlySpan<char> data)
     {
-        byte[] buffer = new byte[Encoding.ASCII.GetByteCount(data)];
+        var buffer = new byte[Encoding.ASCII.GetByteCount(data)];
         Encoding.ASCII.GetBytes(data, buffer);
         return _hashAlgorithmName.Name switch
         {
@@ -275,9 +286,9 @@ public sealed class SaslAuthenticator : IAuthenticator
 
     private static byte[] BuildAuthMessageBytes(ReadOnlySpan<byte> clientFirstMessageBare, ReadOnlySpan<byte> serverFirstMessage, string clientFinalMessageWithoutProof)
     {
-        int clientFinalBytes = Encoding.ASCII.GetByteCount(clientFinalMessageWithoutProof);
-        int authMessageLength = clientFirstMessageBare.Length + serverFirstMessage.Length + clientFinalBytes + 2;
-        byte[] authMessage = new byte[authMessageLength];
+        var clientFinalBytes = Encoding.ASCII.GetByteCount(clientFinalMessageWithoutProof);
+        var authMessageLength = clientFirstMessageBare.Length + serverFirstMessage.Length + clientFinalBytes + 2;
+        var authMessage = new byte[authMessageLength];
         clientFirstMessageBare.CopyTo(authMessage);
         authMessage[clientFirstMessageBare.Length] = (byte)',';
         serverFirstMessage.CopyTo(authMessage.AsSpan(clientFirstMessageBare.Length + 1));
@@ -288,9 +299,12 @@ public sealed class SaslAuthenticator : IAuthenticator
 
     private static byte[] XOR(byte[] a, byte[] b)
     {
-        byte[] result = new byte[a.Length];
-        for (int i = 0; i < a.Length; i++)
+        var result = new byte[a.Length];
+        for (var i = 0; i < a.Length; i++)
+        {
             result[i] = (byte)(a[i] ^ b[i]);
+        }
+
         return result;
     }
 }

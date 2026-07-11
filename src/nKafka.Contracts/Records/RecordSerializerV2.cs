@@ -7,8 +7,8 @@ public class RecordSerializerV2
 {
     public static Record? Deserialize(ref BufferReader reader, long eof)
     {
-        int start = reader.Position;
-        int size = reader.ReadVarInt();
+        var start = reader.Position;
+        var size = reader.ReadVarInt();
         if (size <= 0)
         {
             reader.Position = start;
@@ -28,20 +28,20 @@ public class RecordSerializerV2
             OffsetDelta = reader.ReadVarInt(),
         };
 
-        int keyLength = reader.ReadVarInt();
+        var keyLength = reader.ReadVarInt();
         record.Key = keyLength == -1
             ? null
             : keyLength == 0
                 ? Memory<byte>.Empty
                 : reader.ReadMemory(keyLength);
-        int valueLength = reader.ReadVarInt();
+        var valueLength = reader.ReadVarInt();
         record.Value = valueLength == -1
             ? null
             : valueLength == 0
                 ? Memory<byte>.Empty
                 : reader.ReadMemory(valueLength);
 
-        int headerCount = reader.ReadVarInt();
+        var headerCount = reader.ReadVarInt();
         if (headerCount == 0)
         {
             record.Headers = ReadOnlyDictionary<string, Memory<byte>?>.Empty;
@@ -49,10 +49,10 @@ public class RecordSerializerV2
         else if (headerCount >= 0)
         {
             var headers = new Dictionary<string, Memory<byte>?>(headerCount);
-            for (int i = 0; i < headerCount; i++)
+            for (var i = 0; i < headerCount; i++)
             {
-                string? headerKey = reader.ReadVarString();
-                int headerValueLength = reader.ReadVarInt();
+                var headerKey = reader.ReadVarString();
+                var headerValueLength = reader.ReadVarInt();
                 var headerValue = headerValueLength == -1
                     ? null
                     : headerValueLength == 0

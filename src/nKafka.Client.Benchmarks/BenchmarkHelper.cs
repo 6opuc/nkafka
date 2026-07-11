@@ -9,6 +9,7 @@ internal static class BenchmarkHelper
     internal static readonly string CACertPath = ResolvePath();
 
     internal const int FetchMaxBytes = 100 * 1024 * 1024;
+    internal static readonly TimeSpan ConsumerMaxWaitTime = TimeSpan.FromMilliseconds(100);
     internal const int PartitionMaxBytes = 1 * 1024 * 1024;
     internal const int ResponseBufferSize = 10 * 512 * 1024;
 
@@ -32,6 +33,22 @@ internal static class BenchmarkHelper
         {
             return config with { Tls = new TlsConfig(CACertPath), Sasl = new SaslConfig("SCRAM-SHA-512", "admin", "admin-secret"), CheckCrcs = false };
         }
+        return config;
+    }
+
+    internal static ConsumerConfig CreateConsumerConfig(
+        FetchScenario scenario, string protocol)
+    {
+        var config = new ConsumerConfig(
+            BootstrapServers(protocol),
+            scenario.TopicName,
+            $"testapp-{DateTime.UtcNow.Date:yyyyMMdd}-{Guid.NewGuid():N}",
+            $"test-consumer-group-{Guid.NewGuid():N}",
+            $"test-instance-{Guid.NewGuid():N}");
+
+        config = config with { MaxWaitTime = ConsumerMaxWaitTime };
+        config = config.ConfigureProtocol(protocol);
+
         return config;
     }
 
@@ -72,7 +89,7 @@ internal static class BenchmarkHelper
 
     internal static string BootstrapServers(string protocol)
     {
-        int port = BootstrapPort(protocol);
+        var port = BootstrapPort(protocol);
         return $"{protocol}://localhost:{port}, {protocol}://localhost:{port + 100}, {protocol}://localhost:{port + 200}";
     }
 

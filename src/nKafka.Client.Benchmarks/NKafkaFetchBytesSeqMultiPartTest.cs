@@ -13,7 +13,7 @@ public static class NKafkaFetchBytesSeqMultiPartTest
         var topicMetadata = metadata.Message.Topics![scenario.TopicName];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
-        int recordCount = 0;
+        var recordCount = 0;
         foreach (var group in partitions)
         {
             var broker = metadata.Message.Brokers![group.Key];
@@ -83,7 +83,7 @@ public static class NKafkaFetchBytesSeqMultiPartTest
                             continue;
                         }
 
-                        long? lastOffset = partitionResponse.Records?.LastOffset;
+                        var lastOffset = partitionResponse.Records?.LastOffset;
                         if (lastOffset != null)
                         {
                             partitionRequest.FetchOffset = lastOffset + 1;
@@ -91,7 +91,7 @@ public static class NKafkaFetchBytesSeqMultiPartTest
                     }
                 }
 
-                int responseRecordCount = response.Message.Responses!
+                var responseRecordCount = response.Message.Responses!
                     .SelectMany(x => x.Partitions!)
                     .Sum(x => x.Records!.RecordCount);
                 if (responseRecordCount == 0)

@@ -19,7 +19,7 @@ public class ConfluentConsumeBytesTest
         using var consumer = new ConsumerBuilder<Null, byte[]>(config).Build();
         consumer.Subscribe(scenario.TopicName);
 
-        int counter = 0;
+        var counter = 0;
         while (counter < scenario.MessageCount)
         {
             var consumeResult = consumer.Consume(CancellationToken.None);

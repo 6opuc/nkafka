@@ -36,15 +36,15 @@ public class PendingRequest
             CorrelationId = CorrelationId,
             ClientId = context.Config.ClientId,
         };
-        int start = writer.Position;
+        var start = writer.Position;
         writer.WriteInt(0); // placeholder for header + payload size
-        short requestHeaderVersion = Payload.ApiKey == ApiKey.ControlledShutdown && ApiVersion == 0
+        var requestHeaderVersion = Payload.ApiKey == ApiKey.ControlledShutdown && ApiVersion == 0
             ? (short)0
             : (short)(Payload.FlexibleVersions.Includes(ApiVersion) ? 2 : 1);
         RequestHeaderSerializer.Serialize(ref writer, header, requestHeaderVersion, context);
         Payload.SerializeRequest(ref writer, ApiVersion, context);
-        int end = writer.Position;
-        int size = (int)(end - start) - 4;
+        var end = writer.Position;
+        var size = (int)(end - start) - 4;
         writer.Position = start;
         writer.WriteInt(size);
         writer.Position = end;
@@ -52,7 +52,7 @@ public class PendingRequest
 
     public object DeserializeResponse(ref BufferReader reader, ISerializationContext context)
     {
-        short responseHeaderVersion = Payload.ApiKey == ApiKey.ApiVersions
+        var responseHeaderVersion = Payload.ApiKey == ApiKey.ApiVersions
             ? (short)0
             : (short)(Payload.FlexibleVersions.Includes(ApiVersion) ? 1 : 0);
         var header = ResponseHeaderSerializer.Deserialize(ref reader, responseHeaderVersion, context);

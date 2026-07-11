@@ -6,13 +6,13 @@ public static class CommonStructDefinitionExtensions
 {
     public static string ToNestedTypeDeclarations(this IList<CommonStructDefinition> commonStructs)
     {
-        string nestedTypeDeclarations = string.Join("\n", commonStructs.Select(x => x.ToNestedTypeDeclaration()));
+        var nestedTypeDeclarations = string.Join("\n", commonStructs.Select(x => x.ToNestedTypeDeclaration()));
         return nestedTypeDeclarations;
     }
 
     public static string ToNestedTypeDeclaration(this CommonStructDefinition commonStruct)
     {
-        string? nestedTypeName = commonStruct.Name;
+        var nestedTypeName = commonStruct.Name;
 
         return $$"""
                  public class {{nestedTypeName}}
@@ -35,7 +35,7 @@ public static class CommonStructDefinitionExtensions
             return String.Empty;
         }
 
-        string? nestedTypeName = commonStruct.Name;
+        var nestedTypeName = commonStruct.Name;
 
         return commonStruct.Fields.ToNestedSerializerDeclarations(apiKey, version, flexible, nestedTypeName!);
     }

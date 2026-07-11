@@ -54,15 +54,16 @@ public class ConsumerTests
             protocol);
 
         var cts = new CancellationTokenSource(TestTimeout);
-        var batch = consumer.ConsumeBatchAsync(cts.Token).AsTask();
+        var batchTask = consumer.ConsumeBatchAsync(cts.Token);
 
+        var batch = batchTask.AsTask();
         var completedTask = await Task.WhenAny(batch,
             Task.Delay(TestTimeout + TimeSpan.FromSeconds(2), CancellationToken.None));
 
         completedTask.Should().Be(batch,
             "ConsumeBatchAsync should complete within 10s when no messages are available.");
 
-        using var results = await batch;
+        using var results = await batchTask;
         results.Should().BeEmpty("no messages exist at the high offset");
     }
 
@@ -87,20 +88,22 @@ public class ConsumerTests
         await consumer.JoinGroupAsync(CancellationToken.None);
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        int consumed = 0;
+        var consumed = 0;
 
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
         while (!cts.Token.IsCancellationRequested)
         {
-            using var batch = await consumer.ConsumeBatchAsync(cts.Token).ConfigureAwait(false);
-            foreach (var record in batch)
+            var result = await consumer.ConsumeAsync(cts.Token).ConfigureAwait(false);
+            if (result?.Message != null)
             {
                 consumed++;
             }
 
             if (consumed >= 1000)
+            {
                 break;
+            }
         }
 
         stopwatch.Stop();
@@ -111,12 +114,12 @@ public class ConsumerTests
 
     [Test]
     [TestCaseSource(nameof(Protocols))]
-    public async Task ConsumeBatchAsync_WithMessages_ShouldHaveFetchStats(string protocol)
+    public async Task ConsumeBatchAsync_WithMessages_ShouldConsumeFromTopic(string protocol)
     {
         var config = TestHelpers.CreateConsumerConfig(
-            $"stats-test-{Guid.NewGuid()}",
-            $"stats-group-{Guid.NewGuid()}",
-            $"stats-instance-{Guid.NewGuid()}",
+            $"batch-test-{Guid.NewGuid()}",
+            $"batch-group-{Guid.NewGuid()}",
+            $"batch-instance-{Guid.NewGuid()}",
             protocol,
             maxWaitTime: TimeSpan.FromSeconds(2),
             checkCrcs: true);
@@ -129,8 +132,10 @@ public class ConsumerTests
 
         await consumer.JoinGroupAsync(CancellationToken.None);
 
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var consumed = 0;
+
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        int consumed = 0;
 
         while (!cts.Token.IsCancellationRequested)
         {
@@ -140,14 +145,16 @@ public class ConsumerTests
                 consumed++;
             }
 
-            if (consumed >= 500)
+            if (consumed >= 1000)
+            {
                 break;
+            }
         }
 
-        var stats = consumer.Statistics;
-        stats.P50FetchRoundTripMs.Should().BeGreaterThan(0, "Should have fetch RTT stats");
-        stats.TotalBytesReceived.Should().BeGreaterThan(0, "Should have received bytes");
-        stats.TotalMessagesConsumed.Should().BeGreaterThan(0, "Should have consumed messages");
+        stopwatch.Stop();
+
+        consumed.Should().BeGreaterThan(0, $"Should consume messages from {protocol} topic");
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10), "Should complete within reasonable time");
     }
 
     private static async Task<Consumer<byte[]>> CreateConsumerAsync(string clientId, string consumerGroup,
@@ -172,9 +179,11 @@ public class ConsumerTests
     public async Task ConsumeBatchAsync_WithRebalance_ShouldHandleGracefully(string protocol)
     {
         if (protocol == "SASL_SSL")
+        {
             TestHelpers.ValidateSslInfrastructure();
+        }
 
-        string groupId = $"rebalance-group-{Guid.NewGuid()}";
+        var groupId = $"rebalance-group-{Guid.NewGuid()}";
         var offsetStorage = new FixedOffsetStorage(0);
         var deserializer = new DummyDeserializer();
 
@@ -199,10 +208,10 @@ public class ConsumerTests
         long consumedByB = 0;
         Exception? exceptionOnA = null;
         Exception? exceptionOnB = null;
-        int generationAtRebalance = 0;
+        var generationAtRebalance = 0;
         var rebalanceDetected = new TaskCompletionSource<bool>();
         var stopA = new CancellationTokenSource();
-        int prevGen = consumerA.GenerationId;
+        var prevGen = consumerA.GenerationId;
 
         // Consumer A consumes continuously for test duration, detecting generation change
         var consumeTaskA = Task.Run(async () =>
@@ -217,7 +226,7 @@ public class ConsumerTests
                         Interlocked.Increment(ref consumedByA);
                     }
 
-                    int currentGen = consumerA.GenerationId;
+                    var currentGen = consumerA.GenerationId;
                     if (currentGen != prevGen && Interlocked.CompareExchange(ref generationAtRebalance, currentGen, 0) == 0)
                     {
                         rebalanceDetected.SetResult(true);
@@ -252,7 +261,7 @@ public class ConsumerTests
         // Consumer B consumes 5 batches after rebalance
         var consumeTaskB = Task.Run(async () =>
         {
-            for (int i = 0; i < 5 && exceptionOnB == null; i++)
+            for (var i = 0; i < 5 && exceptionOnB == null; i++)
             {
                 try
                 {

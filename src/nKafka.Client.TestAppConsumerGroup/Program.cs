@@ -3,6 +3,25 @@
 using Microsoft.Extensions.Logging;
 using nKafka.Client;
 using nKafka.Client.TestAppConsumerGroup;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+
+var meterProvider = Sdk.CreateMeterProviderBuilder()
+    .AddNKafka()
+    .AddConsoleExporter()
+    .Build();
+
+var tracerProvider = Sdk.CreateTracerProviderBuilder()
+    .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("testapp-consumer"))
+    .AddNKafka()
+    .AddOtlpExporter(o =>
+    {
+        o.Endpoint = new Uri("http://otel-collector:4318");
+    })
+    .AddConsoleExporter()
+    .Build();
 
 var loggerFactory = LoggerFactory.Create(builder => builder
     .SetMinimumLevel(LogLevel.Debug)
@@ -14,8 +33,7 @@ var consumerConfig = new ConsumerConfig(
     "test_p12_m40K_s10KB",
     $"testapp-{DateTime.UtcNow.Ticks}",
     "test-consumer-group",
-    Guid.NewGuid().ToString("N"),
-    "PLAINTEXT");
+    Guid.NewGuid().ToString("N"));
 
 await using var consumer = new Consumer<Memory<byte>?>(
     consumerConfig,
@@ -24,7 +42,7 @@ await using var consumer = new Consumer<Memory<byte>?>(
     loggerFactory);
 await consumer.JoinGroupAsync(CancellationToken.None);
 
-int counter = 0;
+var counter = 0;
 while (true)
 {
     var consumeResult = await consumer.ConsumeAsync(CancellationToken.None);
@@ -37,4 +55,3 @@ while (true)
 
     await Task.Delay(TimeSpan.FromMilliseconds(300));
 }
-

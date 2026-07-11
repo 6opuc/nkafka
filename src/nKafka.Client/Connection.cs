@@ -83,7 +83,7 @@ public class Connection : IConnection
         _stop = new CancellationTokenSource();
         var cancellationToken = _stop.Token;
 
-        byte[] sizeBuffer = new byte[4];
+        var sizeBuffer = new byte[4];
 
         _receiveBackgroundTask = Task.Run(
             async () =>
@@ -93,13 +93,13 @@ public class Connection : IConnection
                     var stream = _streamProvider.ReadStream;
                     while (!cancellationToken.IsCancellationRequested)
                     {
-                        int bytesRead = await stream.ReadAtLeastAsync(
+                        var bytesRead = await stream.ReadAtLeastAsync(
                             sizeBuffer,
                             sizeBuffer.Length,
                             true,
                             cancellationToken);
 
-                        int? payloadSize = GetIntFromByteArray(sizeBuffer);
+                        var payloadSize = GetIntFromByteArray(sizeBuffer);
                         if (payloadSize == null)
                         {
                             throw new EndOfStreamException("Received unexpected response size.");
@@ -107,10 +107,10 @@ public class Connection : IConnection
 
                         _logger.LogDebug("Receiving payload ({@payloadSize} bytes).", payloadSize);
 
-                        byte[] payload = _arrayPool.Rent(payloadSize.Value);
+                        var payload = _arrayPool.Rent(payloadSize.Value);
                         try
                         {
-                            int read = await stream.ReadAtLeastAsync(
+                            var read = await stream.ReadAtLeastAsync(
                                 payload,
                                 payloadSize.Value,
                                 true,
@@ -122,7 +122,7 @@ public class Connection : IConnection
 
                             _logger.LogDebug("Read response payload ({@payloadSize} bytes).", payloadSize);
 
-                            int? correlationId = GetIntFromByteArray(payload);
+                            var correlationId = GetIntFromByteArray(payload);
                             if (correlationId == null ||
                                 !_pendingRequests.TryRemove(correlationId.Value, out var pendingRequest))
                             {
@@ -140,7 +140,7 @@ public class Connection : IConnection
                                 {
                                     var buffer = new Memory<byte>(payload, 0, payloadSize.Value);
                                     var reader = new BufferReader(buffer);
-                                    object response = pendingRequest.DeserializeResponse(ref reader, _serializationContext);
+                                    var response = pendingRequest.DeserializeResponse(ref reader, _serializationContext);
 
                                     if (reader.Remaining != 0)
                                     {
@@ -260,7 +260,7 @@ public class Connection : IConnection
 
     public bool SupportsApiKeyVersion(ApiKey apiKey, short minVersion)
     {
-        if (_apiVersions.TryGetValue(apiKey, out short maxVersion))
+        if (_apiVersions.TryGetValue(apiKey, out var maxVersion))
         {
             return maxVersion >= minVersion;
         }
