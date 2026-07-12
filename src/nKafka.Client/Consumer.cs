@@ -1245,6 +1245,9 @@ public class Consumer<TMessage> : IConsumer<TMessage>
             _disposed = true;
             _enumerator?.Dispose();
             _enumerator = null;
+            _consumer._messageDeserializeEnumerator = null;
+            _consumer._fetchResult?.Dispose();
+            _consumer._fetchResult = null;
         }
 
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
