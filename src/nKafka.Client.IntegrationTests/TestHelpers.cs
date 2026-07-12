@@ -160,10 +160,13 @@ public static class TestHelpers
             protocol,
             host,
             port,
-            "nKafka.Client.IntegrationTests")
-        {
-            RequestApiVersionsOnOpen = false,
-        };
+            "nKafka.Client.IntegrationTests",
+            512 * 1024,
+            512 * 1024,
+            CreateTlsConfig(protocol),
+            protocol == "SASL_SSL" ? CreateSaslConfig() : null,
+            protocol == "SASL_SSL",
+            false);
         return await CreateConnectionAsync(config, ct);
     }
 
