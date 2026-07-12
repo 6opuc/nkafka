@@ -84,3 +84,13 @@
 - **Always run benchmarks before proposing a PR** for performance-sensitive changes
 - Compare against baseline: `--filter` only the changed method, run on same machine, same cluster state
 
+### Workflow
+- **Always create a feature branch** (e.g., `issue-<NUMBER>-<short-description>`) before implementing changes. Never code directly on `main`.
+- Create the branch, push, then implement. This prevents working on an untracked local state and makes it easy to recover.
+
+### Safety & Validation
+- **Protocol violations should fail fast** - throw exceptions, don't just log
+- Validate response length: `reader.Remaining == 0` after deserialization
+- Create exception hierarchy: `KafkaException` base with typed derivatives
+
+
