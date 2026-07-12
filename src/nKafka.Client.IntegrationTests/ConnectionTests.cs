@@ -10,6 +10,7 @@ using nKafka.Contracts.MessageDefinitions.LeaveGroupRequestNested;
 using nKafka.Contracts.MessageDefinitions.MetadataRequestNested;
 using nKafka.Contracts.MessageDefinitions.OffsetFetchRequestNested;
 using nKafka.Contracts.MessageDefinitions.SyncGroupRequestNested;
+using static nKafka.Client.IntegrationTests.TestHelpers;
 
 namespace nKafka.Client.IntegrationTests;
 
@@ -21,14 +22,14 @@ public class ConnectionTests
         TestHelpers.ValidateSslInfrastructure();
     }
 
+    private static IEnumerable TestProtocols => new[] { "PLAINTEXT", "SASL_SSL" };
+
     [Test]
     [TestCaseSource(nameof(TestProtocols))]
     public async Task ConnectAsyncAndDisposeAsyncShouldNotThrow(string protocol)
     {
         await using var connection = await OpenConnection(protocol);
     }
-
-    private static IEnumerable TestProtocols => new[] { "PLAINTEXT", "SASL_SSL" };
 
     [Test]
     [TestCaseSource(nameof(ApiVersionsRequestTestCases))]
@@ -121,7 +122,7 @@ public class ConnectionTests
             [
                 new MetadataRequestTopic
                 {
-                    Name = "test_p12_m1M_s4B",
+                    Name = Topic,
                     TopicId = Guid.Empty,
                 }
             ],
@@ -165,7 +166,7 @@ public class ConnectionTests
     public async Task SendAsync_JoinGroupRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         var consumerGroupId = Guid.NewGuid().ToString();
-        await using var connection = await OpenCoordinatorConnection(consumerGroupId, protocol);
+        await using var connection = await CreateCoordinatorConnectionAsync(consumerGroupId, protocol);
         using var response = await JoinGroupAsync(connection, apiVersion, consumerGroupId);
 
         response.Message.ErrorCode.Should().Be(0);
@@ -190,59 +191,12 @@ public class ConnectionTests
 
     public static IEnumerable JoinGroupRequestTestCases => KafkaTestCases.GetTestCases<JoinGroupRequest>();
 
-    private static async Task<IDisposableMessage<JoinGroupResponse>> JoinGroupAsync(
-        Connection connection, short apiVersion, string consumerGroupId)
-    {
-        var protocolSubscription = new ConsumerProtocolSubscription
-        {
-            Topics = ["test_p12_m1M_s4B"],
-            UserData = null,
-            OwnedPartitions = null,
-            GenerationId = -1,
-            RackId = null
-        };
-        var request = new JoinGroupRequest
-        {
-            FixedVersion = apiVersion,
-            GroupId = consumerGroupId,
-            SessionTimeoutMs = (int)TimeSpan.FromSeconds(45).TotalMilliseconds,
-            RebalanceTimeoutMs = -1,
-            MemberId = string.Empty,
-            GroupInstanceId = Guid.NewGuid().ToString(),
-            ProtocolType = "consumer",
-            Protocols = new Dictionary<string, JoinGroupRequestProtocol>
-            {
-                {
-                    "nkafka-consumer", new JoinGroupRequestProtocol
-                    {
-                        Name = "nkafka-consumer",
-                        Metadata = protocolSubscription,
-                    }
-                }
-            },
-            Reason = null
-        };
-        var response = await connection.SendAsync(request, CancellationToken.None);
-        response.Should().NotBeNull();
-
-        if (apiVersion == 4 && response.Message.ErrorCode == (short)ErrorCode.MemberIdRequired)
-        {
-            request.MemberId = response.Message.MemberId;
-            response.Dispose();
-
-            response = await connection.SendAsync(request, CancellationToken.None);
-            response.Should().NotBeNull();
-        }
-
-        return response;
-    }
-
     [Test]
     [TestCaseSource(nameof(LeaveGroupRequestTestCases))]
     public async Task SendAsync_LeaveGroupRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         var consumerGroupId = Guid.NewGuid().ToString();
-        await using var connection = await OpenCoordinatorConnection(consumerGroupId, protocol);
+        await using var connection = await CreateCoordinatorConnectionAsync(consumerGroupId, protocol);
         using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var request = new LeaveGroupRequest
         {
@@ -273,16 +227,16 @@ public class ConnectionTests
     public async Task SendAsync_SyncGroupRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         var consumerGroupId = Guid.NewGuid().ToString();
-        await using var connection = await OpenCoordinatorConnection(consumerGroupId, protocol);
+        await using var connection = await CreateCoordinatorConnectionAsync(consumerGroupId, protocol);
         using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var requestedAssignment = new ConsumerProtocolAssignment
         {
             AssignedPartitions = new Dictionary<string, TopicPartition>
             {
                 {
-                    "test_p12_m1M_s4B", new TopicPartition
+                    Topic, new TopicPartition
                     {
-                        Topic = "test_p12_m1M_s4B",
+                        Topic = Topic,
                         Partitions = Enumerable.Range(0, 12).ToArray(),
                     }
                 }
@@ -322,7 +276,7 @@ public class ConnectionTests
     public async Task SendAsync_HeartbeatRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         var consumerGroupId = Guid.NewGuid().ToString();
-        await using var connection = await OpenCoordinatorConnection(consumerGroupId, protocol);
+        await using var connection = await CreateCoordinatorConnectionAsync(consumerGroupId, protocol);
         using var joinGroupResponse = await JoinGroupAsync(connection, 0, consumerGroupId);
         var requestClient = new HeartbeatRequest
         {
@@ -345,62 +299,21 @@ public class ConnectionTests
     public async Task SendAsync_FetchRequest_ShouldReturnExpectedResult(string protocol, short apiVersion)
     {
         using var metadata = await RequestMetadata(protocol);
-        var topicMetadata = metadata.Message.Topics!["test_p12_m1M_s4B"];
+        var topicMetadata = metadata.Message.Topics![Topic];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
         foreach (var group in partitions)
         {
             var broker = metadata.Message.Brokers![group.Key];
-            var config = new ConnectionConfig(
-                protocol,
-                broker.Host!,
-                broker.Port!.Value,
-                "nKafka.Client.IntegrationTests",
-                Tls: TestHelpers.CreateTlsConfig(protocol),
-                Sasl: protocol == "SASL_SSL" ? TestHelpers.CreateSaslConfig() : null,
-                CheckCrcs: protocol == "SASL_SSL",
-                RequestApiVersionsOnOpen: false);
-            await using var connection = new Connection(config, TestLoggerFactory.Instance);
-            await connection.OpenAsync(CancellationToken.None);
+            await using var connection = await CreateDirectConnectionAsync(protocol, broker.Host!, broker.Port!.Value);
 
             foreach (var partition in group)
             {
-                var request = new FetchRequest
-                {
-                    FixedVersion = apiVersion,
-                    ClusterId = null,
-                    ReplicaId = -1,
-                    ReplicaState = null,
-                    MaxWaitMs = 0,
-                    MinBytes = 0,
-                    MaxBytes = 0x7fffffff,
-                    IsolationLevel = 0,
-                    SessionId = 0,
-                    SessionEpoch = -1,
-                    Topics =
-                    [
-                        new FetchTopic
-                        {
-                            Topic = topicMetadata.Name,
-                            TopicId = topicMetadata.TopicId,
-                            Partitions =
-                            [
-                                new FetchPartition
-                                {
-                                    Partition = partition.PartitionIndex!.Value,
-                                    CurrentLeaderEpoch = -1,
-                                    FetchOffset = 0,
-                                    LastFetchedEpoch = -1,
-                                    LogStartOffset = -1,
-                                    PartitionMaxBytes = 1 * 1024 * 1024,
-                                    ReplicaDirectoryId = Guid.Empty,
-                                }
-                            ]
-                        },
-                    ],
-                    ForgottenTopicsData = [],
-                    RackId = string.Empty,
-                };
+                var request = CreateFetchRequest(
+                    apiVersion,
+                    topicMetadata.Name,
+                    topicMetadata.TopicId,
+                    [(partition.PartitionIndex!.Value, 0L)]);
                 using var response = await connection.SendAsync(request, CancellationToken.None);
 
                 response.Should().NotBeNull();
@@ -423,66 +336,25 @@ public class ConnectionTests
     public async Task SendAsync_FetchRequest_ShouldFetchAllRecords(string protocol, short apiVersion)
     {
         using var metadata = await RequestMetadata(protocol);
-        var topicMetadata = metadata.Message.Topics!["test_p12_m1M_s4B"];
+        var topicMetadata = metadata.Message.Topics![Topic];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
         var recordCount = 0;
         foreach (var group in partitions)
         {
             var broker = metadata.Message.Brokers![group.Key];
-            var config = new ConnectionConfig(
-                protocol,
-                broker.Host!,
-                broker.Port!.Value,
-                "nKafka.Client.IntegrationTests",
-                Tls: TestHelpers.CreateTlsConfig(protocol),
-                Sasl: protocol == "SASL_SSL" ? TestHelpers.CreateSaslConfig() : null,
-                CheckCrcs: protocol == "SASL_SSL",
-                RequestApiVersionsOnOpen: false);
-            await using var connection = new Connection(config, NullLoggerFactory.Instance);
-            await connection.OpenAsync(CancellationToken.None);
+            await using var connection = await CreateDirectConnectionAsync(protocol, broker.Host!, broker.Port!.Value);
 
             foreach (var partition in group)
             {
                 long offset = 0;
                 while (true)
                 {
-                    var request = new FetchRequest
-                    {
-                        FixedVersion = apiVersion,
-                        ClusterId = null,
-                        ReplicaId = -1,
-                        ReplicaState = null,
-                        MaxWaitMs = 0,
-                        MinBytes = 0,
-                        MaxBytes = 0x7fffffff,
-                        IsolationLevel = 0,
-                        SessionId = 0,
-                        SessionEpoch = -1,
-                        Topics =
-                        [
-                            new FetchTopic
-                            {
-                                Topic = "test_p12_m1M_s4B",
-                                TopicId = topicMetadata.TopicId,
-                                Partitions =
-                                [
-                                    new FetchPartition
-                                    {
-                                        Partition = partition.PartitionIndex!.Value,
-                                        CurrentLeaderEpoch = -1,
-                                        FetchOffset = offset,
-                                        LastFetchedEpoch = -1,
-                                        LogStartOffset = -1,
-                                        PartitionMaxBytes = 1 * 1024 * 1024,
-                                        ReplicaDirectoryId = Guid.Empty,
-                                    }
-                                ]
-                            },
-                        ],
-                        ForgottenTopicsData = [],
-                        RackId = string.Empty,
-                    };
+                    var request = CreateFetchRequest(
+                        apiVersion,
+                        Topic,
+                        topicMetadata.TopicId,
+                        [(partition.PartitionIndex!.Value, offset)]);
                     using var response = await connection.SendAsync(request, CancellationToken.None);
 
                     var lastOffset = response.Message
@@ -512,7 +384,7 @@ public class ConnectionTests
     public async Task SendAsync_FetchRequestWithSeveralPartitions_ShouldFetchAllRecords(string protocol, short apiVersion)
     {
         using var metadata = await RequestMetadata(protocol);
-        var topicMetadata = metadata.Message.Topics!["test_p12_m1M_s4B"];
+        var topicMetadata = metadata.Message.Topics![Topic];
         var partitions = topicMetadata.Partitions!
             .GroupBy(x => x.LeaderId!.Value);
         var recordCount = 0;
@@ -533,42 +405,12 @@ public class ConnectionTests
             await using var connection = new Connection(config, NullLoggerFactory.Instance);
             await connection.OpenAsync(CancellationToken.None);
 
-            var request = new FetchRequest
-            {
-                FixedVersion = apiVersion,
-                ClusterId = null,
-                ReplicaId = -1,
-                ReplicaState = null,
-                MaxWaitMs = 0,
-                MinBytes = 0,
-                MaxBytes = 0x7fffffff,
-                IsolationLevel = 0,
-                SessionId = 0,
-                SessionEpoch = -1,
-                Topics =
-                [
-                    new FetchTopic
-                    {
-                        Topic = "test_p12_m1M_s4B",
-                        TopicId = topicMetadata.TopicId,
-                        Partitions = group
-                            .Select(x =>
-                                new FetchPartition
-                                {
-                                    Partition = x.PartitionIndex!.Value,
-                                    CurrentLeaderEpoch = -1,
-                                    FetchOffset = 0,
-                                    LastFetchedEpoch = -1,
-                                    LogStartOffset = -1,
-                                    PartitionMaxBytes = 1 * 1024 * 1024,
-                                    ReplicaDirectoryId = Guid.Empty,
-                                })
-                            .ToList(),
-                    },
-                ],
-                ForgottenTopicsData = [],
-                RackId = string.Empty,
-            };
+            var partitionOffsets = group.ToDictionary(x => x.PartitionIndex!.Value, _ => 0L);
+            var request = CreateFetchRequest(
+                apiVersion,
+                Topic,
+                topicMetadata.TopicId,
+                partitionOffsets.Select(kv => (kv.Key, kv.Value)));
 
             while (true)
             {
@@ -596,6 +438,7 @@ public class ConnectionTests
                         if (lastOffset != null)
                         {
                             partitionRequest.FetchOffset = lastOffset + 1;
+                            partitionOffsets[partitionResponse.PartitionIndex!.Value] = lastOffset!.Value + 1;
                         }
                     }
                 }
@@ -658,89 +501,6 @@ public class ConnectionTests
 
     public static IEnumerable OffsetFetchRequestTestCases => KafkaTestCases.GetTestCases<OffsetFetchRequest>();
 
-    private async Task<Connection> OpenConnection(string protocol)
-    {
-        var config = TestHelpers.CreateConnectionConfig(
-            protocol,
-            clientId: "nKafka.Client.IntegrationTests",
-            checkCrcs: protocol == "SASL_SSL",
-            requestApiVersionsOnOpen: false);
-        var connection = new Connection(config, TestLoggerFactory.Instance);
-
-        await connection.OpenAsync(CancellationToken.None);
-
-        return connection;
-    }
-
-    private async Task<Connection> OpenCoordinatorConnection(string groupId, string protocol)
-    {
-        var config = TestHelpers.CreateConnectionConfig(
-            protocol,
-            clientId: "nKafka.Client.IntegrationTests",
-            checkCrcs: protocol == "SASL_SSL",
-            requestApiVersionsOnOpen: false);
-        await using var connection = new Connection(config, TestLoggerFactory.Instance);
-        await connection.OpenAsync(CancellationToken.None);
-
-        var request = new FindCoordinatorRequest
-        {
-            FixedVersion = 4,
-            Key = groupId,
-            KeyType = 0,
-            CoordinatorKeys = [groupId],
-        };
-
-        using var response = await connection.SendAsync(request, CancellationToken.None);
-        if (response == null)
-        {
-            throw new Exception("Empty response from find coordinator request.");
-        }
-
-        var coordinator = response.Message.Coordinators!.Single();
-        if (coordinator.ErrorCode != 0)
-        {
-            throw new Exception(
-                $"Non-zero error code in response from find coordinator request: {coordinator.ErrorCode}.");
-        }
-
-        var coordinatorConfig = new ConnectionConfig(
-                     protocol,
-                     coordinator.Host!,
-                     coordinator.Port!.Value,
-                     "nKafka.Client.IntegrationTests",
-               Tls: TestHelpers.CreateTlsConfig(protocol),
-                Sasl: protocol == "SASL_SSL" ? TestHelpers.CreateSaslConfig() : null,
-                     CheckCrcs: protocol == "SASL_SSL",
-                     RequestApiVersionsOnOpen: false);
-        var coordinatorConnection = new Connection(coordinatorConfig, TestLoggerFactory.Instance);
-        await coordinatorConnection.OpenAsync(CancellationToken.None);
-
-        return coordinatorConnection;
-    }
-
-    private async Task<IDisposableMessage<MetadataResponse>> RequestMetadata(string protocol)
-    {
-        await using var connection = await OpenConnection(protocol);
-        var request = new MetadataRequest
-        {
-            FixedVersion = 12,
-            Topics =
-            [
-                new MetadataRequestTopic
-                {
-                    Name = "test_p12_m1M_s4B",
-                    TopicId = Guid.Empty,
-                }
-            ],
-            AllowAutoTopicCreation = false,
-            IncludeClusterAuthorizedOperations = true,
-            IncludeTopicAuthorizedOperations = true,
-        };
-
-        var response = await connection.SendAsync(request, CancellationToken.None);
-        return response;
-    }
-
     [Test]
     public async Task ConnectAsync_WithSaslSsl_ShouldOpenSuccessfully()
     {
@@ -800,84 +560,17 @@ public class ConnectionTests
             requestApiVersionsOnOpen: false,
             requestBufferSize: 512 * 1024);
 
-        await using var bootstrapConn = new Connection(bootstrapConfig, TestLoggerFactory.Instance);
-        await bootstrapConn.OpenAsync(CancellationToken.None);
+        await using var leaderConnection = await GetLeaderConnectionAsync(bootstrapConfig, requestTimeout: TimeSpan.FromSeconds(2));
 
-        var metadataRequest = new MetadataRequest
-        {
-            FixedVersion = 12,
-            Topics =
-            [
-                new MetadataRequestTopic
-                {
-                    Name = TestHelpers.Topic,
-                    TopicId = Guid.Empty,
-                }
-            ],
-            AllowAutoTopicCreation = false,
-            IncludeClusterAuthorizedOperations = true,
-            IncludeTopicAuthorizedOperations = true,
-        };
+        var fetchRequest = CreateFetchRequest(
+            apiVersion: 12,
+            topic: Topic,
+            topicId: Guid.Empty,
+            partitions: [(0, 0L)],
+            maxWaitMs: 60000,
+            minBytes: 10_000_000);
 
-        using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
-        var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        var partition0 = topicMetadata.Partitions!.FirstOrDefault(p => p.PartitionIndex == 0);
-        if (partition0 == null)
-        {
-            throw new Exception("Partition 0 not found in metadata response");
-        }
-        var leaderId = partition0.LeaderId!.Value;
-        var leader = metadataResponse.Message.Brokers![leaderId];
-
-        // Connect directly to partition 0 leader
-        var config = new ConnectionConfig(
-            "PLAINTEXT",
-            leader.Host!,
-            leader.Port!.Value,
-            "nKafka.Client.IntegrationTests") with
-        { RequestTimeout = TimeSpan.FromSeconds(2) };
-
-        await using var connection = new Connection(config, TestLoggerFactory.Instance);
-        await connection.OpenAsync(CancellationToken.None);
-
-        var fetchRequest = new FetchRequest
-        {
-            FixedVersion = 12,
-            ClusterId = null,
-            ReplicaId = -1,
-            ReplicaState = null,
-            MaxWaitMs = 60000,
-            MinBytes = 10_000_000,
-            MaxBytes = 0x7fffffff,
-            IsolationLevel = 0,
-            SessionId = 0,
-            SessionEpoch = -1,
-            Topics =
-            [
-                new FetchTopic
-                {
-                    Topic = TestHelpers.Topic,
-                    TopicId = Guid.Empty,
-                    Partitions =
-                    [
-                        new FetchPartition
-                        {
-                            Partition = 0,
-                            CurrentLeaderEpoch = -1,
-                            FetchOffset = 0,
-                            LastFetchedEpoch = -1,
-                            LogStartOffset = -1,
-                            PartitionMaxBytes = 1 * 1024 * 1024,
-                            ReplicaDirectoryId = Guid.Empty,
-                        }
-                    ]
-                },
-            ],
-            ForgottenTopicsData = [],
-            RackId = string.Empty,
-        };
-
-        var act = async () => await connection.SendAsync(fetchRequest, CancellationToken.None);
+        var act = async () => await leaderConnection.SendAsync(fetchRequest, CancellationToken.None);
         var exception = await act.Should().ThrowAsync<nKafka.Contracts.Exceptions.PendingRequestTimeoutException>();
         exception.And.ApiKey.Should().Be(ApiKey.Fetch);
         exception.And.TimeoutMs.Should().Be(2000);
@@ -892,10 +585,20 @@ public class ConnectionTests
             clientId: "nKafka.Client.IntegrationTests",
             requestApiVersionsOnOpen: false,
             requestBufferSize: 512 * 1024);
+        await using var connection = await GetLeaderConnectionAsync(bootstrapConfig, requestTimeout: TimeSpan.FromSeconds(2));
 
-        await using var bootstrapConn = new Connection(bootstrapConfig, TestLoggerFactory.Instance);
-        await bootstrapConn.OpenAsync(CancellationToken.None);
+        var fetchRequest = CreateFetchRequest(
+            apiVersion: 12,
+            topic: Topic,
+            topicId: Guid.Empty,
+            partitions: [(0, 0L)],
+            maxWaitMs: 3000,
+            minBytes: 10_000_000);
 
+        var act = async () => await connection.SendAsync(fetchRequest, CancellationToken.None);
+        await act.Should().ThrowAsync<nKafka.Contracts.Exceptions.PendingRequestTimeoutException>();
+
+        // Connection should still work after timeout
         var metadataRequest = new MetadataRequest
         {
             FixedVersion = 12,
@@ -903,7 +606,7 @@ public class ConnectionTests
             [
                 new MetadataRequestTopic
                 {
-                    Name = TestHelpers.Topic,
+                    Name = Topic,
                     TopicId = Guid.Empty,
                 }
             ],
@@ -912,86 +615,7 @@ public class ConnectionTests
             IncludeTopicAuthorizedOperations = true,
         };
 
-        using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
-        var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        var partition0 = topicMetadata.Partitions!.FirstOrDefault(p => p.PartitionIndex == 0);
-        if (partition0 == null)
-        {
-            throw new Exception("Partition 0 not found in metadata response");
-        }
-        var leaderId = partition0.LeaderId!.Value;
-        var leader = metadataResponse.Message.Brokers![leaderId];
-
-        // Connect directly to partition 0 leader with short timeout
-        var config = new ConnectionConfig(
-            "PLAINTEXT",
-            leader.Host!,
-            leader.Port!.Value,
-            "nKafka.Client.IntegrationTests") with
-        { RequestTimeout = TimeSpan.FromSeconds(2) };
-
-        await using var connection = new Connection(config, TestLoggerFactory.Instance);
-        await connection.OpenAsync(CancellationToken.None);
-
-        // First request times out (broker has ~333KB per partition, MinBytes=10MB won't be met)
-        var fetchRequest = new FetchRequest
-        {
-            FixedVersion = 12,
-            ClusterId = null,
-            ReplicaId = -1,
-            ReplicaState = null,
-            MaxWaitMs = 3000,
-            MinBytes = 10_000_000,
-            MaxBytes = 0x7fffffff,
-            IsolationLevel = 0,
-            SessionId = 0,
-            SessionEpoch = -1,
-            Topics =
-            [
-                new FetchTopic
-                {
-                    Topic = TestHelpers.Topic,
-                    TopicId = Guid.Empty,
-                    Partitions =
-                    [
-                        new FetchPartition
-                        {
-                            Partition = 0,
-                            CurrentLeaderEpoch = -1,
-                            FetchOffset = 0,
-                            LastFetchedEpoch = -1,
-                            LogStartOffset = -1,
-                            PartitionMaxBytes = 1 * 1024 * 1024,
-                            ReplicaDirectoryId = Guid.Empty,
-                        }
-                    ]
-                },
-            ],
-            ForgottenTopicsData = [],
-            RackId = string.Empty,
-        };
-
-        var act = async () => await connection.SendAsync(fetchRequest, CancellationToken.None);
-        await act.Should().ThrowAsync<nKafka.Contracts.Exceptions.PendingRequestTimeoutException>();
-
-        // Connection should still work after timeout
-        var metadataRequest2 = new MetadataRequest
-        {
-            FixedVersion = 12,
-            Topics =
-            [
-                new MetadataRequestTopic
-                {
-                    Name = TestHelpers.Topic,
-                    TopicId = Guid.Empty,
-                }
-            ],
-            AllowAutoTopicCreation = false,
-            IncludeClusterAuthorizedOperations = true,
-            IncludeTopicAuthorizedOperations = true,
-        };
-
-        var response = await connection.SendAsync(metadataRequest2, CancellationToken.None);
+        var response = await connection.SendAsync(metadataRequest, CancellationToken.None);
         response.Should().NotBeNull();
         response.Message.Topics.Should().NotBeNullOrEmpty();
     }
@@ -1009,42 +633,13 @@ public class ConnectionTests
         var connection = new Connection(config, TestLoggerFactory.Instance);
         await connection.OpenAsync(CancellationToken.None);
 
-        var fetchRequest = new FetchRequest
-        {
-            FixedVersion = 12,
-            ClusterId = null,
-            ReplicaId = -1,
-            ReplicaState = null,
-            MaxWaitMs = 60000,
-            MinBytes = 10_000_000,
-            MaxBytes = 0x7fffffff,
-            IsolationLevel = 0,
-            SessionId = 0,
-            SessionEpoch = -1,
-            Topics =
-            [
-                new FetchTopic
-                {
-                    Topic = TestHelpers.Topic,
-                    TopicId = Guid.Empty,
-                    Partitions =
-                    [
-                        new FetchPartition
-                        {
-                            Partition = 0,
-                            CurrentLeaderEpoch = -1,
-                            FetchOffset = 0,
-                            LastFetchedEpoch = -1,
-                            LogStartOffset = -1,
-                            PartitionMaxBytes = 1 * 1024 * 1024,
-                            ReplicaDirectoryId = Guid.Empty,
-                        }
-                    ]
-                },
-            ],
-            ForgottenTopicsData = [],
-            RackId = string.Empty,
-        };
+        var fetchRequest = CreateFetchRequest(
+            apiVersion: 12,
+            topic: Topic,
+            topicId: Guid.Empty,
+            partitions: [(0, 0L)],
+            maxWaitMs: 60000,
+            minBytes: 10_000_000);
 
         using var cts = new CancellationTokenSource(60000);
         var sendTask = connection.SendAsync(fetchRequest, cts.Token);
@@ -1074,83 +669,15 @@ public class ConnectionTests
             port: TestHelpers.PlainTextBootstrapPort,
             clientId: "nKafka.Client.IntegrationTests",
             requestApiVersionsOnOpen: false);
+        await using var connection = await GetLeaderConnectionAsync(bootstrapConfig, requestTimeout: TimeSpan.FromSeconds(30));
 
-        await using var bootstrapConn = new Connection(bootstrapConfig, TestLoggerFactory.Instance);
-        await bootstrapConn.OpenAsync(CancellationToken.None);
-
-        var metadataRequest = new MetadataRequest
-        {
-            FixedVersion = 12,
-            Topics =
-            [
-                new MetadataRequestTopic
-                {
-                    Name = TestHelpers.Topic,
-                    TopicId = Guid.Empty,
-                }
-            ],
-            AllowAutoTopicCreation = false,
-            IncludeClusterAuthorizedOperations = true,
-            IncludeTopicAuthorizedOperations = true,
-        };
-
-        using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
-        var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        var partition0 = topicMetadata.Partitions!.FirstOrDefault(p => p.PartitionIndex == 0);
-        if (partition0 == null)
-        {
-            throw new Exception("Partition 0 not found in metadata response");
-        }
-        var leaderId = partition0.LeaderId!.Value;
-        var leader = metadataResponse.Message.Brokers![leaderId];
-
-        // Client timeout is 30s (default), broker MaxWaitMs is only 2s
-        var config = new ConnectionConfig(
-            "PLAINTEXT",
-            leader.Host!,
-            leader.Port!.Value,
-            "nKafka.Client.IntegrationTests") with
-        { RequestTimeout = TimeSpan.FromSeconds(30) };
-
-        await using var connection = new Connection(config, TestLoggerFactory.Instance);
-        await connection.OpenAsync(CancellationToken.None);
-
-        var fetchRequest = new FetchRequest
-        {
-            FixedVersion = 12,
-            ClusterId = null,
-            ReplicaId = -1,
-            ReplicaState = null,
-            MaxWaitMs = 2000,
-            MinBytes = 10_000_000,
-            MaxBytes = 0x7fffffff,
-            IsolationLevel = 0,
-            SessionId = 0,
-            SessionEpoch = -1,
-            Topics =
-            [
-                new FetchTopic
-                {
-                    Topic = TestHelpers.Topic,
-                    TopicId = Guid.Empty,
-                    Partitions =
-                    [
-                        new FetchPartition
-                        {
-                            Partition = 0,
-                            CurrentLeaderEpoch = -1,
-                            FetchOffset = 0,
-                            LastFetchedEpoch = -1,
-                            LogStartOffset = -1,
-                            PartitionMaxBytes = 1 * 1024 * 1024,
-                            ReplicaDirectoryId = Guid.Empty,
-                        }
-                    ]
-                },
-            ],
-            ForgottenTopicsData = [],
-            RackId = string.Empty,
-        };
+        var fetchRequest = CreateFetchRequest(
+            apiVersion: 12,
+            topic: Topic,
+            topicId: Guid.Empty,
+            partitions: [(0, 0L)],
+            maxWaitMs: 2000,
+            minBytes: 10_000_000);
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         using var response = await connection.SendAsync(fetchRequest, CancellationToken.None);
@@ -1177,83 +704,16 @@ public class ConnectionTests
             port: TestHelpers.PlainTextBootstrapPort,
             clientId: "nKafka.Client.IntegrationTests",
             requestApiVersionsOnOpen: false);
-
-        await using var bootstrapConn = new Connection(bootstrapConfig, TestLoggerFactory.Instance);
-        await bootstrapConn.OpenAsync(CancellationToken.None);
-
-        var metadataRequest = new MetadataRequest
-        {
-            FixedVersion = 12,
-            Topics =
-            [
-                new MetadataRequestTopic
-                {
-                    Name = TestHelpers.Topic,
-                    TopicId = Guid.Empty,
-                }
-            ],
-            AllowAutoTopicCreation = false,
-            IncludeClusterAuthorizedOperations = true,
-            IncludeTopicAuthorizedOperations = true,
-        };
-
-        using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
-        var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        var partition0 = topicMetadata.Partitions!.FirstOrDefault(p => p.PartitionIndex == 0);
-        if (partition0 == null)
-        {
-            throw new Exception("Partition 0 not found in metadata response");
-        }
-        var leaderId = partition0.LeaderId!.Value;
-        var leader = metadataResponse.Message.Brokers![leaderId];
-
-        var config = new ConnectionConfig(
-            "PLAINTEXT",
-            leader.Host!,
-            leader.Port!.Value,
-            "nKafka.Client.IntegrationTests") with
-        { RequestTimeout = TimeSpan.FromSeconds(30) };
-
-        await using var connection = new Connection(config, TestLoggerFactory.Instance);
-        await connection.OpenAsync(CancellationToken.None);
+        await using var connection = await GetLeaderConnectionAsync(bootstrapConfig, requestTimeout: TimeSpan.FromSeconds(30));
 
         // First, consume all existing data to get a clean high watermark
-        var consumeAll = new FetchRequest
-        {
-            FixedVersion = 12,
-            ClusterId = null,
-            ReplicaId = -1,
-            ReplicaState = null,
-            MaxWaitMs = 1000,
-            MinBytes = 0,
-            MaxBytes = 0x7fffffff,
-            IsolationLevel = 0,
-            SessionId = 0,
-            SessionEpoch = -1,
-            Topics =
-            [
-                new FetchTopic
-                {
-                    Topic = TestHelpers.Topic,
-                    TopicId = Guid.Empty,
-                    Partitions =
-                    [
-                        new FetchPartition
-                        {
-                            Partition = 0,
-                            CurrentLeaderEpoch = -1,
-                            FetchOffset = 0,
-                            LastFetchedEpoch = -1,
-                            LogStartOffset = -1,
-                            PartitionMaxBytes = 10 * 1024 * 1024,
-                            ReplicaDirectoryId = Guid.Empty,
-                        }
-                    ]
-                },
-            ],
-            ForgottenTopicsData = [],
-            RackId = string.Empty,
-        };
+        var consumeAll = CreateFetchRequest(
+            apiVersion: 12,
+            topic: Topic,
+            topicId: Guid.Empty,
+            partitions: [(0, 0L)],
+            partitionMaxBytes: 10 * 1024 * 1024,
+            maxWaitMs: 1000);
 
         using var consumeAllResponse = await connection.SendAsync(consumeAll, CancellationToken.None);
         var highWatermark = consumeAllResponse.Message.Responses!.FirstOrDefault()?.Partitions?.FirstOrDefault()?.HighWatermark;
@@ -1261,42 +721,14 @@ public class ConnectionTests
         var watermark = highWatermark!.Value;
 
         // Now fetch from high watermark with MaxWaitMs=0, MinBytes=1MB (no data available)
-        var fetchRequest = new FetchRequest
-        {
-            FixedVersion = 12,
-            ClusterId = null,
-            ReplicaId = -1,
-            ReplicaState = null,
-            MaxWaitMs = 0,
-            MinBytes = 1_000_000,
-            MaxBytes = 0x7fffffff,
-            IsolationLevel = 0,
-            SessionId = 0,
-            SessionEpoch = -1,
-            Topics =
-            [
-                new FetchTopic
-                {
-                    Topic = TestHelpers.Topic,
-                    TopicId = Guid.Empty,
-                    Partitions =
-                    [
-                        new FetchPartition
-                        {
-                            Partition = 0,
-                            CurrentLeaderEpoch = -1,
-                            FetchOffset = watermark,
-                            LastFetchedEpoch = -1,
-                            LogStartOffset = -1,
-                            PartitionMaxBytes = 10 * 1024 * 1024,
-                            ReplicaDirectoryId = Guid.Empty,
-                        }
-                    ]
-                },
-            ],
-            ForgottenTopicsData = [],
-            RackId = string.Empty,
-        };
+        var fetchRequest = CreateFetchRequest(
+            apiVersion: 12,
+            topic: Topic,
+            topicId: Guid.Empty,
+            partitions: [(0, watermark)],
+            partitionMaxBytes: 10 * 1024 * 1024,
+            maxWaitMs: 0,
+            minBytes: 1_000_000);
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         using var response = await connection.SendAsync(fetchRequest, CancellationToken.None);
@@ -1320,84 +752,18 @@ public class ConnectionTests
             port: TestHelpers.PlainTextBootstrapPort,
             clientId: "nKafka.Client.IntegrationTests",
             requestApiVersionsOnOpen: false);
-
-        await using var bootstrapConn = new Connection(bootstrapConfig, TestLoggerFactory.Instance);
-        await bootstrapConn.OpenAsync(CancellationToken.None);
-
-        var metadataRequest = new MetadataRequest
-        {
-            FixedVersion = 12,
-            Topics =
-            [
-                new MetadataRequestTopic
-                {
-                    Name = TestHelpers.Topic,
-                    TopicId = Guid.Empty,
-                }
-            ],
-            AllowAutoTopicCreation = false,
-            IncludeClusterAuthorizedOperations = true,
-            IncludeTopicAuthorizedOperations = true,
-        };
-
-        using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
-        var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        var partition0 = topicMetadata.Partitions!.FirstOrDefault(p => p.PartitionIndex == 0);
-        if (partition0 == null)
-        {
-            throw new Exception("Partition 0 not found in metadata response");
-        }
-        var leaderId = partition0.LeaderId!.Value;
-        var leader = metadataResponse.Message.Brokers![leaderId];
-
-        var config = new ConnectionConfig(
-            "PLAINTEXT",
-            leader.Host!,
-            leader.Port!.Value,
-            "nKafka.Client.IntegrationTests") with
-        { RequestTimeout = TimeSpan.FromSeconds(30) };
-
-        await using var connection = new Connection(config, TestLoggerFactory.Instance);
-        await connection.OpenAsync(CancellationToken.None);
+        await using var connection = await GetLeaderConnectionAsync(bootstrapConfig, requestTimeout: TimeSpan.FromSeconds(30));
 
         // Partition 0 has ~333KB of data (topic has 12 partitions, 4MB total)
         // Use MinBytes=100KB which should be met immediately
-        var fetchRequest = new FetchRequest
-        {
-            FixedVersion = 12,
-            ClusterId = null,
-            ReplicaId = -1,
-            ReplicaState = null,
-            MaxWaitMs = 30000,
-            MinBytes = 100_000,
-            MaxBytes = 0x7fffffff,
-            IsolationLevel = 0,
-            SessionId = 0,
-            SessionEpoch = -1,
-            Topics =
-            [
-                new FetchTopic
-                {
-                    Topic = TestHelpers.Topic,
-                    TopicId = Guid.Empty,
-                    Partitions =
-                    [
-                        new FetchPartition
-                        {
-                            Partition = 0,
-                            CurrentLeaderEpoch = -1,
-                            FetchOffset = 0,
-                            LastFetchedEpoch = -1,
-                            LogStartOffset = -1,
-                            PartitionMaxBytes = 10 * 1024 * 1024,
-                            ReplicaDirectoryId = Guid.Empty,
-                        }
-                    ]
-                },
-            ],
-            ForgottenTopicsData = [],
-            RackId = string.Empty,
-        };
+        var fetchRequest = CreateFetchRequest(
+            apiVersion: 12,
+            topic: Topic,
+            topicId: Guid.Empty,
+            partitions: [(0, 0L)],
+            partitionMaxBytes: 10 * 1024 * 1024,
+            maxWaitMs: 30000,
+            minBytes: 100_000);
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         using var response = await connection.SendAsync(fetchRequest, CancellationToken.None);
