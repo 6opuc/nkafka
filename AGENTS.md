@@ -56,6 +56,9 @@
 - Test bounds checking, error cases, and edge conditions
 - Roundtrip tests for all data types
 - Test naming pattern: `MethodUnderTest_Condition_Expectation` (e.g., `WriteByte_Zero_CanBeReadByBufferReader`)
+- **If tests are red, your changes caused it — not infrastructure issues or pre-existing bugs.** Never dismiss failing tests as "infra" or "pre-existing." Every failure is a regression until proven otherwise.
+- **NEVER merge code if there are red tests.** Do not squash, merge, or close a PR/issue until all tests pass green.
+- **If tests are red, your changes caused it — not infrastructure issues or pre-existing bugs.** Never dismiss failing tests as "infra" or "pre-existing." Every failure is a regression until proven otherwise.
 
 ### Exception Hierarchy
 - **KafkaException** (base)
