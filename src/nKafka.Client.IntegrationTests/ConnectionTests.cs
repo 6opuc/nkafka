@@ -821,7 +821,12 @@ public class ConnectionTests
 
         using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
         var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        var leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
+        var partition0 = topicMetadata.Partitions!.FirstOrDefault(p => p.PartitionIndex == 0);
+        if (partition0 == null)
+        {
+            throw new Exception("Partition 0 not found in metadata response");
+        }
+        var leaderId = partition0.LeaderId!.Value;
         var leader = metadataResponse.Message.Brokers![leaderId];
 
         // Connect directly to partition 0 leader
@@ -909,7 +914,12 @@ public class ConnectionTests
 
         using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
         var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        var leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
+        var partition0 = topicMetadata.Partitions!.FirstOrDefault(p => p.PartitionIndex == 0);
+        if (partition0 == null)
+        {
+            throw new Exception("Partition 0 not found in metadata response");
+        }
+        var leaderId = partition0.LeaderId!.Value;
         var leader = metadataResponse.Message.Brokers![leaderId];
 
         // Connect directly to partition 0 leader with short timeout
@@ -1086,7 +1096,12 @@ public class ConnectionTests
 
         using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
         var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        var leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
+        var partition0 = topicMetadata.Partitions!.FirstOrDefault(p => p.PartitionIndex == 0);
+        if (partition0 == null)
+        {
+            throw new Exception("Partition 0 not found in metadata response");
+        }
+        var leaderId = partition0.LeaderId!.Value;
         var leader = metadataResponse.Message.Brokers![leaderId];
 
         // Client timeout is 30s (default), broker MaxWaitMs is only 2s
@@ -1184,7 +1199,12 @@ public class ConnectionTests
 
         using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
         var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        var leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
+        var partition0 = topicMetadata.Partitions!.FirstOrDefault(p => p.PartitionIndex == 0);
+        if (partition0 == null)
+        {
+            throw new Exception("Partition 0 not found in metadata response");
+        }
+        var leaderId = partition0.LeaderId!.Value;
         var leader = metadataResponse.Message.Brokers![leaderId];
 
         var config = new ConnectionConfig(
@@ -1322,7 +1342,12 @@ public class ConnectionTests
 
         using var metadataResponse = await bootstrapConn.SendAsync(metadataRequest, CancellationToken.None);
         var topicMetadata = metadataResponse.Message.Topics![TestHelpers.Topic];
-        var leaderId = topicMetadata.Partitions![0].LeaderId!.Value;
+        var partition0 = topicMetadata.Partitions!.FirstOrDefault(p => p.PartitionIndex == 0);
+        if (partition0 == null)
+        {
+            throw new Exception("Partition 0 not found in metadata response");
+        }
+        var leaderId = partition0.LeaderId!.Value;
         var leader = metadataResponse.Message.Brokers![leaderId];
 
         var config = new ConnectionConfig(
